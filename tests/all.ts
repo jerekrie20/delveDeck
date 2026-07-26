@@ -7,5 +7,6 @@ import { summary } from './helpers';
 await import('./sim.test');
 await import('./server.test');
 await import('./art.test');
+await import('./tutorial.test');
 
 summary();

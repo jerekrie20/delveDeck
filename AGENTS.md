@@ -40,6 +40,23 @@ art before the loop was settled, and that ordering is what hurt.
 - Devvit web only — never `@devvit/public-api` or "blocks" code.
 - Named exports, no default exports, no type casts, descriptive full-word names.
 
+## The tutorial
+
+`src/client/tutorial.ts` is the first-run tutorial: a 15-step scripted practice
+encounter, offered once (localStorage) and reachable forever from the header's
+**How to play**. Two rules hold it together:
+
+- **It is a separate run, never a prefix of the daily one.** Own seed
+  (`TUTORIAL_SEED`), own choice list. Nothing in the tutorial can reach the array
+  that gets submitted — that separation is why a practice run cannot contaminate
+  a leaderboard entry.
+- **Never hand-type a number the sim owns.** Copy is templated
+  (`{intentValue}`, `{strikeDamage}`, `{scorePerEncounter}`) and filled from the
+  live `RunView` and `TUNING`. `tests/tutorial.test.ts` drives the whole script
+  through the real `simulateRun` and fails on an unfilled placeholder, a step
+  that asks for a card that can't be in hand, or a step whose screen doesn't
+  match the phase the run is in. Retune a card and the tutorial retunes with it.
+
 ## Balance instrument
 
 `npx tsx scratchpad/probe.ts` reports the **floor** (a greedy policy that never
