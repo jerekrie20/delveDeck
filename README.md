@@ -11,9 +11,9 @@ rather than just numbers.
 
 ## Status
 
-**M0–M3 complete** — playable end to end, with the daily leaderboard, replay
-viewer, and art pass in. M4 (the shareable spoiler-free result grid) is next.
-See `TODO.md`.
+**M0–M3 complete**, plus the first-run tutorial — playable end to end, with the
+daily leaderboard, replay viewer, and art pass in. M4 (the shareable spoiler-free
+result grid) is next. See `TODO.md`.
 
 | | |
 |---|---|
@@ -21,8 +21,23 @@ See `TODO.md`.
 | **M1** — the client | DOM card game: combat, draft, result |
 | **M2** — the daily | per-subreddit leaderboard, server-side replay verification |
 | **M3** — the art | 25 bespoke pixel-art images, all static |
+| **M3.5** — onboarding | 15-step tutorial played on a real encounter |
 
-44 checks, no test framework — plain `tsx` scripts with `assert`.
+60 checks, no test framework — plain `tsx` scripts with `assert`.
+
+## Learning it
+
+A new player gets one run a day, so the tutorial teaches by playing rather than
+explaining: a scripted first turn on a fixed seed where all three energy is spent
+and a telegraphed 5-damage hit lands on exactly 5 block for zero damage — the
+intent telegraph, the energy budget and block-clears-every-turn in one turn. Then
+the rails come off for the rest of the encounter and a draft.
+
+It runs on its own seed and its own choice list, so it can never contaminate the
+daily run, and it is replayable any time from **How to play**. Its copy is
+templated from `TUNING` and the live run, and `tests/tutorial.test.ts` drives the
+whole script through the real `simulateRun` — so a card retune updates the
+tutorial's numbers instead of quietly making it lie.
 
 ```bash
 npm install

@@ -84,6 +84,35 @@ No `Math.random` in `src/shared/`, ever.
 - **8 enemies**, each with a fixed cycling intent pattern.
 - **12 encounters**, fixed order, boss last.
 
+## Onboarding
+
+A daily game gets **one shot** at a new player: they arrive from a feed, they get
+one run, and if they don't understand the intent telegraph they will read the
+whole thing as a slot machine and never come back. So the tutorial teaches by
+playing, not by explaining — 15 steps over a real encounter on a fixed seed
+(`TUTORIAL_SEED`), with the rest of the screen gated so there is exactly one
+right tap at a time.
+
+The scripted first turn is the design: Strike, Strike, Guard, end turn — all
+three energy spent, and the telegraphed 5-damage hit lands on exactly 5 block for
+**zero damage taken**. That single turn demonstrates the intent telegraph, the
+energy budget and block-clears-every-turn at once, and it is a fact about the
+tuning rather than about the copy — a test fails if retuning ever breaks it.
+
+Then the rails come off: the player finishes the encounter themselves, takes a
+draft, and gets the scoring rules and a quick-reference card. It stops after one
+encounter — the tutorial must not eat the 3–6 minute session it is selling.
+
+**It is a separate run.** Its own seed, its own choice list; it never touches the
+daily one, so it costs the player nothing and can be replayed from the header at
+any time. Offered once (a first-time player shouldn't have to go looking), then
+never volunteered again.
+
+Open question: should the tutorial run on the day's actual seed instead of a
+fixed one, so the encounter you practise on is the encounter you then play? It
+would make the first turn's zero-damage lesson unreliable, which is why it does
+not today.
+
 ## Art (the constraint that shapes the project)
 
 **No art that animates or aligns.** Full card illustrations, static portraits,

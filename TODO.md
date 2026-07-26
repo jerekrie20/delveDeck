@@ -225,6 +225,46 @@ illustrations rather than 64px icons on a text card.
       luminous glowing accents, rim lighting, subtle dark outline, gritty heroic
       dungeon atmosphere" — never substitute a colour into the accent slot
 
+## M3.5 — onboarding (the first-run tutorial)
+
+Not originally on the roadmap. It landed here because M3 made the game look
+finished, and a finished-looking daily game that never explains the intent
+telegraph gets read as a slot machine by everyone who arrives from a feed.
+
+- [x] `src/client/tutorial.ts` — the 15-step script: gates, focus targets, and
+      copy templated from the live run. No DOM in this file; `main.ts` owns that.
+- [x] Scripted first turn (Strike, Strike, Guard, end) on a pinned seed —
+      **all 3 energy spent, 5 block against a telegraphed 5 damage, zero taken.**
+      That one turn is the whole pitch: intent + energy + block-clears-every-turn.
+      Seed 53 chosen by search; a 20 HP Ratling with three Strikes and two Guards
+      in the opening hand.
+- [x] Gating: one legal input per step. Off-script cards are dimmed and
+      `pointer-events: none`, and the gate refuses the input anyway — the nudge
+      line explains the refusal rather than the tap silently doing nothing.
+- [x] Free-play step (finish the encounter yourself) → a draft → scoring → a
+      quick-reference card. Stops after one encounter, deliberately.
+- [x] Offered once on first visit (localStorage, best-effort — a blocked iframe
+      just re-offers it), always reachable from the header's **How to play**.
+- [x] `tests/tutorial.test.ts` — 16 checks. It drives the script through the real
+      `simulateRun` the way the client does, so the suite fails if a step asks for
+      a card that can't be in hand, if a step's screen doesn't match the phase the
+      run is actually in, or if any copy leaves an unfilled `{placeholder}`.
+      The zero-damage claim and "all energy spent" are asserted against the sim,
+      not against the copy.
+
+**The rule that shapes this file:** the tutorial is a SEPARATE run — its own seed,
+its own choice list. It cannot reach the array that gets submitted, so a practice
+run can never contaminate a leaderboard entry.
+
+**Two things verified in a browser at 359x632, both of which were real problems:**
+1. The coach panel costs ~130px at the top, which pushed **End turn below the
+   fold** on the step that asks for it. Fixed by scrolling the focused element
+   into view once per step (`block: 'nearest'`, so anything already visible does
+   not move). Any new chrome above the board needs the same check.
+2. The header's new "How to play" button squeezed `.header-stats` until
+   "Encounter 1 / 12" broke across two lines mid-label. `white-space: nowrap` on
+   the stat spans plus `flex-wrap` on the row: items wrap, labels don't.
+
 ## M4 — share
 
 - [ ] Spoiler-free result grid for comments (the Wordle share mechanic)

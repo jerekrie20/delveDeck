@@ -12,7 +12,7 @@ Follow CODING_BIBLE §4: **NO builds / devvit / vite build** — validate with
 
 ## WHAT EXISTS (don't redo)
 
-**M0–M3 complete.** 44 checks green, type-check and lint clean.
+**M0–M3 complete, plus the M3.5 tutorial.** 60 checks green, type-check and lint clean.
 
 - `src/shared/` — `sim.ts` (`simulateRun(seed, choices)`), `cards.ts` (14),
   `enemies.ts` (8). Pure, deterministic, no I/O. The client submits **choices,
@@ -41,7 +41,15 @@ Follow CODING_BIBLE §4: **NO builds / devvit / vite build** — validate with
   "glowing accents" turns things magenta. Inspect scene corners for hallucinated
   artist signatures. Any entrance animation must animate transform only, never
   opacity — see GAME_DESIGN.md for why.
-- `tests/` — `sim.test.ts` (16), `server.test.ts` (15), `art.test.ts` (13).
+- `src/client/tutorial.ts` — the first-run tutorial (M3.5): a 15-step scripted
+  practice encounter on `TUTORIAL_SEED`, offered once and always reachable from
+  the header's **How to play**. It is a SEPARATE run with its own choice list and
+  can never reach the array that gets submitted. Copy is templated from the live
+  run and `TUNING` — **never hand-type a number the sim owns**, the test fails on
+  an unfilled `{placeholder}`. Adding chrome above the board? Re-check End turn
+  at 359x632; the coach panel pushed it below the fold once already.
+- `tests/` — `sim.test.ts` (16), `server.test.ts` (15), `art.test.ts` (13),
+  `tutorial.test.ts` (16).
   Run everything with `npm run test`. `scratchpad/probe.ts` is the balance
   instrument: greedy 6.1 vs 1-ply search 9.0 clears. **Run it after any card,
   enemy or tuning change.**

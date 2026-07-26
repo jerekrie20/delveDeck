@@ -19,6 +19,17 @@ import {
 } from '../shared/sim';
 import { trpc } from './trpc';
 import { backdropArt, cardArt, enemyArt } from './art';
+import {
+  fillCopy,
+  gateAllows,
+  gateTargetCard,
+  tutorialFacts,
+  TUTORIAL_SEED,
+  TUTORIAL_SEEN_KEY,
+  TUTORIAL_STEPS,
+  type TutorialFocus,
+  type TutorialStep,
+} from './tutorial';
 
 // ---- environment detection ---------------------------------------------------
 
@@ -49,6 +60,72 @@ let replayUser = '';
 let replayDay = '';
 let replayAuto = true;
 
+// ---- tutorial state ------------------------------------------------------------
+//
+// The tutorial is a SEPARATE run: its own seed, its own choice list. Nothing here
+// can reach `choices`, which is the only array that ever gets submitted — that
+// separation is the reason a practice run can't contaminate the daily one.
+
+let tutorialActive = false;
+let tutorialChoices: RunChoice[] = [];
+let tutorialStepIndex = 0;
+/** Set when an input the current step forbids is attempted; cleared on the next
+ *  successful one. Drives the shake + nudge line on the coach panel. */
+let tutorialNudge = false;
+/** Whether to offer the tutorial above the daily run (first visit only). */
+let tutorialOffered = false;
+
+/** Which part of the screen the current step is pointing at. Read by the screen
+ *  renderers so the highlight doesn't have to be threaded through every one of
+ *  them. Recomputed at the top of every `render()`. */
+let coachFocus: TutorialFocus = 'none';
+/** The card the current step wants played, if any — highlighted in hand while
+ *  every other card is dimmed and unclickable. */
+let coachTargetCard: string | undefined;
+
+const currentStep = (): TutorialStep | undefined => TUTORIAL_STEPS[tutorialStepIndex];
+
+/** Storage is best-effort: a locked-down iframe or private mode throws on access,
+ *  and the only consequence is that the tutorial gets offered again. */
+function hasSeenTutorial(): boolean {
+  try {
+    return window.localStorage.getItem(TUTORIAL_SEEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function markTutorialSeen(): void {
+  try {
+    window.localStorage.setItem(TUTORIAL_SEEN_KEY, '1');
+  } catch {
+    // Nothing to do — see above.
+  }
+}
+
+function startTutorial(): void {
+  tutorialActive = true;
+  tutorialChoices = [];
+  tutorialStepIndex = 0;
+  tutorialNudge = false;
+  tutorialOffered = false;
+  lastRevealedStep = -1;
+  // "How to play" is reachable from a scrolled-down board; the first step is at
+  // the top of the page and would otherwise open off screen.
+  window.scrollTo({ top: 0 });
+  render();
+}
+
+function exitTutorial(): void {
+  tutorialActive = false;
+  tutorialChoices = [];
+  tutorialStepIndex = 0;
+  tutorialNudge = false;
+  tutorialOffered = false;
+  markTutorialSeen();
+  render();
+}
+
 // ---- board state -------------------------------------------------------------
 
 interface BoardEntry {
@@ -66,9 +143,39 @@ if (!app) throw new Error('#app missing from HTML');
 
 function applyChoice(choice: RunChoice): void {
   if (replayMode) return;
+  if (tutorialActive) {
+    applyTutorialChoice(choice);
+    return;
+  }
   const attempted = [...choices, choice];
   if (simulateRun(seed, attempted).outcome === 'invalid') return;
   choices = attempted;
+  render();
+}
+
+/** The same thing for the practice run, with the current step's gate in front of
+ *  it. The gate only ever NARROWS what is legal — `simulateRun` still has the
+ *  final say, exactly as it does for the daily run. */
+function applyTutorialChoice(choice: RunChoice): void {
+  const step = currentStep();
+  const before = simulateRun(TUTORIAL_SEED, tutorialChoices);
+  if (!step || !gateAllows(step.gate, choice, before.view)) {
+    tutorialNudge = true;
+    render();
+    return;
+  }
+
+  const attempted = [...tutorialChoices, choice];
+  const after = simulateRun(TUTORIAL_SEED, attempted);
+  if (after.outcome === 'invalid') return;
+  tutorialChoices = attempted;
+  tutorialNudge = false;
+
+  // Every gate is satisfied by the one input it allows, except free play, which
+  // runs until the encounter is actually over.
+  if (step.gate.kind !== 'freePlay' || after.view?.phase === 'draft') {
+    tutorialStepIndex++;
+  }
   render();
 }
 
@@ -85,7 +192,10 @@ async function tryInit(): Promise<void> {
 }
 
 async function trySubmit(): Promise<string | null> {
-  if (!serverAvailable || submitted || replayMode) return null;
+  // `tutorialActive` is belt-and-braces: the tutorial never renders a submit
+  // button, and it submits `choices` (the daily run) rather than the practice
+  // list, so a stray call here could only ever submit an unfinished daily run.
+  if (!serverAvailable || submitted || replayMode || tutorialActive) return null;
   try {
     const result = await trpc.run.submit.mutate({ choices });
     if (result.ok) {
@@ -171,13 +281,27 @@ function bar(current: number, max: number, kind: string): string {
     </div>`;
 }
 
+/** The tutorial's highlight class for an element, or '' when it isn't the thing
+ *  the current step is talking about. A step that names a specific card outlines
+ *  the card itself, so the hand around it stays plain — two nested gold outlines
+ *  read as noise rather than as a pointer. */
+function focusClass(target: TutorialFocus): string {
+  if (!tutorialActive || coachFocus !== target) return '';
+  if (target === 'hand' && coachTargetCard !== undefined) return '';
+  return ' tut-focus';
+}
+
 function cardTile(
   cardId: string,
   options: { action?: string; index?: number; disabled?: boolean } = {},
 ): string {
   const card = CARDS[cardId];
   if (!card) return `<div class="card card-unknown">${escapeHtml(cardId)}</div>`;
-  const clickable = options.action !== undefined && !options.disabled;
+  // While a step asks for a specific card, the others are dimmed AND made
+  // unclickable in CSS — the gate in `applyTutorialChoice` already refuses them,
+  // but a card that visibly can't be tapped explains itself without a nudge.
+  const offScript = coachTargetCard !== undefined && coachTargetCard !== cardId;
+  const clickable = options.action !== undefined && !options.disabled && !offScript;
   const attributes = clickable
     ? `data-action="${options.action}" data-index="${options.index ?? 0}"`
     : '';
@@ -187,10 +311,12 @@ function cardTile(
   const art = illustration
     ? `<img class="card-art" src="${illustration}" alt="" width="128" height="176">`
     : '';
+  const tutorialClass =
+    coachTargetCard === undefined ? '' : offScript ? ' tut-offscript' : ' tut-target';
   return `
     <div class="card card-${card.rarity}${options.disabled ? ' card-disabled' : ''}${
       clickable ? ' card-clickable' : ''
-    }${illustration ? '' : ' card-artless'}" ${attributes}>
+    }${illustration ? '' : ' card-artless'}${tutorialClass}" ${attributes}>
       ${art}
       <div class="card-scrim">
         <div class="card-name">${escapeHtml(card.name)}</div>
@@ -233,6 +359,23 @@ function deckSummary(deck: readonly string[]): string {
 // ---- screens ------------------------------------------------------------------
 
 function header(result: RunResult, encounterNumber: number): string {
+  // The tutorial gets its own header: a practice run has no day, no seed worth
+  // showing and no score, and putting one there invites a new player to compare it
+  // with the board.
+  if (tutorialActive) {
+    return `
+      <div class="header">
+        <div>
+          <span class="title">Daily Deck</span>
+          <span class="day">Tutorial — a practice run, not today's</span>
+        </div>
+        <div class="header-stats">
+          <span class="badge badge-tutorial">Tutorial</span>
+          <button class="button button-small" data-action="tutorial-exit">Skip</button>
+        </div>
+      </div>`;
+  }
+
   const badges: string[] = [];
   if (replayMode) badges.push(`Replay — u/${escapeHtml(replayUser)} · ${escapeHtml(replayDay)}`);
   else if (submitted) badges.push('Submitted');
@@ -251,6 +394,99 @@ function header(result: RunResult, encounterNumber: number): string {
         <span>Cleared <strong>${result.cleared}</strong></span>
         <span>Score <strong>${result.score}</strong></span>
         ${badges.map(b => `<span class="badge">${escapeHtml(b)}</span>`).join('')}
+        <button class="button button-small" data-action="tutorial-start">How to play</button>
+      </div>
+    </div>`;
+}
+
+// ---- the tutorial's own chrome --------------------------------------------------
+
+/** The offer a first-time player sees above the daily run. Shown once — taking
+ *  it or dismissing it both count as an answer. */
+function tutorialOffer(): string {
+  if (!tutorialOffered || tutorialActive || replayMode) return '';
+  return `
+    <div class="panel coach coach-offer">
+      <div class="coach-title">New here?</div>
+      <div class="coach-body">
+        Two minutes and one practice encounter, and you will know everything this game
+        expects you to know. Your daily run will still be waiting.
+      </div>
+      <div class="actions coach-actions">
+        <button class="button button-primary" data-action="tutorial-start">Teach me</button>
+        <button class="button" data-action="tutorial-dismiss">I know how to play</button>
+      </div>
+    </div>`;
+}
+
+/** The coaching panel: step counter, the step's copy with the live numbers filled
+ *  in, and whatever button that step's gate needs. Rendered directly under the
+ *  header so it is on screen on a phone without scrolling. */
+function coachPanel(step: TutorialStep, result: RunResult): string {
+  const facts = tutorialFacts(result);
+  const write = (text: string): string => escapeHtml(fillCopy(text, facts));
+
+  const bullets = step.bullets?.length
+    ? `<ul class="coach-list">${step.bullets
+        .map((line) => `<li>${write(line)}</li>`)
+        .join('')}</ul>`
+    : '';
+
+  const buttons: string[] = [];
+  if (step.gate.kind === 'acknowledge') {
+    buttons.push(
+      `<button class="button button-primary" data-action="tutorial-next">${escapeHtml(
+        step.button ?? 'Next',
+      )}</button>`,
+    );
+  } else if (step.gate.kind === 'finish') {
+    buttons.push(
+      `<button class="button button-primary" data-action="tutorial-exit">${escapeHtml(
+        step.button ?? 'Done',
+      )}</button>`,
+    );
+  }
+  if (step.gate.kind !== 'finish') {
+    buttons.push('<button class="button" data-action="tutorial-exit">Skip tutorial</button>');
+  }
+
+  const nudge =
+    tutorialNudge && step.nudge
+      ? `<div class="coach-nudge-text">${escapeHtml(step.nudge)}</div>`
+      : '';
+
+  return `
+    <div class="panel coach${tutorialNudge ? ' coach-nudging' : ''}">
+      <div class="coach-step">Step ${tutorialStepIndex + 1} of ${TUTORIAL_STEPS.length}</div>
+      <div class="coach-title">${write(step.title)}</div>
+      <div class="coach-body">${write(step.body)}</div>
+      ${bullets}
+      ${nudge}
+      <div class="actions coach-actions">${buttons.join('')}</div>
+    </div>`;
+}
+
+/** The closing screens. By this point the run has moved on to encounter 2, so
+ *  there is nothing left on the board worth pointing at — the coach panel becomes
+ *  the whole screen instead of an overlay on a board the player is done with. */
+function tutorialOutro(step: TutorialStep, result: RunResult): string {
+  return `<div class="tutorial-outro">${coachPanel(step, result)}</div>`;
+}
+
+/** Shown only if a practice run somehow ends — you would have to end turn into a
+ *  Ratling about ten times running, but a dead end with no way out is worse than
+ *  three lines of markup. */
+function tutorialDeadEnd(): string {
+  return `
+    <div class="panel coach">
+      <div class="coach-title">That went badly</div>
+      <div class="coach-body">
+        The practice run is over. Start it again, or go straight to today's run —
+        it is untouched either way.
+      </div>
+      <div class="actions coach-actions">
+        <button class="button button-primary" data-action="tutorial-start">Start over</button>
+        <button class="button" data-action="tutorial-exit">Today's run</button>
       </div>
     </div>`;
 }
@@ -277,7 +513,7 @@ function combatScreen(view: CombatView): string {
     : '';
 
   return `
-    <div class="enemy panel" style="background-image:url('${backdropArt(view.enemyId)}')">
+    <div class="enemy panel${focusClass('enemy')}" style="background-image:url('${backdropArt(view.enemyId)}')">
       ${portraitMarkup}
       <div class="enemy-body">
         <div class="row">
@@ -293,7 +529,7 @@ function combatScreen(view: CombatView): string {
       </div>
     </div>
 
-    <div class="player panel">
+    <div class="player panel${focusClass('player')}">
       <div class="row">
         <span class="name">You</span>
         <span class="energy">${energyPips}<span class="energy-text">${view.energy} energy</span></span>
@@ -306,9 +542,9 @@ function combatScreen(view: CombatView): string {
       </div>
     </div>
 
-    <div class="hand">${hand}</div>
+    <div class="hand${focusClass('hand')}">${hand}</div>
     <div class="actions">
-      <button class="button button-primary" data-action="end">End turn</button>
+      <button class="button button-primary${focusClass('endTurn')}" data-action="end">End turn</button>
     </div>`;
 }
 
@@ -324,7 +560,7 @@ function draftScreen(view: DraftView): string {
       </div>
       <div class="hint">Take one, or skip. A leaner deck draws its good cards more often.</div>
     </div>
-    <div class="hand">${offers}</div>
+    <div class="hand${focusClass('draft')}">${offers}</div>
     <div class="actions">
       <button class="button" data-action="skip">Skip the draft</button>
     </div>
@@ -435,7 +671,16 @@ function boardPanel(): string {
 // ---- render -------------------------------------------------------------------
 
 function render(): void {
-  const result = simulateRun(seed, choices);
+  const step = tutorialActive ? currentStep() : undefined;
+  // Set before any screen is built: the screen renderers read these to decide
+  // what to outline and which cards to put out of reach.
+  coachFocus = step?.focus ?? 'none';
+  coachTargetCard = step ? gateTargetCard(step.gate) : undefined;
+
+  const result = simulateRun(
+    tutorialActive ? TUTORIAL_SEED : seed,
+    tutorialActive ? tutorialChoices : choices,
+  );
   const view = result.view;
   const encounterNumber = Math.min(
     GAUNTLET.length,
@@ -443,15 +688,46 @@ function render(): void {
   );
 
   let body: string;
-  if (!view) {
+  if (tutorialActive) {
+    if (!step) body = tutorialDeadEnd();
+    else if (step.screen === 'outro') body = tutorialOutro(step, result);
+    else if (!view) body = tutorialDeadEnd();
+    else body = coachPanel(step, result) + (view.phase === 'draft' ? draftScreen(view) : combatScreen(view));
+  } else if (!view) {
     body = resultScreen(result) + resultActions() + boardPanel();
   } else if (view.phase === 'draft') {
-    body = draftScreen(view);
+    body = tutorialOffer() + draftScreen(view);
   } else {
-    body = combatScreen(view);
+    body = tutorialOffer() + combatScreen(view);
   }
 
-  app!.innerHTML = header(result, encounterNumber) + body + logPanel(result.log);
+  // The outro replaces the board entirely, so the log below it would be a trace
+  // of a run the player has already been told is over.
+  const log = tutorialActive && step?.screen === 'outro' ? '' : logPanel(result.log);
+  app!.innerHTML = header(result, encounterNumber) + body + log;
+
+  revealFocus();
+}
+
+/** Scroll whatever the current step points at into view — once per step, not on
+ *  every render, so it never fights a player who has scrolled deliberately.
+ *
+ *  This exists because the coach panel costs ~130px at the top of a ~360px-wide
+ *  phone, which is enough to push End turn below the fold on the step that asks
+ *  for it. `block: 'nearest'` means anything already on screen doesn't move. */
+let lastRevealedStep = -1;
+
+function revealFocus(): void {
+  if (!tutorialActive) {
+    lastRevealedStep = -1;
+    return;
+  }
+  if (tutorialStepIndex === lastRevealedStep) return;
+  lastRevealedStep = tutorialStepIndex;
+  app!.querySelector('.tut-focus, .tut-target')?.scrollIntoView({
+    block: 'nearest',
+    behavior: 'smooth',
+  });
 }
 
 // ---- input --------------------------------------------------------------------
@@ -518,6 +794,23 @@ app.addEventListener('click', (event) => {
       replayAuto = false;
       replayStep(-1);
       break;
+    case 'tutorial-start':
+      startTutorial();
+      break;
+    case 'tutorial-next':
+      tutorialStepIndex++;
+      tutorialNudge = false;
+      render();
+      break;
+    case 'tutorial-exit':
+      exitTutorial();
+      break;
+    case 'tutorial-dismiss':
+      // Declining counts as an answer: don't ask again.
+      tutorialOffered = false;
+      markTutorialSeen();
+      render();
+      break;
   }
 });
 
@@ -542,6 +835,11 @@ async function boot(): Promise<void> {
   if (serverInit?.alreadyPlayed) {
     await tryFetchBoard();
   }
+
+  // Offer the tutorial to a first-time player rather than starting it for them:
+  // one run per day is a real cost, and a returning player who cleared their
+  // storage should not be made to sit through it.
+  tutorialOffered = !hasSeenTutorial();
 
   render();
 }

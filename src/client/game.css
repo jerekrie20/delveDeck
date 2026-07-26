@@ -79,10 +79,18 @@ body {
 
 .header-stats {
   display: flex;
-  gap: 14px;
+  align-items: center;
+  /* Wrap as whole items: without this the "How to play" button squeezes the
+     stats until "Encounter 1 / 12" breaks across two lines mid-label. */
+  flex-wrap: wrap;
+  gap: 6px 14px;
   font-weight: 400;
   font-size: 13px;
   color: #98a0b3;
+}
+
+.header-stats > span {
+  white-space: nowrap;
 }
 
 .header-stats strong {
@@ -698,6 +706,146 @@ body {
   vertical-align: middle;
 }
 
+/* ---- tutorial ------------------------------------------------------------- */
+
+/* The coach panel sits directly under the header, so on a phone the instruction
+   and the thing it points at are both on screen without scrolling. Gold, because
+   gold is already this game's "pay attention to this" colour (rare cards). */
+
+.coach {
+  border-color: #d4a843;
+  background: #1a1710;
+}
+
+.coach-step {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #a08340;
+}
+
+.coach-title {
+  margin-top: 3px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #f0e4c0;
+  letter-spacing: 0.01em;
+}
+
+.coach-body {
+  margin-top: 5px;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #d8d4c8;
+}
+
+.coach-list {
+  margin: 7px 0 0 18px;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #d8d4c8;
+}
+
+.coach-list li {
+  margin-bottom: 4px;
+}
+
+.coach-actions {
+  margin-top: 11px;
+}
+
+.coach-nudge-text {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffb84d;
+}
+
+/* The outro replaces the board, so it gets a little room to breathe. */
+.tutorial-outro .coach {
+  padding: 18px 16px;
+}
+
+/* A smaller button for the header's "How to play" / "Skip" affordances — they
+   must not compete with End turn for the eye or for the tap. */
+.button-small {
+  padding: 3px 10px;
+  font-size: 11px;
+  border-width: 1px;
+  border-radius: 5px;
+}
+
+.badge-tutorial {
+  background: #d4a843;
+  color: #14161c;
+}
+
+/* The highlight. An outline rather than a border: borders reflow the layout, and
+   the enemy panel and the hand are both size-critical here. */
+.tut-focus {
+  outline: 2px solid #d4a843;
+  outline-offset: 3px;
+  border-radius: 8px;
+  animation: tut-pulse 1.8s ease-in-out infinite;
+}
+
+/* Cards the current step doesn't want: pushed out of reach visually and by
+   pointer-events, so the gate in main.ts is a backstop rather than the only
+   thing stopping a misfire. */
+.card.tut-offscript {
+  opacity: 0.32;
+  filter: saturate(0.15);
+  pointer-events: none;
+}
+
+.card.tut-target {
+  outline: 2px solid #d4a843;
+  outline-offset: 2px;
+  animation: tut-pulse 1.8s ease-in-out infinite;
+}
+
+/* Glow only — no `backwards` fill and no opacity keyframes, so a frozen or
+   backgrounded tab pins this at a plain visible outline rather than at nothing.
+   Same lesson as the deal-in animation above. */
+@keyframes tut-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 rgb(212 168 67 / 0%);
+  }
+  50% {
+    box-shadow: 0 0 12px rgb(212 168 67 / 45%);
+  }
+}
+
+/* Refused input: a short nudge on the panel, transform-only. */
+.coach-nudging {
+  animation: coach-nudge 240ms ease-in-out;
+}
+
+@keyframes coach-nudge {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-5px);
+  }
+  75% {
+    transform: translateX(5px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tut-focus,
+  .card.tut-target,
+  .coach-nudging {
+    animation: none;
+  }
+}
+
 /* ---- log ------------------------------------------------------------------ */
 
 .log {
@@ -883,5 +1031,21 @@ body {
      the one you hit every turn. */
   .actions .button-primary {
     flex: 1 1 100%;
+  }
+
+  /* The coach panel is pure overhead on a phone — every pixel it takes is a
+     pixel the board doesn't get, so it tightens up more than the panels do. */
+  .coach {
+    padding: 9px 10px;
+  }
+
+  .coach-body,
+  .coach-list {
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .coach-actions {
+    margin-top: 9px;
   }
 }
