@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Daily Deck</title>
+    <!-- Featherweight on purpose: this renders inline in the Reddit feed, so it
+         gets no imports and no framework. One script, one request, done.
+
+         The only assets are three card illustrations (~78KB total). They earn
+         their weight: this is a card game, and a fan of real cards is the whole
+         pitch. Everything else here — the vignette, the frames, the fan itself —
+         is drawn in CSS so it costs nothing. Do NOT add the 400x320 backdrops
+         here; atmosphere is not worth another 40KB in a feed. -->
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 16px;
+        background:
+          radial-gradient(ellipse at 50% 32%, #232a3a 0%, #14161c 62%, #0d0f14 100%);
+        color: #e6e8ee;
+        font: 600 16px/1.4 system-ui, sans-serif;
+        text-align: center;
+      }
+
+      .splash {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+      }
+
+      /* ---- the fan ---- */
+
+      /* Cards render at exactly half their native 128x176 so the pixels stay on
+         grid, then step up to full size when there is room. */
+      .fan {
+        --card-w: 64px;
+        --card-h: 88px;
+        display: flex;
+        justify-content: center;
+        align-items: flex-end;
+        height: calc(var(--card-h) + 14px);
+      }
+
+      .fan img {
+        width: var(--card-w);
+        height: var(--card-h);
+        image-rendering: pixelated;
+        border-radius: 5px;
+        border: 2px solid #3a4050;
+        background: #12141a;
+        box-shadow: 0 6px 14px rgb(0 0 0 / 65%);
+      }
+
+      /* Overlap and tilt: reads as a hand being held, not three loose images. */
+      .fan img:nth-child(1) {
+        transform: rotate(-11deg) translateY(6px);
+        margin-right: -14px;
+        border-color: #5b9bd5;
+      }
+      .fan img:nth-child(2) {
+        transform: translateY(-6px);
+        z-index: 2;
+        border-color: #d4a843;
+        box-shadow:
+          0 8px 18px rgb(0 0 0 / 70%),
+          0 0 12px rgb(212 168 67 / 30%);
+      }
+      .fan img:nth-child(3) {
+        transform: rotate(11deg) translateY(6px);
+        margin-left: -14px;
+        border-color: #e6e8ee;
+      }
+
+      /* ---- copy ---- */
+
+      .title {
+        font-size: 26px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+
+      .sub {
+        max-width: 20rem;
+        font-weight: 400;
+        font-size: 13px;
+        line-height: 1.45;
+        color: #b0b8cc;
+      }
+
+      .play-btn {
+        margin-top: 2px;
+        padding: 12px 32px;
+        border: none;
+        border-radius: 22px;
+        background: #d93900;
+        color: #ffffff;
+        font: 700 15px system-ui, sans-serif;
+        letter-spacing: 0.02em;
+        cursor: pointer;
+        touch-action: manipulation;
+        box-shadow: 0 4px 12px rgb(217 57 0 / 35%);
+      }
+      .play-btn:hover {
+        background: #e04500;
+      }
+      .play-btn:active {
+        background: #b02e00;
+        transform: translateY(1px);
+      }
+
+      .meta {
+        font-weight: 400;
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #7c8496;
+      }
+
+      /* Roomier feed slots get the cards at native resolution. The width gate is
+         400px, not 360: three 128px cards overlapped still span ~320px, and the
+         11deg tilt throws the outer corners another ~15px each side. At 360 that
+         clipped. Only two sizes are offered on purpose — both are integer scales
+         of the 128x176 source, so the art never lands off-grid. */
+      @media (min-height: 420px) and (min-width: 400px) {
+        .fan {
+          --card-w: 128px;
+          --card-h: 176px;
+        }
+        .fan img:nth-child(1) {
+          margin-right: -30px;
+        }
+        .fan img:nth-child(3) {
+          margin-left: -30px;
+        }
+        .title {
+          font-size: 30px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="splash">
+      <div class="fan">
+        <img src="/cards/riposte.png" alt="" width="128" height="176" />
+        <img src="/cards/execute.png" alt="" width="128" height="176" />
+        <img src="/cards/bulwark.png" alt="" width="128" height="176" />
+      </div>
+      <div>
+        <div class="title">Daily Deck</div>
+        <div class="sub">
+          Everyone in this subreddit plays the <strong>same run</strong> today.
+          Same cards, same enemies, same everything. One score to compare.
+        </div>
+      </div>
+      <button id="play-btn" class="play-btn">Play today's run</button>
+      <div class="meta">12 encounters · one run a day</div>
+    </div>
+    <script type="module" src="splash-init.ts"></script>
+  </body>
+</html>

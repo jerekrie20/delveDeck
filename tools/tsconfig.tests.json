@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../dist/types/tests",
+    "tsBuildInfoFile": "../dist/types/tests/tsconfig.tsbuildinfo",
+    "types": ["node"],
+    "rootDir": ".."
+  },
+  "include": ["../tests/**/*", "../scratchpad/**/*"],
+  "exclude": [],
+  "references": [
+    {
+      "path": "./tsconfig.client.json"
+    },
+    {
+      "path": "./tsconfig.server.json"
+    },
+    {
+      "path": "./tsconfig.shared.json"
+    }
+  ]
+}
