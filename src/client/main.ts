@@ -137,6 +137,9 @@ interface BoardEntry {
 
 let boardEntries: BoardEntry[] | null = null;
 let boardLoading = false;
+// Whether the board is pinned open outside the post-run screen (which shows it
+// unconditionally once loaded). This is the always-available entry point.
+let boardOverlay = false;
 
 const app = document.getElementById('app');
 if (!app) throw new Error('#app missing from HTML');
@@ -394,6 +397,11 @@ function header(result: RunResult, encounterNumber: number): string {
         <span>Cleared <strong>${result.cleared}</strong></span>
         <span>Score <strong>${result.score}</strong></span>
         ${badges.map(b => `<span class="badge">${escapeHtml(b)}</span>`).join('')}
+        ${
+          serverAvailable && !replayMode
+            ? `<button class="button button-small" data-action="toggle-board">${boardOverlay ? 'Hide Board' : 'Leaderboard'}</button>`
+            : ''
+        }
         <button class="button button-small" data-action="tutorial-start">How to play</button>
       </div>
     </div>`;
@@ -636,11 +644,9 @@ function boardPanel(): string {
   if (!serverAvailable) return '';
   if (boardLoading) return '<div class="panel board-loading">Loading leaderboard…</div>';
 
-  if (!boardEntries || boardEntries.length === 0) {
-    if (submitted || serverInit?.alreadyPlayed) {
-      return '<div class="panel hint" style="text-align:center">No other runs yet today. Be the first!</div>';
-    }
-    return '';
+  if (!boardEntries) return '';
+  if (boardEntries.length === 0) {
+    return '<div class="panel hint" style="text-align:center">No other runs yet today. Be the first!</div>';
   }
 
   const yourUsername = serverInit?.username;
@@ -696,9 +702,9 @@ function render(): void {
   } else if (!view) {
     body = resultScreen(result) + resultActions() + boardPanel();
   } else if (view.phase === 'draft') {
-    body = tutorialOffer() + draftScreen(view);
+    body = tutorialOffer() + draftScreen(view) + (boardOverlay ? boardPanel() : '');
   } else {
-    body = tutorialOffer() + combatScreen(view);
+    body = tutorialOffer() + combatScreen(view) + (boardOverlay ? boardPanel() : '');
   }
 
   // The outro replaces the board entirely, so the log below it would be a trace
@@ -758,6 +764,7 @@ app.addEventListener('click', (event) => {
       replayChoices = [];
       boardEntries = null;
       boardLoading = false;
+      boardOverlay = false;
       render();
       break;
     case 'submit':
@@ -774,6 +781,14 @@ app.addEventListener('click', (event) => {
       break;
     case 'load-board':
       void tryFetchBoard().then(() => render());
+      break;
+    case 'toggle-board':
+      boardOverlay = !boardOverlay;
+      if (boardOverlay && boardEntries === null && !boardLoading) {
+        void tryFetchBoard().then(() => render());
+      } else {
+        render();
+      }
       break;
     case 'replay-load': {
       const user = target.dataset['username'] ?? '';
@@ -831,7 +846,26 @@ async function boot(): Promise<void> {
 
   await tryInit();
 
-  // If already played today, pre-load the board.
+  // Already played today: this may be a fresh page load (Reddit reopened the
+  // post) rather than the same session that submitted, so `choices` starts
+  // empty and would otherwise simulate as a brand-new, unfinished run — never
+  // reaching the result screen the board lives on. Restore the submitted run
+  // so the player lands on their result, then pre-load the board.
+  if (serverInit?.alreadyPlayed && serverInit.username) {
+    try {
+      const own = await trpc.run.replay.query({
+        username: serverInit.username,
+        day: serverInit.day,
+      });
+      if (own) {
+        choices = own.choices;
+        submitted = true;
+      }
+    } catch {
+      // Board still loads below; the player just won't see their own result
+      // screen pre-filled this load.
+    }
+  }
   if (serverInit?.alreadyPlayed) {
     await tryFetchBoard();
   }
