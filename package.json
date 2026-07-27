@@ -13,7 +13,7 @@
     "login": "devvit login",
     "prettier": "prettier-package-json --write ./package.json && prettier --write .",
     "preview": "vite --config vite.preview.config.ts",
-    "test": "tsx tests/all.ts",
+    "test": "tsx tests/all.ts && vitest run --project server",
     "type-check": "tsc --build"
   },
   "engines": {

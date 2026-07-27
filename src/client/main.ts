@@ -137,6 +137,7 @@ interface BoardEntry {
 
 let boardEntries: BoardEntry[] | null = null;
 let boardLoading = false;
+let boardError: string | null = null;
 // Whether the board is pinned open outside the post-run screen (which shows it
 // unconditionally once loaded). This is the always-available entry point.
 let boardOverlay = false;
@@ -216,12 +217,18 @@ async function trySubmit(): Promise<string | null> {
 async function tryFetchBoard(): Promise<void> {
   if (!serverAvailable) return;
   boardLoading = true;
+  boardError = null;
   render();
   try {
     const data = await trpc.board.get.query({});
     boardEntries = data.entries;
-  } catch {
+  } catch (error: unknown) {
+    // Swallowing this used to render an empty string, which is indistinguishable
+    // from "the board is fine and empty" — the player just saw nothing and had
+    // no way to tell anyone what went wrong. Keep the message.
     boardEntries = null;
+    boardError = error instanceof Error ? error.message : String(error);
+    console.error('leaderboard fetch failed', error);
   } finally {
     boardLoading = false;
   }
@@ -644,6 +651,9 @@ function boardPanel(): string {
   if (!serverAvailable) return '';
   if (boardLoading) return '<div class="panel board-loading">Loading leaderboard…</div>';
 
+  if (boardError) {
+    return `<div class="panel hint" style="text-align:center">Leaderboard unavailable — ${escapeHtml(boardError)}<br><button class="button" data-action="load-board">Retry</button></div>`;
+  }
   if (!boardEntries) return '';
   if (boardEntries.length === 0) {
     return '<div class="panel hint" style="text-align:center">No other runs yet today. Be the first!</div>';
@@ -765,6 +775,7 @@ app.addEventListener('click', (event) => {
       boardEntries = null;
       boardLoading = false;
       boardOverlay = false;
+      boardError = null;
       render();
       break;
     case 'submit':

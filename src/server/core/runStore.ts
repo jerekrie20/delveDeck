@@ -39,9 +39,12 @@ export const redisRunStore: RunStore = {
   },
 
   async writeRunIfAbsent(key, value, expiresAt) {
-    // Devvit's SET NX resolves to null when the key already existed.
+    // Devvit's `set` is typed `Promise<string>` and is backed by a protobuf
+    // StringValue, so a refused NX write comes back as '' — never null. The old
+    // `result !== null` was therefore ALWAYS true, which silently disarmed the
+    // one-run-per-day guard. 'OK' is the only success value.
     const result = await redis.set(key, value, { nx: true, expiration: expiresAt });
-    return result !== null;
+    return result === 'OK';
   },
 
   async addBoardScore(key, member, score) {
@@ -60,8 +63,13 @@ export const redisRunStore: RunStore = {
   },
 
   async readTopBoardScores(key, limit) {
-    // Scores are never negative (see `scoreRun`), so '0' is a safe inclusive floor.
-    const entries = await redis.zRange(key, '+inf', '0', {
+    // `reverse` here does NOT mean "I am passing max then min" the way raw Redis
+    // `ZRANGE ... BYSCORE REV` does — Devvit takes the range ascending and
+    // reverses the RESULT. Passing ('+inf', '0') read as min=+inf, max=0, which
+    // is an empty range, so this returned [] for every board that ever existed.
+    // Keep the bounds ascending, and keep them infinite: a '0' floor would also
+    // silently drop a legitimate zero score.
+    const entries = await redis.zRange(key, '-inf', '+inf', {
       reverse: true,
       by: 'score',
       limit: { offset: 0, count: limit },
