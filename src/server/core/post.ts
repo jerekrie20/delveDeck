@@ -23,7 +23,7 @@ function dayMarkerKey(day: string, subreddit: string): string {
 /** Create today's post unconditionally. For the moderator menu item only. */
 export async function createPost(): Promise<{ id: string }> {
   return await reddit.submitCustomPost({
-    title: `Daily Deck — ${dayKey(Date.now())}`,
+    title: `Daily Delve — ${dayKey(Date.now())}`,
   });
 }
 

@@ -7,7 +7,7 @@ import type { BoardEntry } from './run';
 /** Render a single row of the share grid as text suitable for a Reddit comment. */
 export function renderShareText(score: number, cleared: number, hp: number): string {
   const squares = GAUNTLET.map((_, i) => (i < cleared ? '🟩' : '⬛')).join('');
-  return `Daily Deck — ${score} pts\n${squares}  ${cleared}/${GAUNTLET.length} · ${hp} HP`;
+  return `Daily Delve — ${score} pts\n${squares}  ${cleared}/${GAUNTLET.length} · ${hp} HP`;
 }
 
 /** Render a leaderboard entry as a single line. */

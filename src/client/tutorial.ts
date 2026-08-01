@@ -107,7 +107,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: 'welcome',
     screen: 'combat',
     focus: 'none',
-    title: 'Welcome to Daily Deck',
+    title: 'Welcome to Daily Delve',
     body:
       'Everyone in this subreddit plays the exact same run each day — same enemies, ' +
       'same card offers, same everything. The leaderboard compares decisions, not luck. ' +

@@ -11,7 +11,7 @@ import { dayKey } from '../../shared/sim';
  */
 export const schedulerRoutes = new Hono();
 
-/** Daily post: creates the "Daily Deck — YYYY-MM-DD" post at the scheduled time. */
+/** Daily post: creates the "Daily Delve — YYYY-MM-DD" post at the scheduled time. */
 schedulerRoutes.post('/daily-post', async (c) => {
   const day = dayKey(Date.now());
   const subreddit = context.subredditName;
