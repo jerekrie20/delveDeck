@@ -34,6 +34,7 @@ map — open it in Obsidian.
 | [GEAR.md](GEAR.md) | Procedural gear · affixes · salvage and reroll · uniques and sets |
 | [PROGRESSION.md](PROGRESSION.md) | XP · levels · classes · talents · unlocks · deeds · **the hero object** |
 | [ECONOMY.md](ECONOMY.md) | Shards · sources · sinks · **the rule that must never bend** |
+| [IDENTITY.md](IDENTITY.md) | Customization, cosmetics and **revenue** — money buys variety, play buys status |
 | **The fiction and the surface** | |
 | [STORY.md](STORY.md) | How the fiction reaches the player · the Endless depth ladder · seasons |
 | [LORE.md](LORE.md) | What is true — the voice, the canon, the cast |
@@ -42,7 +43,8 @@ map — open it in Obsidian.
 | **Process** | |
 | [SCREENS.md](SCREENS.md) | The 17 mockup screens → what each is, which stage builds it |
 | [MIGRATION.md](MIGRATION.md) | Why delvedeck and not infinite-delve · the salvage manifest · the risks |
-| [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) | **Temporary.** Exists to be emptied, then deleted. |
+| [QUESTIONS.md](QUESTIONS.md) | **Temporary.** Open decisions for the owner — two of them blocked on Devvit answers. |
+| [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) | **Temporary.** The contradiction log. Exists to be emptied, then deleted. |
 | **Visual** | |
 | [COMBAT-FLOW.canvas](COMBAT-FLOW.canvas) | Obsidian canvas — **a fight actually played out**, turn by turn, in all three modes |
 

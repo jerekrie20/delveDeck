@@ -54,6 +54,10 @@ them gets built as an unplanned fifth camp tile.
 | **The haul** | A strip on the combat screen — you must be able to see what you stand to lose *while deciding at the fork* | 6 |
 | **Resume-run prompt** | On the camp, when an Endless run is in progress | 6 |
 | **Delver naming** | Once, at first Endless entry | 6 |
+| **🏕️ Your camp** | The hub screen (02) becomes personal — site, fire, objects, ledger | 7 |
+| **🏆 The trophy wall** | Inside the camp. **Only items you surfaced with.** | 7 |
+| **Visiting a camp** | One tap from any board row, read-only — works *within* a sub with no cross-install problem | 7 |
+| **The store** | A tile on the shrine (05), never a wall in front of the game | 10 |
 | **The seven Endless beats** | Not a screen — coach cards fired by events, over days ([GAME_DESIGN.md](GAME_DESIGN.md)) | 6 |
 
 Two of those deliberately reuse an existing screen rather than adding one. **The camp

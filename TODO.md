@@ -339,6 +339,43 @@ migration; shipping an empty one is free.
       tier purchase. It gates foresight in **Endless only**; the Daily always renders
       all three. Never sell back a mechanic the player already has free.
 - [ ] Cosmetics recolour the flame and **never affect numbers**
+- [ ] Flame stays a **token set**, not a hardcoded colour — the stage already reads
+      `--lantern`; keep it a variable and every future cosmetic is free
+- [ ] Earned marks: community-event flames, deed titles, depth marks, streak marks,
+      **season marks** (permanently unrepeatable once a season ends — the strongest
+      thing in the game and it costs nothing)
+- [ ] **The lantern is an object, not a colour** — `skin` is a field *separate from the
+      slot's stats*, or a cosmetic can never be sold without selling foresight with it
+- [ ] **🏕️ Your camp** — screen 02 becomes personal: site, fire, placed objects, ledger.
+      **It must never affect a number**; the instant it grants anything it stops being
+      decoration and becomes a power sink.
+- [ ] **🏆 The trophy wall** — `trophies[]` written **only on surfacing**. Gear lost in
+      the haul can never be displayed; the wall's entire meaning is that it records
+      extraction, not luck. Store the depth it dropped at — that's the flex.
+- [ ] **Visiting camps** — one tap from a board row, read-only, no comments. Works
+      *within* a subreddit with no cross-install problem, unlike sub-vs-sub. Cheapest
+      social feature in the design: it turns a list of numbers into a list of places.
+- [ ] **≈40 gear base sprites** (PixelLab) — **one per base TYPE, never per item.**
+      Rarity ring, tint, glow and name stay code-drawn on top, so a thousand items ride
+      on forty sprites. `tests/art.test.ts` enforces squareness on these too.
+
+## Stage 10 — revenue (`IDENTITY.md`)
+
+Reddit's Developer Program sells digital goods for **gold** at $0.01/gold, $10 minimum
+payout, with an official template (`reddit/devvit-template-payments`). **Developer
+Funds is the primary path** — it pays for engagement and asks nothing of the design.
+
+- [ ] ⚠️ **BLOCKED — answer before a single item goes on sale:** does Devvit track
+      entitlements **per-user-per-app (global)**, or must the app store them itself
+      (**per-sub**, like the hero)? A flame bought in r/foo that is missing in r/bar is
+      a refund request every time. **This one involves other people's money — do not
+      guess.**
+- [ ] Cosmetic-only store, a tile on the shrine, **never a wall in front of the game**
+- [ ] **Gold never converts to shards, in either direction.** Shards buy ascends,
+      ascends are power — a conversion is gold→power with one extra step.
+- [ ] **No randomised purchases.** No loot boxes, no mystery items. The game already
+      asks players to gamble a haul; it will not ask them to gamble money.
+- [ ] Earned cosmetics are **never** sold, and the rarest-looking things stay unbuyable
 - [ ] Talents: one point per level, three shallow branches per class, **free instant
       respec**. They are `kit.mods` — the same fold as boons and affixes.
 - [ ] **Evolution**: each base class → one of two specialisations at a level gate.

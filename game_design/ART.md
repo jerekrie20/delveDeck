@@ -40,6 +40,42 @@ Everything below is CSS, not a file:
 
 ---
 
+## Gear sprites — allowed, with one rule
+
+Gear now gets **real sprites**, generated with PixelLab. Earlier drafts said gear was
+code-drawn plates with a two-letter glyph; that was a budget decision, not a law, and
+it is reversed. Item art is worth having — you cannot dress a delver, so the *objects*
+have to carry the fantasy.
+
+This is legal under Rule 1 and it is not close: an item sprite is **one static square
+that aligns with nothing**. It is not layered on a body, it has no frames, it has no
+anchor. It is the icon category — which is precisely the art that always went smoothly.
+
+> ### One sprite per TYPE. Never per INSTANCE.
+
+That is the whole rule, and it is what keeps procedural loot from becoming an infinite
+art commission.
+
+A **base type** gets a sprite — `Axe`, `Pick`, `Coat`, `Hood`, `Signet`, `Hooded Lamp`.
+Everything that distinguishes one *item* from another is drawn in code on top of it:
+the rarity ring, the tier tint, the glow, the affix list, the name. So:
+
+| | Sprites needed |
+|---|---|
+| 3–4 base types per slot × 11 slots | **≈ 40** |
+| An unbounded number of generated items | **0 more, ever** |
+
+A Legendary Gravebite Axe and a Common Axe are the same 40th sprite with a different
+code-drawn frame around it. Ship a thousand items on forty sprites.
+
+**The failure mode to watch:** the first time someone wants a unique to look different
+from its base. Uniques are hand-authored, so a handful of bespoke sprites for the most
+famous ones is a *deliberate, counted* exception — not a precedent that every rare
+needs its own.
+
+Generation follows the recipe and the checklist below like everything else, and
+`tests/art.test.ts` enforces squareness on these exactly as it does on portraits.
+
 ## The budget — there is no count cap
 
 An earlier draft of this doc set a hard cap of 12 portraits. **That number was
@@ -61,8 +97,16 @@ proven, never before (Rule 2 of `AGENTS.md`, and the ordering that hurt last tim
 |---|---|---|---|
 | Enemy portraits @128 | **8** | +22 | One per roster row; see BESTIARY.md |
 | Hero portrait | 0 | +1 | Generate @64, display centred @32 (see below) |
+| **Gear base sprites** | 0 | **≈40** | One per base *type*, never per item. Unbounded loot on a fixed sprite count. |
+| **Lantern objects** | 0 | grows | The sellable cosmetic slot — see [IDENTITY.md](IDENTITY.md) |
+| **Camp objects** | 0 | grows | Trophy-wall and base decoration. **The site, fire and light stay CSS.** |
 | Card illustrations @128×176 | 14 | **−14** | **DELETE.** See below. |
 | Stratum backdrops @400×320 | 3 | 0 | The stage is a CSS gradient. Optional; see below. |
+
+**Two of those rows grow forever and that is the point** — lantern objects and camp
+objects are the cosmetic surface, so their count rising is the business model working.
+They are safe to grow *only* because each one is an independent static square that
+lines up with nothing. The moment one needs to align with another, stop.
 
 **What replaces the cap as a tripwire:** `tests/art.test.ts`, which fails on any
 non-square portrait, and the standing rule that nothing is generated before the loop

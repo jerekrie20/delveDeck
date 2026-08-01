@@ -24,9 +24,15 @@ protected mode is a big surface area for that rule to leak through.
 
 ## Currencies
 
-**One currency. Shards.** Resisting a second one is a design decision, not an
+**One *game* currency. Shards.** Resisting a second one is a design decision, not an
 oversight — dual currencies exist to gate conversion rates, and there is nothing here
 worth gating.
+
+**Reddit gold is not a second currency; it is a payment rail** for cosmetics only, and
+**it never converts to shards in either direction** — see [IDENTITY.md](IDENTITY.md).
+That firewall matters more than it looks: shards buy gear ascends, ascends are power,
+so a gold→shard conversion would be gold→power with one extra step, and the Endless
+board would become a spend chart.
 
 | | Shards |
 |---|---|
@@ -124,7 +130,7 @@ delivers the whole "I can improve this" loop with one screen and no new content 
 
 | | Call |
 |---|---|
-| **Real money** | Not now, and if ever, **cosmetics only, forever.** Gear improvement and consumables are already shard-priced; making either purchasable would put purchasable power one bad quarter away from the Daily. |
+| **Real money for anything but cosmetics** | **Never.** Reddit gold buys look, never numbers, and never shards — [IDENTITY.md](IDENTITY.md) owns the whole surface. Gear improvement and consumables are shard-priced; making either purchasable would put purchasable power one bad quarter away from the Daily. |
 | **Loot boxes** | No. |
 | **A second currency** | No. Nothing here needs a conversion gate. |
 | **Trading between players** | No. It turns a per-subreddit hero into a market, and markets need moderation this project cannot staff. |
