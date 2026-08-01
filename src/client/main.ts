@@ -200,8 +200,13 @@ async function trySubmit(): Promise<string | null> {
   // button, and it submits `choices` (the daily run) rather than the practice
   // list, so a stray call here could only ever submit an unfinished daily run.
   if (!serverAvailable || submitted || replayMode || tutorialActive) return null;
+  // Send the day this run was PLAYED, not the day it happens to be when the
+  // button is pressed — a delve started before UTC midnight and finished after it
+  // must still be scored against the seed it was played on.
+  const playedDay = serverInit?.day;
+  if (!playedDay) return null;
   try {
-    const result = await trpc.run.submit.mutate({ choices });
+    const result = await trpc.run.submit.mutate({ choices, day: playedDay });
     if (result.ok) {
       submitted = true;
       await tryFetchBoard();
@@ -376,7 +381,7 @@ function header(result: RunResult, encounterNumber: number): string {
     return `
       <div class="header">
         <div>
-          <span class="title">Daily Deck</span>
+          <span class="title">Daily Delve</span>
           <span class="day">Tutorial — a practice run, not today's</span>
         </div>
         <div class="header-stats">
@@ -394,7 +399,7 @@ function header(result: RunResult, encounterNumber: number): string {
   return `
     <div class="header">
       <div>
-        <span class="title">Daily Deck</span>
+        <span class="title">Daily Delve</span>
         <span class="day">
           ${escapeHtml(serverInit?.day ?? localDay)} · seed ${seed}
         </span>

@@ -9,8 +9,35 @@
 // client supplied — that recomputation is the only thing making the leaderboard
 // mean anything.
 
-import { simulateRun, seedForDay, scoreRun, type RunChoice } from '../../shared/sim';
+import { simulateRun, seedForDay, scoreRun, dayKey, type RunChoice } from '../../shared/sim';
 import type { RunStore } from './runStore';
+
+// ---- which day a submission is allowed to be for -------------------------------
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/** How long after UTC midnight yesterday's run may still be handed in.
+ *
+ *  A delve takes ~4 minutes. Without a grace window, a run started at 23:58 and
+ *  finished at 00:01 was replayed against the NEXT day's seed, came back
+ *  `invalid`, and the player lost it to a message about an illegal choice. The
+ *  daily post is created at 00:01 UTC, so that window is exactly when traffic
+ *  turns over. */
+export const LATE_SUBMIT_GRACE_MINUTES = 20;
+
+/**
+ * Whether a run claiming to be for `claimedDay` may be submitted right now.
+ *
+ * Today always. Yesterday only inside the grace window. Anything else is refused,
+ * so this can't be used to hand in an arbitrary old day — the client picks which
+ * day it played, but not which days exist.
+ */
+export function isSubmittableDay(claimedDay: string, now: number): boolean {
+  if (claimedDay === dayKey(now)) return true;
+  // UTC days align to the epoch, so ms-into-day is a plain modulo.
+  const minutesIntoDay = (((now % MS_PER_DAY) + MS_PER_DAY) % MS_PER_DAY) / 60000;
+  return claimedDay === dayKey(now - MS_PER_DAY) && minutesIntoDay < LATE_SUBMIT_GRACE_MINUTES;
+}
 
 // ---- types --------------------------------------------------------------------
 

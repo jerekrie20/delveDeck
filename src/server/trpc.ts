@@ -4,7 +4,7 @@ import { transformer } from '../shared/transformer';
 import type { Context } from './context';
 import { context, reddit } from '@devvit/web/server';
 import { dayKey, seedForDay } from '../shared/sim';
-import { submitRun, getBoard, getRun, hasSubmitted } from './core/run';
+import { submitRun, getBoard, getRun, hasSubmitted, isSubmittableDay } from './core/run';
 import { redisRunStore } from './core/runStore';
 
 /**
@@ -29,11 +29,16 @@ const runChoiceSchema = z.discriminatedUnion('k', [
   z.object({ k: z.literal('end') }),
 ]);
 
+const dayRegex = /^\d{4}-\d{2}-\d{2}$/;
+
 const submitInput = z.object({
   choices: z.array(runChoiceSchema).min(1).max(500),
+  /** The day the run was PLAYED, from `init.get`. A ~4 minute delve can start
+   *  before UTC midnight and finish after it; scoring against the submit-time day
+   *  would replay it on the wrong seed and reject it. `isSubmittableDay` bounds
+   *  which days this is allowed to name. */
+  day: z.string().regex(dayRegex),
 });
-
-const dayRegex = /^\d{4}-\d{2}-\d{2}$/;
 
 export const appRouter = t.router({
   init: t.router({
@@ -52,19 +57,22 @@ export const appRouter = t.router({
 
   run: t.router({
     submit: publicProcedure.input(submitInput).mutation(async ({ input }) => {
-      const day = dayKey(Date.now());
+      const now = Date.now();
       const subreddit = context.subredditName;
       const username = (await reddit.getCurrentUsername()) ?? undefined;
       if (!username) {
         return { ok: false as const, error: 'You must be logged in to submit a run' };
       }
+      if (!isSubmittableDay(input.day, now)) {
+        return { ok: false as const, error: 'That delve is closed — today’s shaft is a new one' };
+      }
       return await submitRun(
         redisRunStore,
-        day,
+        input.day,
         subreddit,
         username,
         input.choices,
-        Date.now(),
+        now,
       );
     }),
 

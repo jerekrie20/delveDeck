@@ -9,7 +9,10 @@
 
 import { assert, check, describe } from './helpers';
 import { greedyChoices } from './policies';
-import { submitRun, getBoard, getRun, hasSubmitted } from '../src/server/core/run';
+import {
+  submitRun, getBoard, getRun, hasSubmitted,
+  isSubmittableDay, LATE_SUBMIT_GRACE_MINUTES,
+} from '../src/server/core/run';
 import type { BoardScore, RunStore } from '../src/server/core/runStore';
 import { seedForDay, simulateRun, scoreRun, type RunChoice } from '../src/shared/sim';
 
@@ -236,6 +239,51 @@ await check('fetching a run that was never submitted returns null', async () => 
   const store = fakeRunStore();
   assert.equal(await getRun(store, DAY, SUB, 'nobody'), null);
   assert.equal(await hasSubmitted(store, DAY, SUB, 'nobody'), false);
+});
+
+// ---- the midnight boundary ----------------------------------------------------
+//
+// A delve takes ~4 minutes, and the daily post is created at 00:01 UTC, so runs
+// genuinely straddle midnight. Scoring against the SUBMIT-time day replayed those
+// runs on the wrong seed, returned `invalid`, and lost them with a message about
+// an illegal choice. These pin the window that fixed it.
+
+const JUST_BEFORE_MIDNIGHT = Date.UTC(2026, 6, 25, 23, 58, 0);
+const JUST_AFTER_MIDNIGHT = Date.UTC(2026, 6, 26, 0, 1, 0);
+
+await check('a run played today can be submitted today', () => {
+  assert.ok(isSubmittableDay(DAY, NOW));
+  assert.ok(isSubmittableDay(DAY, JUST_BEFORE_MIDNIGHT));
+});
+
+await check("a run that straddles midnight is still yesterday's run", () => {
+  // Started 23:58 on the 25th, handed in 00:01 on the 26th. Before the fix this
+  // was replayed against the 26th's seed and rejected.
+  assert.ok(isSubmittableDay(DAY, JUST_AFTER_MIDNIGHT));
+});
+
+await check('the grace window closes, and it closes on time', () => {
+  const graceEnds = Date.UTC(2026, 6, 26, 0, 0, 0) + LATE_SUBMIT_GRACE_MINUTES * 60_000;
+  assert.ok(isSubmittableDay(DAY, graceEnds - 1_000), 'just inside the window');
+  assert.equal(isSubmittableDay(DAY, graceEnds + 1_000), false, 'just outside it');
+  assert.equal(isSubmittableDay(DAY, Date.UTC(2026, 6, 26, 12, 0, 0)), false, 'mid-afternoon');
+});
+
+await check('an arbitrary old or future day is refused', () => {
+  // The client picks WHICH day it played; it must not get to pick which days exist.
+  assert.equal(isSubmittableDay('2026-07-01', NOW), false, 'weeks ago');
+  assert.equal(isSubmittableDay('2026-07-24', NOW), false, 'two days ago');
+  assert.equal(isSubmittableDay('2026-07-26', NOW), false, 'tomorrow');
+});
+
+await check('a straddling run scores against the day it was PLAYED', async () => {
+  // The whole point: same choices, scored on yesterday's seed, still valid.
+  const store = fakeRunStore();
+  const result = await submitRun(store, DAY, SUB, 'alice', honestRun(DAY), JUST_AFTER_MIDNIGHT);
+  assert.ok(result.ok, 'a run handed in just after midnight must not be rejected');
+  const stored = await getRun(store, DAY, SUB, 'alice');
+  assert.ok(stored, 'and it lands on the day it was played');
+  assert.equal(stored.score, result.score);
 });
 
 /** A run that ends the turn until the player dies — a legal, complete, terrible
