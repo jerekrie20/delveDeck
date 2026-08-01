@@ -2,145 +2,115 @@
 
 ---
 
-Continue **delvedeck** (the game is *Daily Delve*), a daily-seed Reddit game at
+Continue **delvedeck** (the game is *Daily Delve*), a Reddit Devvit game at
 `C:\Users\Jeremiah\Desktop\reddit_games\delvedeck`.
 
-Read **AGENTS.md**, then **game_design/GAME_DESIGN.md** and **TODO.md** BEFORE
-touching anything. Follow CODING_BIBLE §4: **NO builds / devvit / vite build** —
-validate with `npm run type-check`, `npm run lint`, `npm run test`.
+Read **AGENTS.md**, then **game_design/GAME_DESIGN.md** and **TODO.md** before touching
+anything. Follow CODING_BIBLE §4: **no builds, no `devvit`, no `vite build`** — validate
+with `npm run type-check`, `npm run lint`, `npm run test`.
 
-**🔒 The design is LOCKED.** `game_design/` is the specification. Counts in it are
-caps. Only the owner unlocks it, and a change lands in the folder first, then in code
-and `TODO.md`. If code and the folder disagree, **the folder is right.**
-
-The design lives in `game_design/` — a spine plus three catalogs. It derives from
-`game_design/daily-delve-v5.html`, a 17-screen mockup. **The mockup wins unless a doc
-explicitly overrides it**; there are six overrides, listed together in
-`GAME_DESIGN.md`, each labelled in place. Never override it silently.
-
-**Docs own shape, code owns numbers.** A design doc says "24 abilities across 7
-archetypes"; it never says "Strike deals 9". Tuning lives in `TUNING` and the
-registries.
+**🔒 The design is LOCKED.** `game_design/` (17 docs + a canvas + the mockup) is the
+specification, not a sketch. Counts in it are caps. **If code and the folder disagree,
+the folder is right and the code is a bug.** Only I unlock it, and a change lands in the
+folder first, then in code and TODO.md.
 
 
-## ⚠️ FIRST — one blocked question worth five minutes
+## TASK 1 — I have answers to `game_design/QUESTIONS.md`
 
-**Does Devvit provide state shared across app installations of the same app?**
+I'll paste them at the start. For each one:
 
-Redis is scoped per installation (per subreddit), which is why heroes are per-sub.
-**Sub-vs-sub competition is undesignable until this is answered**, because the two
-possible answers support entirely different features — live races versus asynchronous
-comparison. `MODES.md` § Sub-vs-sub states the question and the fallback. Answer it
-against the Devvit docs before anyone designs on top of it.
+1. Fold the answer into **the doc that owns it** (the file says which), written as a
+   decision with its reasoning — not as a Q&A entry.
+2. Update `TODO.md` if it changes the build order.
+3. **Delete the answered row from QUESTIONS.md.** When the file is empty, delete it.
 
+Two are marked ⛔ and involve other people's money or data — **Q1 (do Devvit purchase
+entitlements survive across subreddits?)** and **Q2 (is there state shared across app
+installations?)**. If I haven't answered those, leave them blocked and don't design
+around a guess.
 
-## WHERE THINGS STAND
-
-**Stage 0 and 0.5 (design) are done. Stage 1 (sim migration) is next.** 73 checks
-green, type-check and lint clean.
-
-### The centre of gravity moved
-
-The design now treats the **Endless as the game** — the hero built piece by piece over
-months, and the reason anyone is still here on day forty. The **Daily is the habit**
-(four fair minutes) and the **Community is the belonging**.
-
-**The Daily still reads no account state, and that is *why* the Endless can be this
-deep.** Every power fantasy over there is safe exactly as long as there is one mode it
-cannot touch. Do not soften that while building the Endless out.
-
-**The haul rule is the biggest single change:** everything found on an Endless run is
-**lost on death**, including anything equipped from it mid-run. Only your starting kit,
-records, XP and story survive. This **overrides the mockup's screen 14** and turns the
-fork from a shard calculation into a real decision.
-
-The game is mid-migration from a **deckbuilder** to a **seeded ability pool**. M0–M3.5
-shipped the deck version end to end; the server, the verification loop, and the
-tutorial's invariants carry forward wholesale. The combat model does not.
-
-### The headline design decision
-
-**The day's 9 abilities are drawn by seed from a 24-ability catalog** (+3 ultimates
-from 6). Same seed, same nine, for everyone — comparability untouched — but the
-loadout puzzle is new daily, ~1,000 loadouts per day.
-
-This is a **balance decision first**. `THERE IS SKILL HEADROOM` currently passes
-largely *because* a random 5-card hand punishes left-to-right play; a fixed,
-fully-visible bar would have removed that variance and let the guard decay into a
-coin flip. The seeded pool puts it back in what you were *given* and what you *chose*.
-
-### What exists and carries forward
-
-- `src/server/` — tRPC `init.get` / `run.submit` / `run.replay` / `board.get`, Redis
-  per-sub leaderboard, one-run-per-day guard, daily scheduler post, server-side
-  replay verification. **This is the asset**; infinite-delve never built it.
-- `src/client/` — full DOM game, renders from the sim's view, keeps no game state of
-  its own. Shell survives Stage 2; the CSS and hand UI are replaced.
-- `src/client/splash.html` — the feed entrypoint. **It is a fan of three card
-  illustrations and those files are deleted at Stage 2**, so it needs a replacement
-  decision. Featherweight either way.
-- `src/client/tutorial.ts` — 15 steps today, **shrinks to 5 beats at Stage 3**.
-- `tests/` — 65 tsx checks + 8 server vitest. `npm run test` runs both; don't
-  "simplify" it to one, that has silently skipped a whole suite before.
-- `public/` — 8 enemy portraits @128 + 3 backdrops. **The 14 card illustrations go at
-  Stage 2.** Do not reuse them in the ~110×64 landscape ability tile — that means
-  re-cropping, which means a pipeline, which is the failure mode this project exists
-  to avoid.
-
-### What changed in the last session
-
-- `game_design/` fleshed out: `ABILITIES.md`, `BESTIARY.md`, `GEAR.md` added;
-  `GAME_DESIGN.md` rewritten as a spine.
-- `CODING_BIBLE.md` **rewritten** — it was infinite-delve's file verbatim, describing
-  a Phaser idle game and naming seven docs that don't exist here.
-- `"Daily Deck"` → **"Daily Delve"** across the code, including the daily post title.
-- **A live data-loss bug fixed:** a run played at 23:58 UTC and submitted at 00:01
-  was replayed against the *next* day's seed and lost. Submissions now carry the day
-  they were played, bounded by `isSubmittableDay` (today, or yesterday within 20
-  minutes). Five new checks pin it.
-- The 5–8 stratum renamed `CAMP` → **HOLD**; it collided with the hub, and the
-  collision landed in the share grid's middle row label.
+Do not start Task 2 until the answers are folded in.
 
 
-## TASK — Stage 1, in this order
+## TASK 2 — Stage 1: the sim migration, headless
 
-1. **Rebuild `scratchpad/probe.ts` FIRST**, before the sim rewrite lands. The
-   instrument has to exist to measure the change, not explain it afterwards.
-2. Then the rewrite, per `TODO.md` § Stage 1 — abilities catalog + archetypes,
-   `issuedPoolForDay`, the roster with `kind`/`stratum`/`threat`, the new choice
-   union, turn cooldowns, rage, per-depth RNG, two entry points.
-3. Rewrite `tests/policies.ts` and `tests/sim.test.ts`. **`tests/art.test.ts` breaks
-   in this stage** — it imports `CARDS` from `cards.ts`.
-4. **Zero UI in this stage.**
+The real work, fully specced in `TODO.md` § Stage 1. Zero UI in this stage.
 
-**The gate is measured, not asserted.** Run the probe across a seed sweep:
+**In this order:**
 
-- greedy must fall short of a full clear **with real margin**
-- **the best loadout must beat the worst by ≥1 depth on most seeds** — sweep bar
-  composition *and bar size*, or the loadout screen is decoration
-- "greedy" needs a loadout to mean anything: floor = **greedy on a median loadout**,
+1. **Rebuild `scratchpad/probe.ts` BEFORE the rewrite lands.** The instrument has to
+   exist to measure the change, not to explain it afterwards.
+2. `cards.ts` → `abilities.ts` + `boons.ts`. 24 abilities + 6 ultimates, tagged with
+   archetype / school / element / class. `ABILITIES.md` owns the shape; **you author the
+   numbers here and tune them against the probe.**
+3. `issuedPoolForDay(seed)` — 9 abilities + 3 ultimates, per the composition template.
+   The Daily draws **shared rows only** (no class-locked rows), so it stays account-blind.
+4. `enemies.ts` → 20 stratum templates + 4 wanderers + 6 bosses, with `kind`, `stratum`,
+   `threat`, `traits`, `bossOf`, and **boss phases** (a second intent cycle at an HP
+   threshold, shown on the track before it fires).
+5. The new `RunChoice` union, the turn loop, rage, per-depth RNG, two entry points.
+6. Rewrite `tests/policies.ts` and `tests/sim.test.ts`.
+
+**`tests/art.test.ts` breaks in this stage**, not Stage 2 — it imports `CARDS` from
+`cards.ts`.
+
+### The four seams — cheap now, rewrites later
+
+`GAME_DESIGN.md` § The seams Stage 1 must leave. Do not skip these:
+
+- `RunResult.shards` · `RunResult.seen: string[]` · `RunResult.facts` (`RunFacts`)
+- **A consumable/encounter variant in `RunChoice`** — unused until Stage 6, but a choice
+  variant **cannot be retrofitted into a verified replay list** without breaking every
+  stored run. This is the one that gets missed.
+- `issuedKitForDay(seed, modifier)` with the modifier always `'none'`
+
+### The gate — measured, not asserted
+
+Run the probe across a seed sweep:
+
+- Greedy must fall short of a full clear **with real margin**
+- **Best loadout beats worst by ≥1 depth on most seeds** — sweep composition *and bar
+  size*, or the loadout screen is decoration
+- "Greedy" needs a loadout to mean anything: floor = **greedy on a median loadout**,
   ceiling = **1-ply search on the best**. Report both plus the spread.
-- **every seed must be playable** — assert the composition template holds across a
-  large sweep. One unplayable day is a lost day for an entire subreddit, with no way
-  to reroll it.
+- **Every seed must be playable** — assert the composition template holds across a large
+  sweep. One unplayable day is a lost day for a whole subreddit, with no reroll.
+- **Pick the depth curve now.** Compounding ~8% forever puts depth 200 near five
+  million× base HP. It must flatten toward linear, with difficulty past that coming from
+  traits and lantern strain. Changing an exponent after players hold depth records
+  invalidates every record.
 
 If greedy full-clears: **widen cooldowns and cut numbers before adding systems.**
 
 
-## RULES THAT SHAPE THIS PROJECT (from AGENTS.md — please honour them)
+## STATE
 
-1. **No art that animates or aligns.** Enforced by `tests/art.test.ts`. There is **no
-   image count cap** — the ban is on work that compounds (strips, anchors,
-   paper-doll), not on volume. One portrait per roster row, none before the loop is
-   proven.
-2. **The Daily is issued-kit — `simulateRun` takes two arguments, forever.** No
-   account state reaches it. Endless derives its kit server-side.
+- Branch **`design/lock-the-specification`**, 5 commits ahead of `main`, **not pushed**.
+- **73 checks green** — 65 tsx (`tests/all.ts`) + 8 vitest (`--project server`).
+  `npm run test` runs both; don't "simplify" it to one, that has silently skipped a
+  whole suite before.
+- The server layer (tRPC, per-sub leaderboard, one-run-per-day guard, server-side replay
+  verification, daily scheduler post) is **built and carries forward unchanged.**
+- `public/` has 8 enemy portraits + 3 backdrops. The **14 card illustrations are deleted
+  at Stage 2** — don't reuse them in the ability tile; that means re-cropping, which
+  means a pipeline.
+
+
+## RULES THAT SHAPE THIS PROJECT
+
+1. **The Daily reads no account state.** `simulateRun(seed, choices)` — two arguments,
+   forever; a test asserts `.length === 2`. This is not the Daily being precious: every
+   power fantasy in the Endless is safe only while there is one mode it cannot touch.
+2. **The client submits CHOICES, never outcomes.** The server recomputes every score.
 3. `src/shared/` stays pure — no I/O, no DOM, no `Math.random`.
-4. **Never mutate the `ABILITIES` registry.** Boons fold over a copy; the server
-   process is long-lived and one write poisons later verifications.
-5. **No new Redis call without a test against `@devvit/test`'s mock.** The wrapper
-   does not behave like raw Redis and it has bitten this repo twice.
-6. Prefer fixing balance in `TUNING` + the probe over adding systems.
-7. Verify any layout change at 359×632, not just desktop.
+4. **Never mutate the `ABILITIES` registry.** Boons, talents, gear affixes and class
+   signatures all fold over a *copy* via `effectiveAbility()`. The server process is
+   long-lived; one write poisons every later verification.
+5. **No new Redis call without a test against `@devvit/test`'s mock.** The wrapper does
+   not behave like raw Redis and it has bitten this repo twice.
+6. **No art that animates or aligns.** Static squares only, enforced by
+   `tests/art.test.ts`. Gear sprites are legal — **one per base TYPE, never per item.**
+7. Verify any layout change at **359×632**, not just desktop.
+8. Prefer fixing balance in `TUNING` + the probe over adding systems.
 
 ---
