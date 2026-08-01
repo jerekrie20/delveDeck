@@ -17,3 +17,6 @@ coverage
 # Claude Code: launch.json is shared project config and IS committed;
 # settings.local.json is per-machine and is not.
 .claude/settings.local.json
+
+# Obsidian per-machine editor state (the vault content is tracked, its UI config is not)
+game_design/.obsidian/

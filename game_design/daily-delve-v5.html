@@ -1,0 +1,1244 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Daily Delve — v5 — full system</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   DAILY DELVE — v5
+   FIXED IN THIS PASS:
+   · Atmosphere (vignette + grain) is scoped to the STAGE only.
+     In v4 it sat at z-index 55/60, on top of the HUD, and was
+     eating the buttons. Now: atmosphere z0–4, stage z5–9,
+     HUD z10–19, overlays z20–29, transient FX z30+.
+   · All shells raised off near-black so panels have ground.
+   · Contrast tokens re-measured. Any type under 10px must use
+     --dim or brighter. --ghost is decorative only, never meaning.
+   · Disabled ≠ invisible. Off states desaturate + hatch, and keep
+     their text at readable contrast.
+   · Everything below the stage sits on a lit PLINTH — your
+     lantern lighting your own hands.
+   ═══════════════════════════════════════════════════════════════ */
+:root{
+  /* ── ink scale (measured on --shell) ─────────────────────── */
+  --ink:#f2f4f9;      /* primary            ~16:1 */
+  --ink2:#cdd4e2;     /* body / secondary    ~11:1 */
+  --dim:#a8b0c2;      /* labels, small caps  ~7:1  */
+  --faint:#7c8497;    /* 11px+ meta only     ~4.7:1*/
+  --ghost:#525a6b;    /* decorative ONLY */
+
+  --atk:#ff6257; --atk-deep:#7d211d; --atk-glow:rgba(255,98,87,.5);
+  --blk:#6cdcec; --blk-deep:#164e5c; --blk-glow:rgba(108,220,236,.45);
+  --buff:#bf9dff; --nrg:#ffc85c; --nrg-glow:rgba(255,200,92,.55);
+  --ok:#6bdd92; --ok-glow:rgba(107,221,146,.4);
+  --rage:#ff9450; --rage-glow:rgba(255,148,80,.5);
+  --shard:#a892ec;
+
+  --r-starter:#78808f; --r-common:#e8eaf0;
+  --r-uncommon:#6aa9df; --r-rare:#e2b854;
+
+  --px:"Silkscreen",ui-monospace,"Courier New",monospace;
+  --ui:system-ui,-apple-system,"Segoe UI",sans-serif;
+  --lantern:rgba(255,186,105,.15);
+
+  /* plinth — the lit control surface. constant at every depth. */
+  --plinth-1:#272d3a; --plinth-2:#1a1e27; --plinth-3:#141821;
+}
+/* ── strata: shells raised so nothing is pure black ─────────── */
+.d-surface{--stratum:#ffbc6a;--stratum-soft:rgba(255,188,106,.22);--shell:#241a13;--shell2:#181109;--vig:.42;--chill:0}
+.d-warrens{--stratum:#d4813f;--stratum-soft:rgba(212,129,63,.20);--shell:#1b1610;--shell2:#12100c;--vig:.52;--chill:0}
+.d-camp   {--stratum:#9bc94f;--stratum-soft:rgba(155,201,79,.16);--shell:#151a12;--shell2:#0e120c;--vig:.62;--chill:.35}
+.d-crypt  {--stratum:#a790ee;--stratum-soft:rgba(167,144,238,.18);--shell:#10121b;--shell2:#0a0c12;--vig:.72;--chill:.75}
+.d-abyss  {--stratum:#ff6257;--stratum-soft:rgba(255,98,87,.16);--shell:#150c0d;--shell2:#0b0708;--vig:.78;--chill:1}
+
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:#040507;color:var(--ink);font:600 14px/1.45 var(--ui);font-variant-numeric:tabular-nums;
+  display:flex;flex-wrap:wrap;gap:30px;padding:30px 18px 70px;justify-content:center;align-items:flex-start}
+.rig{display:flex;flex-direction:column;gap:9px;align-items:center;width:359px}
+.rig-label{font:400 10px/1.4 var(--px);letter-spacing:.1em;text-transform:uppercase;color:#7c8497;text-align:center}
+.phone{width:359px;height:632px;overflow:hidden;position:relative;background:#0a0c11;
+  box-shadow:0 24px 60px rgba(0,0,0,.8),0 0 0 1px #1c212b}
+.note{color:#828a9c;font-size:11px;line-height:1.6}.note b{color:#cdd4e2}
+.sect{width:100%;text-align:center;margin:22px 0 -6px;font:400 12px/1 var(--px);letter-spacing:.24em;
+  color:#5a6273;text-transform:uppercase}
+
+/* ═══════════════════════════════════════════════════════════════
+   SHELL + LAYERING
+   ═══════════════════════════════════════════════════════════════ */
+.app{height:100%;display:flex;flex-direction:column;position:relative;padding:8px 10px 10px 20px;
+  background:linear-gradient(180deg,var(--shell),var(--shell2) 78%,#07080c)}
+.app.plain{padding-left:12px}
+/* z1 · grain — BELOW the HUD now */
+.app::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;opacity:.34;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/><feColorMatrix type='saturate' values='0'/></filter><rect width='120' height='120' filter='url(%23n)' opacity='.14'/></svg>")}
+/* z2 · gentle global falloff, capped — the drama lives in the stage */
+.app::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:2;
+  background:radial-gradient(120% 74% at 50% 40%,transparent 46%,rgba(0,0,0,.5) 100%)}
+.app.panic .plinth{animation:panic 1.15s ease-in-out infinite}
+@keyframes panic{50%{box-shadow:inset 0 1px 0 rgba(255,215,170,.18),inset 0 0 0 1px #000,
+  inset 0 0 70px rgba(255,60,48,.3),0 -10px 26px rgba(255,186,105,.07)}}
+.app.shake{animation:shake .34s steps(4)}
+@keyframes shake{25%{transform:translate(-3px,2px)}50%{transform:translate(3px,-2px)}75%{transform:translate(-2px,-1px)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+
+.lantern{position:absolute;left:50%;bottom:-70px;width:420px;height:280px;margin-left:-210px;
+  pointer-events:none;z-index:3;background:radial-gradient(ellipse at 50% 100%,var(--lantern),transparent 66%);
+  animation:flicker 4.6s ease-in-out infinite}
+@keyframes flicker{37%{transform:scale(1.05)}62%{transform:scale(.97)}}
+.fog{position:absolute;inset:0;pointer-events:none;z-index:3;overflow:hidden}
+.fog i{position:absolute;width:250px;height:120px;border-radius:50%;filter:blur(24px);
+  background:var(--stratum-soft);animation:drift linear infinite}
+@keyframes drift{from{transform:translateX(-270px)}to{transform:translateX(390px)}}
+
+/* ── depth spine ────────────────────────────────────────────── */
+.spine{position:absolute;left:4px;top:10px;bottom:10px;width:11px;z-index:14;display:flex;flex-direction:column;gap:3px}
+.spine .cap{font:400 8px/1 var(--px);color:var(--dim);text-align:center;margin-bottom:3px}
+.rung{flex:1;background:#1a1f28;box-shadow:inset 0 0 0 1px #05060a;position:relative}
+.rung.past{background:linear-gradient(180deg,var(--stratum),transparent);opacity:.6}
+.rung.here{background:linear-gradient(180deg,#fff,var(--stratum));
+  box-shadow:0 0 12px var(--stratum),inset 0 0 0 1px #000;animation:hererung 1.7s ease-in-out infinite}
+@keyframes hererung{50%{transform:scaleX(1.5)}}
+.rung.here::after{content:"";position:absolute;left:14px;top:50%;margin-top:-4px;
+  border:4px solid transparent;border-left:6px solid #fff;filter:drop-shadow(0 0 5px var(--stratum))}
+.spine .band{flex:0 0 2px;background:rgba(255,255,255,.28);margin:2px 0}
+.mnu{position:absolute;top:8px;right:10px;z-index:16;width:26px;height:26px;font:400 12px/24px var(--px);
+  text-align:center;color:var(--ink2);background:rgba(20,24,32,.92);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
+
+.eyebrow{font:400 8px/1.5 var(--px);letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+.meter{position:relative;overflow:hidden;background:#0a0d13;box-shadow:inset 0 0 0 1px #000,inset 0 2px 5px rgba(0,0,0,.9)}
+.meter .fill{position:absolute;top:0;bottom:0;left:0}
+.meter::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(90deg,transparent 0 5px,rgba(0,0,0,.6) 5px 7px)}
+.grow{flex:1}
+.hd{position:relative;z-index:12;margin-top:8px}
+.hd .h{font:400 15px/1.3 var(--px);margin-top:6px;text-shadow:0 2px 0 #000}
+
+/* ═══════════════════════════════════════════════════════════════
+   STAGE — all the darkness lives in here
+   ═══════════════════════════════════════════════════════════════ */
+.stage{flex:0 0 auto;position:relative;height:208px;z-index:5;overflow:hidden;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.07)}
+.stage .bd{position:absolute;inset:0;image-rendering:pixelated;pointer-events:none;z-index:1;
+  background:radial-gradient(58% 44% at 50% 32%,var(--stratum-soft),transparent 72%),
+  repeating-linear-gradient(90deg,rgba(255,255,255,.025) 0 3px,transparent 3px 9px)}
+.stage .vig{position:absolute;inset:0;pointer-events:none;z-index:6;
+  background:radial-gradient(72% 62% at 50% 42%,transparent 26%,rgba(3,4,7,var(--vig)) 100%)}
+.stage .above{position:absolute;left:50%;top:0;width:120px;height:22px;margin-left:-60px;z-index:2;
+  background:radial-gradient(ellipse at 50% 0%,rgba(255,205,140,calc(.24 - var(--chill)*.2)),transparent 70%)}
+.mote{position:absolute;width:2px;height:2px;background:var(--stratum);box-shadow:0 0 7px var(--stratum);
+  animation:rise linear infinite;z-index:2}
+@keyframes rise{from{transform:translateY(30px)}to{transform:translateY(-175px) translateX(18px)}}
+.stagetop{position:absolute;top:8px;left:10px;right:40px;display:flex;justify-content:space-between;z-index:8}
+.depthtag{font:400 9px/1 var(--px);letter-spacing:.14em;color:var(--stratum);text-shadow:0 0 12px var(--stratum)}
+.foe{position:absolute;left:0;right:0;top:26px;padding:0 10px;display:flex;gap:11px;z-index:7}
+.pw{position:relative;width:100px;height:100px;flex:0 0 100px}
+.pglow{position:absolute;inset:-18px;border-radius:50%;background:radial-gradient(circle,var(--stratum-soft),transparent 66%);
+  animation:breathe 3.6s ease-in-out infinite}
+@keyframes breathe{50%{transform:scale(1.14)}}
+.port{position:absolute;inset:0;image-rendering:pixelated;background:linear-gradient(158deg,#37324a,#191826 55%,#0b0b12);
+  box-shadow:inset 0 0 0 1px #000,inset 0 0 30px rgba(0,0,0,.85),inset 0 2px 0 var(--stratum-soft),0 10px 22px rgba(0,0,0,.7);
+  display:grid;place-items:center;font:400 8px/1.6 var(--px);color:rgba(240,242,248,.3);text-align:center;
+  animation:sway 5s ease-in-out infinite}
+@keyframes sway{50%{transform:translateY(-5px)}}
+.port.hit{animation:recoil .3s steps(3)}
+@keyframes recoil{33%{transform:translate(-6px,2px)}66%{transform:translate(5px,-2px)}}
+.eyes{position:absolute;top:42%;left:50%;margin-left:-15px;display:flex;gap:18px;z-index:2}
+.eyes b{width:5px;height:5px;background:var(--atk);box-shadow:0 0 12px var(--atk),0 0 24px var(--atk);
+  animation:blink 5.5s steps(1) infinite}
+@keyframes blink{94%,97%{transform:scaleY(.1)}}
+.fside{flex:1;min-width:0;padding-top:4px}
+.fname{font:400 13px/1.2 var(--px);text-shadow:0 2px 0 #000,0 0 18px var(--stratum)}
+.ftags{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+.tag{font:400 7px/1 var(--px);letter-spacing:.1em;text-transform:uppercase;color:var(--ink2);padding:3px 5px;
+  background:rgba(14,17,24,.92);box-shadow:inset 0 0 0 1px rgba(240,242,248,.2)}
+.fhp{margin-top:8px}.fhp .meter{height:12px}
+.fhp .fill{background:linear-gradient(180deg,#ff8a6c,#a82d26 60%,#661814);box-shadow:0 0 14px var(--atk-glow)}
+.fhp .ghost{position:absolute;top:0;bottom:0;background:rgba(255,255,255,.65);transform-origin:right;
+  animation:chip .5s ease-out forwards}
+@keyframes chip{to{transform:scaleX(0)}}
+.fline{display:flex;justify-content:space-between;margin-top:4px;align-items:baseline}
+.fline .n{font:400 12px/1 var(--px);color:var(--ink)}.fline .n small{color:var(--dim);font-size:8px}
+.pop{position:absolute;z-index:30;font:400 22px/1 var(--px);pointer-events:none;
+  text-shadow:0 2px 0 #000,0 0 14px currentColor;animation:pop .75s ease-out forwards}
+@keyframes pop{0%{transform:translateY(8px) scale(.6)}30%{transform:translateY(-16px) scale(1.15)}
+  100%{transform:translateY(-42px) scale(.85)}}
+.pop.dmg{color:var(--atk)}.pop.blkp{color:var(--blk)}
+
+/* ── threat track ───────────────────────────────────────────── */
+.threat{position:absolute;left:8px;right:8px;bottom:8px;display:flex;gap:6px;align-items:flex-end;z-index:9}
+.ts{position:relative;flex:1;padding:5px 6px 6px;background:rgba(10,13,19,.96);
+  box-shadow:inset 0 0 0 1px #000,inset 0 1px 0 rgba(255,255,255,.12)}
+.ts .when{font:400 7px/1 var(--px);letter-spacing:.18em;color:var(--dim)}
+.ts .row{display:flex;align-items:center;gap:5px;margin-top:4px}
+.ts .gly{font-size:13px;line-height:1;filter:drop-shadow(0 0 7px currentColor)}
+.ts .val{font:400 14px/1 var(--px)}
+.ts .plus{font:400 8px/1 var(--px);color:var(--nrg);padding:2px 3px;box-shadow:inset 0 0 0 1px rgba(255,200,92,.5)}
+.ts.now{flex:1.65;padding:8px 9px 11px;margin-bottom:-4px;
+  box-shadow:inset 0 0 0 1px #000,inset 0 2px 0 rgba(255,255,255,.18),inset 0 -4px 0 rgba(0,0,0,.7),
+  0 4px 0 rgba(0,0,0,.6),0 0 26px var(--tg,transparent);animation:loom 2.3s ease-in-out infinite}
+@keyframes loom{50%{transform:translateY(-3px)}}
+.ts.now .val{font-size:26px}.ts.now .gly{font-size:19px}
+.ts.next{opacity:.95}.ts.then{opacity:.8}
+.ts.atk{--tg:var(--atk-glow)}.ts.atk .val,.ts.atk .gly,.ts.atk .when{color:var(--atk)}
+.ts.atk.now{background:linear-gradient(180deg,#55231e,#181011)}
+.ts.blk{--tg:var(--blk-glow)}.ts.blk .val,.ts.blk .gly,.ts.blk .when{color:var(--blk)}
+.ts.blk.now{background:linear-gradient(180deg,#154551,#0d151b)}
+.ts.buff{--tg:rgba(191,157,255,.45)}.ts.buff .val,.ts.buff .gly,.ts.buff .when{color:var(--buff)}
+.ts.buff.now{background:linear-gradient(180deg,#352a5c,#161422)}
+/* unlit = LOCKED, not invisible. Readable, with the reason. */
+.ts.unlit{background:rgba(16,20,28,.96);box-shadow:inset 0 0 0 1px #000,inset 0 0 0 1px rgba(255,200,92,.14)}
+.ts.unlit .when{color:#6f7788}
+.ts.unlit .lk{font:400 13px/1 var(--px);color:#8d95a7;margin-top:4px}
+.ts.unlit .why{font:400 6px/1.3 var(--px);letter-spacing:.1em;color:#b08b4e;margin-top:4px}
+.ts.lethal::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(115deg,rgba(255,98,87,.28) 0 6px,transparent 6px 14px);
+  animation:crawl 1s linear infinite}
+@keyframes crawl{to{transform:translateX(14px)}}
+.lt{position:absolute;top:-10px;right:-2px;font:400 8px/1 var(--px);letter-spacing:.1em;color:#fff;
+  background:#8e2621;padding:3px 5px;box-shadow:inset 0 0 0 1px var(--atk),0 0 14px var(--atk-glow)}
+
+/* ═══════════════════════════════════════════════════════════════
+   THE PLINTH — lit control surface. Never darkened by anything.
+   ═══════════════════════════════════════════════════════════════ */
+.plinth{position:relative;z-index:12;margin-top:8px;padding:9px 10px 10px;
+  display:flex;flex-direction:column;flex:1;
+  background:linear-gradient(180deg,var(--plinth-1),var(--plinth-2) 46%,var(--plinth-3));
+  box-shadow:inset 0 1px 0 rgba(255,215,170,.18),inset 0 0 0 1px #000,
+    inset 0 -3px 0 rgba(0,0,0,.5),0 -10px 26px rgba(255,186,105,.07)}
+.plinth::before{content:"";position:absolute;left:0;right:0;top:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(255,205,150,.55),transparent)}
+
+.hero{flex:0 0 auto;display:flex;gap:9px;align-items:center}
+.hport{position:relative;width:44px;height:44px;flex:0 0 44px;image-rendering:pixelated;
+  background:linear-gradient(150deg,#5b4f3a,#2a241d);
+  box-shadow:inset 0 0 0 1px #000,inset 0 2px 0 rgba(255,210,155,.35),0 0 16px rgba(255,186,105,.2);
+  display:grid;place-items:center;font:400 7px/1.4 var(--px);color:rgba(255,230,195,.62);text-align:center}
+.hport .lvl{position:absolute;bottom:-4px;right:-4px;font:400 8px/1 var(--px);color:#ffe9c0;
+  background:#2b2015;padding:2px 3px;box-shadow:inset 0 0 0 1px var(--r-rare)}
+.hbars{flex:1;min-width:0;position:relative}
+.armour{height:8px;position:relative;margin-bottom:3px}
+.armour .socket{position:absolute;inset:0;box-shadow:inset 0 0 0 1px rgba(108,220,236,.3);
+  background:repeating-linear-gradient(90deg,rgba(108,220,236,.08) 0 5px,transparent 5px 7px)}
+.armour .scales{position:absolute;top:0;bottom:0;left:0;transform-origin:50% 0;
+  background:repeating-linear-gradient(90deg,var(--blk) 0 5px,var(--blk-deep) 5px 7px);box-shadow:0 0 16px var(--blk-glow)}
+.armour .scales.gone{animation:shatter .5s cubic-bezier(.4,0,.85,.3) forwards}
+@keyframes shatter{40%{transform:translateY(2px) scaleY(1.12)}100%{transform:translateY(12px) scaleY(.04) skewX(24deg)}}
+.hprail{height:15px;position:relative}.hprail .meter{position:absolute;inset:0}
+.hprail .life{background:linear-gradient(180deg,#fdfeff,#b3bccf 65%,#818b9e)}
+.hprail .loss{position:absolute;top:0;bottom:0;background:linear-gradient(180deg,#ff7365,#8c2621);
+  background-image:repeating-linear-gradient(48deg,rgba(0,0,0,.28) 0 3px,transparent 3px 7px);
+  box-shadow:0 0 14px var(--atk-glow);animation:threat 1.05s ease-in-out infinite}
+@keyframes threat{50%{transform:scaleY(1.2)}}
+.hread{flex:0 0 auto;text-align:right;line-height:1}
+.hread .n{font:400 18px/1 var(--px);text-shadow:0 2px 0 #000}
+.hread .n small{font-size:8px;color:var(--dim)}
+.hread .n.low{color:var(--atk);animation:heart 1.15s ease-in-out infinite}
+@keyframes heart{50%{transform:scale(1.09)}}
+.hread .d{font:400 10px/1 var(--px);margin-top:5px;color:var(--atk)}
+.hread .d.safe{color:var(--ok)}
+.perfect{position:absolute;left:0;right:0;top:-14px;text-align:center;font:400 10px/1 var(--px);
+  letter-spacing:.2em;color:var(--ok);text-shadow:0 0 14px var(--ok-glow);animation:pop .9s ease-out forwards;z-index:30}
+
+.res{flex:0 0 auto;display:flex;align-items:center;gap:7px;margin-top:9px}
+.pips{display:flex;gap:4px}
+.pip{width:14px;height:14px;transform:rotate(45deg);background:#0d1017;
+  box-shadow:inset 0 0 0 1px rgba(255,200,92,.38)}
+.pip.on{background:linear-gradient(140deg,#fff6dd,var(--nrg) 55%,#cd8a17);
+  box-shadow:0 0 14px var(--nrg-glow);animation:pipglow 2.3s ease-in-out infinite}
+@keyframes pipglow{50%{transform:rotate(45deg) scale(1.1)}}
+.lab{font:400 8px/1 var(--px);letter-spacing:.14em;color:var(--dim)}
+.rage{flex:0 0 94px}
+.rage .meter{height:9px}
+.rage .fill{background:linear-gradient(180deg,#ffbe80,var(--rage) 60%,#ad4a13);box-shadow:0 0 14px var(--rage-glow)}
+.rage .k{font:400 7px/1 var(--px);letter-spacing:.12em;color:var(--dim);margin-top:4px;text-align:right}
+.rage.full .fill{animation:ragefull .9s ease-in-out infinite}
+@keyframes ragefull{50%{transform:scaleY(1.35)}}
+.log{flex:0 0 auto;margin-top:8px;height:18px;display:flex;align-items:center;gap:6px;
+  font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden}
+.log em{font-style:normal;color:var(--ink2)}
+
+/* ── ability bar ────────────────────────────────────────────── */
+.abgrid{flex:0 0 auto;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:9px}
+.ab{--rar:var(--r-common);position:relative;height:64px;cursor:pointer;overflow:hidden;
+  background:linear-gradient(158deg,var(--a1,#5c6577),var(--a2,#22262f) 72%,#12151c);
+  box-shadow:inset 0 0 0 1px #000,inset 0 0 0 2px var(--rar),inset 0 0 0 3px rgba(0,0,0,.85),
+    inset 0 0 18px rgba(0,0,0,.45),0 3px 0 rgba(0,0,0,.55);
+  animation:abin .34s cubic-bezier(.2,.9,.3,1.05) backwards;animation-delay:calc(var(--i)*40ms);
+  transition:transform .1s}
+@keyframes abin{from{transform:translateY(16px) scale(.92)}}
+.ab:not(.off):active{transform:translateY(2px)}
+.ab .ico{position:absolute;top:6px;left:8px;font:400 15px/1 var(--px);color:#fff;
+  text-shadow:0 2px 0 #000,0 0 12px var(--rar)}
+.ab .cost{position:absolute;top:5px;right:5px;width:17px;height:17px;transform:rotate(45deg);
+  background:linear-gradient(140deg,#fff6dd,var(--nrg) 55%,#cd8a17);
+  box-shadow:inset 0 0 0 1px #2c1c00,0 0 10px var(--nrg-glow)}
+.ab .cost span{display:block;transform:rotate(-45deg);color:#2c1c00;font:700 10px/16px var(--px);text-align:center}
+.ab .nm{position:absolute;left:7px;right:7px;bottom:19px;font:400 8px/1 var(--px);color:#fff;text-shadow:0 2px 0 #000}
+.ab .rx{position:absolute;left:7px;right:7px;bottom:5px;font:600 9px/1.2 var(--ui);color:var(--ink2)}
+.ab .rx b{color:#ff8a80}.ab .rx i{font-style:normal;color:#8fe6f4}
+.ab .cdtag{position:absolute;bottom:5px;right:6px;font:400 7px/1 var(--px);color:var(--dim)}
+.ab.r-starter{--rar:var(--r-starter);--a1:#525a6a;--a2:#22262f}
+.ab.r-common{--rar:var(--r-common);--a1:#5c6577}
+.ab.r-uncommon{--rar:var(--r-uncommon);--a1:#356a95;--a2:#1a2431}
+.ab.r-rare{--rar:var(--r-rare);--a1:#7a5c2c;--a2:#2e251a}
+.ab.r-rare .sheen{position:absolute;top:-60%;left:-40%;width:26%;height:220%;transform:rotate(20deg);
+  background:linear-gradient(90deg,transparent,rgba(255,240,200,.4),transparent);
+  animation:sheen 4.4s ease-in-out infinite}
+@keyframes sheen{0%{transform:translateX(0) rotate(20deg)}58%,100%{transform:translateX(200px) rotate(20deg)}}
+.ab.ready{box-shadow:inset 0 0 0 1px #000,inset 0 0 0 2px var(--rar),inset 0 0 0 3px rgba(0,0,0,.85),
+  inset 0 0 18px rgba(0,0,0,.45),0 3px 0 rgba(0,0,0,.55),0 0 16px var(--rar)}
+/* OFF: desaturate + hatch. Text stays readable. */
+.ab.off{filter:saturate(.28);cursor:default}
+.ab.off::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(125deg,rgba(0,0,0,.42) 0 5px,transparent 5px 11px)}
+.ab.off .rx,.ab.off .nm{color:#b6bdcb}
+.ab.off .cost{background:linear-gradient(140deg,#8c4a41,#3a1c19);box-shadow:inset 0 0 0 1px #b0453c}
+.ab.off .cost span{color:#ffd0ca}
+.ab .cdmask{position:absolute;inset:0;background:rgba(9,12,18,.7);display:grid;place-items:center;z-index:3}
+.ab .cdmask b{font:400 26px/1 var(--px);color:#e2e7f0;text-shadow:0 2px 0 #000,0 0 14px rgba(108,220,236,.5)}
+.ab .cdmask i{position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--blk);box-shadow:0 0 8px var(--blk-glow)}
+.ab.ult{grid-column:span 3;height:50px}
+.ab.ult .nm{bottom:21px;left:50px;font-size:10px}
+.ab.ult .rx{left:50px;bottom:7px}
+.ab.ult .ico{top:15px;left:15px;font-size:20px}
+.ab.ult.charged{animation:abin .34s cubic-bezier(.2,.9,.3,1.05) backwards,ultpulse 1.6s ease-in-out infinite .4s}
+@keyframes ultpulse{50%{transform:scale(1.012)}}
+.ab.ult .chargebar{position:absolute;left:0;right:0;bottom:0;height:4px;background:#232833;z-index:4}
+.ab.ult .chargebar span{position:absolute;left:0;top:0;bottom:0;
+  background:linear-gradient(90deg,#ffbe80,var(--rage));box-shadow:0 0 12px var(--rage-glow)}
+
+/* ═══════════════════════════════════════════════════════════════
+   BUTTONS — brighter base, hard lip, always above atmosphere
+   ═══════════════════════════════════════════════════════════════ */
+.act{flex:0 0 auto;display:flex;gap:8px;margin-top:9px;z-index:14;position:relative}
+.btn{position:relative;height:48px;flex:1;cursor:pointer;color:#fff;font:400 12px/1 var(--px);
+  letter-spacing:.06em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  background:linear-gradient(180deg,#5b6479,#3a4251 45%,#252b36);
+  box-shadow:inset 0 0 0 1px #000,inset 0 2px 0 rgba(255,255,255,.24),inset 0 -3px 0 rgba(0,0,0,.55),
+    0 4px 0 #0a0d12,0 8px 16px rgba(0,0,0,.65);transition:transform .08s,box-shadow .08s;
+  text-shadow:0 1px 0 rgba(0,0,0,.75)}
+.btn:active{transform:translateY(3px);box-shadow:inset 0 0 0 1px #000,inset 0 2px 0 rgba(255,255,255,.14),0 1px 0 #0a0d12}
+.btn .sub{font:400 8px/1 var(--px);letter-spacing:.14em;color:#e2e7f0;opacity:.9}
+.btn.go{background:linear-gradient(180deg,#a58a49,#6e5427 45%,#3a2b14);
+  box-shadow:inset 0 0 0 1px #000,inset 0 2px 0 rgba(255,235,180,.45),inset 0 -3px 0 rgba(0,0,0,.55),
+    0 4px 0 #1c150b,0 0 26px rgba(226,184,84,.32)}
+.btn.go .sub{color:#fff2d4}
+.btn.danger{background:linear-gradient(180deg,#b34a40,#7a2621 45%,#3d1512);
+  box-shadow:inset 0 0 0 1px #000,inset 0 2px 0 rgba(255,190,180,.4),inset 0 -3px 0 rgba(0,0,0,.55),
+    0 4px 0 #200907,0 0 28px var(--atk-glow)}
+.btn.cool{background:linear-gradient(180deg,#3a7a89,#1e5260 45%,#0f2830);
+  box-shadow:inset 0 0 0 1px #000,inset 0 2px 0 rgba(175,240,252,.4),0 4px 0 #08151a,0 0 26px var(--blk-glow)}
+.btn.good{background:linear-gradient(180deg,#3f9a63,#25683f 45%,#123420);
+  box-shadow:inset 0 0 0 1px #000,inset 0 2px 0 rgba(180,250,205,.4),0 4px 0 #071a10,0 0 26px var(--ok-glow)}
+.btn.small{flex:0 0 74px;font-size:10px;background:linear-gradient(180deg,#3a4251,#20252f)}
+.btn[disabled]{filter:saturate(.3);opacity:.8;pointer-events:none}
+.btn[disabled]::after{content:"";position:absolute;inset:0;
+  background:repeating-linear-gradient(125deg,rgba(0,0,0,.4) 0 5px,transparent 5px 11px)}
+.btn .hz{position:absolute;left:0;right:0;bottom:0;height:3px;
+  background:repeating-linear-gradient(115deg,var(--atk) 0 5px,#000 5px 10px)}
+
+/* ═══════════════════════════════════════════════════════════════
+   PANELS — generic readable surface used by every menu screen
+   ═══════════════════════════════════════════════════════════════ */
+.pane{position:relative;z-index:12;background:linear-gradient(180deg,#20252f,#161a22);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.11),inset 0 0 0 1px #000}
+.pane.lit{box-shadow:inset 0 1px 0 rgba(255,205,150,.28),inset 0 0 0 1px #000,0 0 22px rgba(255,186,105,.1)}
+.rowitem{display:flex;gap:9px;align-items:center;padding:9px 10px;cursor:pointer;
+  box-shadow:inset 0 -1px 0 rgba(0,0,0,.6)}
+.rowitem:last-child{box-shadow:none}
+.rowitem.sel{background:linear-gradient(90deg,rgba(226,184,84,.16),transparent);
+  box-shadow:inset 3px 0 0 var(--r-rare),inset 0 -1px 0 rgba(0,0,0,.6)}
+.gi{width:34px;height:34px;flex:0 0 34px;position:relative;image-rendering:pixelated;
+  background:linear-gradient(150deg,var(--g1,#4a5261),#171b22);
+  box-shadow:inset 0 0 0 1px #000,inset 0 0 0 2px var(--rar,var(--r-common)),inset 0 0 0 3px rgba(0,0,0,.8)}
+.gi span{position:absolute;inset:0;display:grid;place-items:center;font:400 11px/1 var(--px);
+  color:#fff;text-shadow:0 0 10px var(--rar)}
+.gm{flex:1;min-width:0}
+.gk{font:400 7px/1 var(--px);letter-spacing:.16em;color:var(--dim)}
+.gn{font:400 10px/1.2 var(--px);margin-top:6px;color:var(--rar,var(--ink))}
+.gs{font-size:10px;color:var(--ink2);margin-top:5px;line-height:1.4}
+.gs b{color:var(--ok)}.gs s{color:#e2857c;text-decoration:none}
+.r-common{--rar:var(--r-common);--g1:#5c6577}
+.r-uncommon{--rar:var(--r-uncommon);--g1:#356a95}
+.r-rare{--rar:var(--r-rare);--g1:#7a5c2c}
+.r-starter{--rar:var(--r-starter);--g1:#4a5261}
+.empty2{--rar:#4d5666;--g1:#171b22}
+.empty2 .gn{color:var(--faint)}
+
+/* ═══════════════════════════════════════════════════════════════
+   CAMP
+   ═══════════════════════════════════════════════════════════════ */
+.fire{position:absolute;left:50%;top:70px;width:300px;height:220px;margin-left:-150px;pointer-events:none;z-index:3;
+  background:radial-gradient(ellipse at 50% 60%,rgba(255,176,84,.3),transparent 66%);
+  animation:flicker 3.2s ease-in-out infinite}
+.camphead{position:relative;z-index:12;display:flex;gap:11px;align-items:center;margin-top:6px;
+  padding:10px;background:linear-gradient(180deg,#2c2419,#1a1610);
+  box-shadow:inset 0 1px 0 rgba(255,205,150,.3),inset 0 0 0 1px #000}
+.camphead .hport{width:54px;height:54px;flex:0 0 54px}
+.chname{font:400 14px/1 var(--px);text-shadow:0 2px 0 #000}
+.chclass{font:400 8px/1 var(--px);letter-spacing:.16em;color:#ffbc6a;margin-top:6px}
+.xp{margin-top:8px}.xp .meter{height:6px}
+.xp .fill{background:linear-gradient(180deg,#ffe0a6,#d4813f);box-shadow:0 0 10px rgba(255,186,105,.5)}
+.shards{flex:0 0 auto;text-align:right}
+.shards .v{font:400 15px/1 var(--px);color:#c4b2ff;text-shadow:0 0 14px rgba(168,146,236,.6)}
+.shards .k{font:400 7px/1 var(--px);letter-spacing:.14em;color:var(--dim);margin-top:6px}
+.doors{position:relative;z-index:12;margin-top:9px;display:flex;flex-direction:column;gap:8px}
+.door{position:relative;padding:11px 12px;cursor:pointer;overflow:hidden;
+  background:linear-gradient(120deg,#20252f,#141821);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12),inset 0 0 0 1px #000,0 3px 0 rgba(0,0,0,.55);transition:transform .12s}
+.door:active{transform:translateY(2px)}
+.door::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--dc);box-shadow:0 0 16px var(--dc)}
+.door .dt{font:400 12px/1 var(--px);letter-spacing:.05em}
+.door .dd{font-size:11px;color:var(--ink2);margin-top:7px;line-height:1.45}
+.door .dd b{color:#fff}
+.door .badge{position:absolute;top:11px;right:12px;font:400 8px/1 var(--px);letter-spacing:.1em;
+  padding:4px 6px;color:#0a0c10;background:var(--dc);box-shadow:0 0 14px var(--dc)}
+.door .prog{margin-top:9px}.door .prog .meter{height:8px}
+.door.daily{--dc:#ffbc6a}.door.endless{--dc:#a790ee}.door.community{--dc:#6bdd92}
+.door.daily .prog .fill{background:linear-gradient(180deg,#ffddb0,#d4813f)}
+.door.community .prog .fill{background:linear-gradient(180deg,#9aecb8,#2f8a52);box-shadow:0 0 12px var(--ok-glow)}
+.tiles{position:relative;z-index:12;margin-top:auto;display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.tile{position:relative;padding:10px 4px 9px;text-align:center;cursor:pointer;
+  background:linear-gradient(180deg,#2a2620,#15141a);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12),inset 0 0 0 1px #000,0 3px 0 rgba(0,0,0,.55)}
+.tile .g{font:400 15px/1 var(--px);color:#ffd9a0;text-shadow:0 0 12px rgba(255,186,105,.6)}
+.tile .k{font:400 7px/1 var(--px);letter-spacing:.08em;color:var(--ink2);margin-top:8px}
+.tile .dot{position:absolute;top:6px;right:6px;width:6px;height:6px;background:var(--ok);box-shadow:0 0 10px var(--ok-glow)}
+
+/* ── foresight strip ────────────────────────────────────────── */
+.foresight{display:flex;gap:5px;margin-top:9px}
+.fs{flex:1;height:28px;display:grid;place-items:center;font:400 8px/1 var(--px);letter-spacing:.1em;
+  background:#12151d;color:#7d8698;box-shadow:inset 0 0 0 1px #000}
+.fs.lit{color:#241703;background:linear-gradient(180deg,#ffddb0,#d4813f);box-shadow:0 0 16px rgba(255,186,105,.5)}
+.fs.nxt{color:#e0b263;box-shadow:inset 0 0 0 1px rgba(255,186,105,.5)}
+.statgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:9px;z-index:12;position:relative}
+.st{padding:9px;background:linear-gradient(180deg,#20252f,#161a22);box-shadow:inset 0 1px 0 rgba(255,255,255,.1),inset 0 0 0 1px #000}
+.st .k{font:400 7px/1 var(--px);letter-spacing:.14em;color:var(--dim)}
+.st .v{font:400 14px/1 var(--px);margin-top:7px}
+.st .v em{font-style:normal;font-size:9px;color:var(--ok)}
+
+/* ── boons / skip ───────────────────────────────────────────── */
+.boons{position:relative;z-index:12;display:flex;flex-direction:column;gap:7px;margin-top:11px}
+.boon{position:relative;display:flex;gap:10px;align-items:center;padding:11px 10px;cursor:pointer;
+  background:linear-gradient(120deg,#20252f,#141821);
+  box-shadow:inset 0 0 0 1px #000,inset 0 0 0 2px var(--rar),inset 0 0 0 3px rgba(0,0,0,.8);transition:transform .14s}
+.boon.on{transform:translateY(-2px);box-shadow:inset 0 0 0 1px #000,inset 0 0 0 2px var(--rar),
+  inset 0 0 0 3px rgba(0,0,0,.8),0 0 22px var(--rar)}
+.boon .bi{width:38px;height:38px;flex:0 0 38px;display:grid;place-items:center;font:400 13px/1 var(--px);
+  color:#fff;background:linear-gradient(150deg,var(--g1),#12151c);text-shadow:0 0 12px var(--rar);box-shadow:inset 0 0 0 1px #000}
+.boon .bn{font:400 10px/1 var(--px);color:var(--rar)}
+.boon .bd{font-size:11px;color:var(--ink2);margin-top:7px;line-height:1.4}
+.skipb{position:relative;z-index:12;margin-top:7px;display:flex;align-items:center;gap:10px;padding:11px 10px;
+  cursor:pointer;background:linear-gradient(120deg,#18251d,#0e1512);
+  box-shadow:inset 0 0 0 1px rgba(107,221,146,.45),inset 0 1px 0 rgba(255,255,255,.08)}
+.skipb.on{box-shadow:inset 0 0 0 2px var(--ok),0 0 22px var(--ok-glow)}
+.skipb .big{font:400 17px/1 var(--px);color:var(--ok);text-shadow:0 0 14px var(--ok-glow)}
+.skipb .t{flex:1;font-size:11px;color:var(--ink2);line-height:1.45}
+.skipb .t b{display:block;font:400 10px/1 var(--px);color:#fff;margin-bottom:6px;letter-spacing:.06em}
+
+/* ── descent ────────────────────────────────────────────────── */
+.desc{position:absolute;inset:0;z-index:24;overflow:hidden;background:linear-gradient(180deg,#0e1119,#07080d)}
+.strata{position:absolute;left:0;right:0;top:-100%;height:300%;animation:fall 2.4s cubic-bezier(.35,0,.2,1) infinite}
+@keyframes fall{to{transform:translateY(46%)}}
+.strata i{display:block;height:22px;margin-bottom:14px;
+  background:linear-gradient(90deg,transparent,rgba(167,144,238,.26),transparent);box-shadow:0 1px 0 rgba(255,255,255,.08)}
+.desc .mid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.desc .lbl{font:400 9px/1 var(--px);letter-spacing:.38em;color:var(--dim)}
+.desc .num{font:400 68px/1 var(--px);margin-top:14px;text-shadow:0 5px 0 #000,0 0 40px rgba(167,144,238,.65);
+  animation:slam .45s cubic-bezier(.2,1.7,.4,1)}
+@keyframes slam{from{transform:scale(2.4)}}
+.desc .nmz{font:400 15px/1 var(--px);letter-spacing:.2em;color:#bda9ff;margin-top:16px;text-shadow:0 0 22px rgba(167,144,238,.7)}
+.desc .warn{margin-top:22px;font-size:11px;color:var(--ink2);line-height:1.7}
+.desc .warn b{color:var(--atk)}
+.desc .foot{position:absolute;left:0;right:0;bottom:22px;text-align:center;font:400 8px/1 var(--px);
+  letter-spacing:.18em;color:var(--dim)}
+
+/* ── result / share ─────────────────────────────────────────── */
+.rtop{position:relative;z-index:12;margin-top:10px;text-align:center;padding:8px 0 4px}
+.stamp{display:inline-block;font:400 9px/1 var(--px);letter-spacing:.18em;color:#ff8b82;padding:6px 10px;
+  transform:rotate(-2.5deg);background:rgba(140,38,33,.35);box-shadow:inset 0 0 0 1px var(--atk),0 0 20px var(--atk-glow)}
+.score{font:400 42px/1 var(--px);margin-top:13px;text-shadow:0 4px 0 #000,0 0 34px rgba(226,184,84,.55)}
+.rankline{font-size:11px;color:var(--ink2);margin-top:9px}
+.rankline b{color:#f0cd74;font-family:var(--px);font-size:12px}
+.bdr{display:flex;justify-content:space-between;padding:8px 10px;font-size:11px;color:var(--ink2);
+  box-shadow:inset 0 -1px 0 rgba(0,0,0,.6)}
+.bdr .n{font:400 12px/1 var(--px);color:var(--ink)}
+.bdr.miss{color:var(--faint)}.bdr.miss .n{color:var(--faint)}
+.bdr.tot{background:linear-gradient(180deg,#2b3240,#1a1f28);box-shadow:none}
+.bdr.tot .n{color:#f0cd74;font-size:14px;text-shadow:0 0 14px rgba(226,184,84,.5)}
+.share{position:relative;z-index:12;margin-top:11px;padding:10px;background:#0d1017;
+  box-shadow:inset 0 0 0 1px #262c38,inset 0 1px 0 rgba(255,255,255,.08)}
+.sh{display:flex;justify-content:space-between;font:400 8px/1 var(--px);letter-spacing:.12em;color:var(--dim);text-transform:uppercase}
+.sgrid{margin:10px 0 9px;display:flex;flex-direction:column;gap:4px;align-items:center}
+.srow{display:flex;gap:4px;align-items:center;position:relative}
+.srow .sl{position:absolute;left:-52px;font:400 7px/1 var(--px);color:var(--dim);letter-spacing:.12em}
+.sq{width:26px;height:26px;background:#1c212b;box-shadow:inset 0 0 0 1px rgba(0,0,0,.7);
+  animation:sqin .32s cubic-bezier(.2,1.5,.4,1) backwards;animation-delay:calc(var(--n)*45ms)}
+@keyframes sqin{from{transform:scale(0) rotate(-40deg)}}
+.sq.full{background:linear-gradient(160deg,#8aeaae,#2f8a52);box-shadow:0 0 10px var(--ok-glow)}
+.sq.hurt{background:linear-gradient(160deg,#f7d97a,#a8811f)}
+.sq.crit{background:linear-gradient(160deg,#ffab6e,#a34c17)}
+.sq.dead{background:linear-gradient(160deg,#ff7365,#6d1a16);box-shadow:0 0 14px var(--atk-glow);position:relative}
+.sq.dead::after{content:"";position:absolute;inset:8px;background:#fff}
+.sfoot{font-size:11px;color:var(--ink2);line-height:1.65;text-align:center}
+.sfoot b{color:#fff;font-family:var(--px);font-size:11px}
+
+/* ── leaderboard ────────────────────────────────────────────── */
+.lb{position:relative;z-index:12;flex:1;overflow:auto;margin-top:9px;background:#12161e;
+  box-shadow:inset 0 0 0 1px #000,inset 0 1px 0 rgba(255,255,255,.09)}
+.lbcta{display:flex;gap:9px;align-items:center;padding:11px 10px;
+  background:linear-gradient(180deg,#302748,#191527);box-shadow:inset 0 -1px 0 #000}
+.lbcta .t{flex:1;font-size:11px;color:var(--ink2);line-height:1.5}
+.lbcta .t b{display:block;font:400 10px/1.35 var(--px);color:#f4e2b4;margin-bottom:5px;text-shadow:0 0 14px rgba(226,184,84,.5)}
+.row{display:flex;align-items:center;gap:8px;padding:8px 9px;cursor:pointer;box-shadow:inset 0 -1px 0 rgba(0,0,0,.55)}
+.pb{flex:0 0 30px;height:30px;display:grid;place-items:center;font-size:11px;padding-left:2px;color:#fff;
+  background:linear-gradient(180deg,#3c4454,#20252f);
+  box-shadow:inset 0 0 0 1px #000,inset 0 1px 0 rgba(255,255,255,.2),0 2px 0 rgba(0,0,0,.55)}
+.row.me{background:linear-gradient(90deg,rgba(107,221,146,.16),transparent);
+  box-shadow:inset 3px 0 0 var(--ok),inset 0 -1px 0 rgba(0,0,0,.55)}
+.row.me .pb{color:#9df0b8;box-shadow:inset 0 0 0 1px var(--ok),0 0 14px var(--ok-glow)}
+.rk{flex:0 0 22px;text-align:center;font:400 10px/1 var(--px);color:var(--dim)}
+.rk.m1{color:#ffd85e;text-shadow:0 0 12px rgba(255,216,94,.7)}
+.rk.m2{color:#e2e7f0}.rk.m3{color:#e6a978}
+.who{flex:1;min-width:0}
+.nm2{font:400 10px/1 var(--px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+.dep{display:flex;gap:2px;margin-top:6px}
+.ds{width:7px;height:7px;background:#2a303b}
+.ds.f{background:#48a86e}.ds.h{background:#b8901f}.ds.c{background:#b05c22}
+.ds.d{background:#a02c26;box-shadow:0 0 7px var(--atk-glow)}
+.sc{flex:0 0 auto;text-align:right}
+.sc .v{font:400 13px/1 var(--px);color:var(--ink)}
+.sc .d{font:400 8px/1 var(--px);color:var(--dim);margin-top:6px}
+
+/* ── replay transport ───────────────────────────────────────── */
+.transport{position:relative;z-index:14;margin-top:9px;padding:9px 10px;
+  background:linear-gradient(180deg,#262c38,#161a22);box-shadow:inset 0 1px 0 rgba(255,255,255,.14),inset 0 0 0 1px #000}
+.trtop{display:flex;align-items:center;gap:7px}
+.trb{width:34px;height:32px;display:grid;place-items:center;font-size:12px;color:#fff;cursor:pointer;
+  background:linear-gradient(180deg,#3c4454,#20252f);box-shadow:inset 0 0 0 1px #000,inset 0 1px 0 rgba(255,255,255,.2)}
+.trb.wide{flex:1;font:400 9px/1 var(--px);color:var(--ink2);letter-spacing:.08em}
+.track{display:flex;gap:2px;margin-top:9px}
+.tseg{flex:1;height:7px;background:#2a303b;cursor:pointer}
+.tseg.past{background:linear-gradient(180deg,#6bdd92,#2f8a52)}
+.tseg.cur{background:#fff;box-shadow:0 0 10px rgba(255,255,255,.8)}
+.trmeta{display:flex;justify-content:space-between;font:400 7px/1 var(--px);color:var(--dim);
+  margin-top:7px;letter-spacing:.12em}
+.watchtag{position:absolute;top:8px;left:20px;z-index:16;font:400 8px/1 var(--px);letter-spacing:.14em;
+  color:#0d1017;background:#a790ee;padding:4px 6px;box-shadow:0 0 16px rgba(167,144,238,.6)}
+
+/* ── fork / death ───────────────────────────────────────────── */
+.fork{position:relative;z-index:12;flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px}
+.forkhead{text-align:center}
+.forkhead .d{font:400 52px/1 var(--px);text-shadow:0 4px 0 #000,0 0 34px var(--stratum);animation:slam .45s cubic-bezier(.2,1.7,.4,1)}
+.forkhead .k{font:400 9px/1 var(--px);letter-spacing:.32em;color:var(--dim);margin-top:12px}
+.forkhead .s{font-size:11px;color:var(--ink2);margin-top:12px;line-height:1.65}
+.forkhead .s b{color:#fff}
+.optn{padding:12px;cursor:pointer;position:relative;overflow:hidden;
+  background:linear-gradient(120deg,#20252f,#141821);box-shadow:inset 0 1px 0 rgba(255,255,255,.11),inset 0 0 0 1px #000}
+.optn::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--oc);box-shadow:0 0 16px var(--oc)}
+.optn .ot{font:400 12px/1 var(--px);color:var(--oc)}
+.optn .od{font-size:11px;color:var(--ink2);margin-top:8px;line-height:1.5}
+.optn .od b{color:#fff}
+.optn.safe{--oc:#6bdd92}.optn.risk{--oc:#ff6257}
+.riskbar{display:flex;gap:3px;margin-top:9px}
+.riskbar i{flex:1;height:5px;background:#2a303b}
+.riskbar i.on{background:var(--atk);box-shadow:0 0 8px var(--atk-glow)}
+.deathwrap{position:relative;z-index:12;flex:1;display:flex;flex-direction:column;justify-content:center;text-align:center;gap:14px}
+.deathwrap .big{font:400 24px/1.3 var(--px);color:#ff8b82;text-shadow:0 3px 0 #000,0 0 30px var(--atk-glow)}
+.lost{padding:12px;background:linear-gradient(120deg,#2a1416,#140a0b);box-shadow:inset 0 0 0 1px #7d211d}
+.lost .v{font:400 30px/1 var(--px);color:#ff8b82;text-decoration:line-through;text-decoration-thickness:3px}
+.lost .k{font:400 8px/1 var(--px);letter-spacing:.16em;color:var(--dim);margin-top:9px}
+.kept{padding:12px;background:linear-gradient(120deg,#16261c,#0c1410);box-shadow:inset 0 0 0 1px rgba(107,221,146,.5)}
+.kept .v{font:400 20px/1 var(--px);color:#9df0b8}
+.kept .k{font:400 8px/1 var(--px);letter-spacing:.16em;color:var(--dim);margin-top:9px}
+
+/* ── community ──────────────────────────────────────────────── */
+.cshaft{position:relative;z-index:12;flex:1;margin-top:11px;display:flex;gap:10px}
+.ctrack{flex:0 0 26px;position:relative;background:#0d1017;box-shadow:inset 0 0 0 1px #000}
+.ctrack .filled{position:absolute;left:0;right:0;top:0;background:linear-gradient(180deg,rgba(107,221,146,.8),rgba(47,138,82,.4));
+  box-shadow:0 0 20px var(--ok-glow)}
+.ctrack .mark{position:absolute;left:0;right:0;height:2px;background:rgba(255,255,255,.3)}
+.ctrack .youare{position:absolute;left:-4px;right:-4px;height:3px;background:#fff;box-shadow:0 0 14px #fff;
+  animation:hererung 1.6s ease-in-out infinite}
+.ctrack .bossz{position:absolute;left:0;right:0;bottom:0;height:56px;
+  background:linear-gradient(180deg,transparent,rgba(255,98,87,.5));box-shadow:inset 0 0 0 1px #7d211d}
+.cinfo{flex:1;display:flex;flex-direction:column;gap:9px}
+.cbig{font:400 30px/1 var(--px);text-shadow:0 3px 0 #000,0 0 28px var(--ok-glow)}
+.cbig small{font-size:12px;color:var(--dim)}
+.cline{font-size:11px;color:var(--ink2);line-height:1.55}.cline b{color:#fff}
+.contrib{margin-top:auto;display:flex;flex-direction:column;gap:5px}
+.cr{display:flex;align-items:center;gap:7px;font-size:10px}
+.cr .bar{flex:1;height:6px;background:#0d1017;position:relative;box-shadow:inset 0 0 0 1px #000}
+.cr .bar i{position:absolute;left:0;top:0;bottom:0;background:var(--ok);opacity:.85}
+.cr .nn{flex:0 0 72px;font:400 8px/1 var(--px);color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cr .vv{flex:0 0 28px;text-align:right;font:400 8px/1 var(--px);color:var(--dim)}
+.cboss{position:relative;z-index:12;padding:11px;margin-top:10px;
+  background:linear-gradient(120deg,#2c1416,#120a0c);box-shadow:inset 0 0 0 1px #8e2621,0 0 26px rgba(255,98,87,.14)}
+.cboss .bt{font:400 11px/1 var(--px);color:#ff8b82;text-shadow:0 0 14px var(--atk-glow)}
+.cboss .bd2{font-size:11px;color:var(--ink2);margin-top:8px;line-height:1.5}
+.cboss .bd2 b{color:#fff}
+.cboss .meter{height:11px;margin-top:9px}
+.cboss .fill{background:linear-gradient(180deg,#ff8a6c,#a82d26);box-shadow:0 0 14px var(--atk-glow)}
+
+/* ── records ────────────────────────────────────────────────── */
+.cal{position:relative;z-index:12;display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:11px}
+.cd{aspect-ratio:1;background:#1c212b;box-shadow:inset 0 0 0 1px #000;position:relative}
+.cd.g1{background:#2c3a30}.cd.g2{background:#35603f}.cd.g3{background:#3f8a54}
+.cd.g4{background:#4fb56c;box-shadow:inset 0 0 0 1px #000,0 0 10px var(--ok-glow)}
+.cd.gx{background:#7a2a26}
+.cd.today{box-shadow:inset 0 0 0 2px #fff}
+.recgrid{position:relative;z-index:12;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:11px}
+.streak{position:relative;z-index:12;margin-top:11px;padding:12px;
+  background:linear-gradient(120deg,#2c2419,#16130e);box-shadow:inset 0 1px 0 rgba(255,205,150,.28),inset 0 0 0 1px #000}
+.streak .v{font:400 26px/1 var(--px);color:#ffd9a0;text-shadow:0 0 20px rgba(255,186,105,.6)}
+.streak .k{font:400 8px/1 var(--px);letter-spacing:.16em;color:var(--dim);margin-top:9px}
+.streak .s2{font-size:11px;color:var(--ink2);margin-top:9px;line-height:1.5}
+
+/* ── coach ──────────────────────────────────────────────────── */
+.coach{position:absolute;left:14px;right:14px;z-index:26;padding:11px 12px;
+  background:linear-gradient(180deg,#39435a,#1e2431);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),inset 0 0 0 1px #000,
+  0 10px 30px rgba(0,0,0,.7)}
+.coach .step{font:400 8px/1 var(--px);letter-spacing:.16em;color:#a6bde0}
+.coach .msg{font-size:12px;line-height:1.5;margin-top:7px;color:#fff}
+.coach .msg b{color:#8fe6f4}
+.coach::after{content:"";position:absolute;width:12px;height:12px;background:#232a38;
+  box-shadow:1px 1px 0 0 #000;transform:rotate(45deg)}
+.coach.down::after{bottom:-7px;left:50%;margin-left:-6px}
+.lockveil{position:absolute;inset:0;z-index:22;background:rgba(6,8,12,.55)}
+.hl{position:relative;z-index:25!important;box-shadow:0 0 0 2px var(--ok),0 0 24px var(--ok-glow)!important}
+
+/* ── feed post ──────────────────────────────────────────────── */
+.feed{height:100%;background:#0e1013;padding:12px;display:flex;flex-direction:column;gap:10px}
+.fchrome{display:flex;align-items:center;gap:8px}
+.fav{width:26px;height:26px;background:linear-gradient(150deg,#d4813f,#2a1c10);box-shadow:inset 0 0 0 1px #000}
+.fsub{font-size:12px;color:var(--ink)}
+.fmeta{font-size:11px;color:var(--faint)}
+.ftitle{font:400 14px/1.45 var(--px);color:#fff}
+.fcard{position:relative;flex:1;overflow:hidden;background:linear-gradient(180deg,#241a13,#0a0b10);
+  box-shadow:inset 0 0 0 1px #2a2f3a}
+.fcard .fl{position:absolute;left:50%;top:-40px;width:280px;height:180px;margin-left:-140px;
+  background:radial-gradient(ellipse at 50% 100%,rgba(255,186,105,.35),transparent 68%);animation:flicker 4s ease-in-out infinite}
+.fcard .fttl{position:absolute;left:0;right:0;top:38px;text-align:center;font:400 22px/1.3 var(--px);
+  text-shadow:0 3px 0 #000,0 0 30px rgba(255,186,105,.6)}
+.fcard .fsub2{position:absolute;left:0;right:0;top:106px;text-align:center;font:400 9px/1.8 var(--px);
+  letter-spacing:.2em;color:#ffbc6a}
+.fcard .frow{position:absolute;left:16px;right:16px;bottom:64px;display:flex;gap:4px;justify-content:center}
+.fcard .frow i{width:20px;height:20px;background:#1e232d;box-shadow:inset 0 0 0 1px #000}
+.fcard .frow i.a{background:linear-gradient(160deg,#8aeaae,#2f8a52)}
+.fcard .frow i.b{background:linear-gradient(160deg,#f7d97a,#a8811f)}
+.fcard .frow i.c{background:linear-gradient(160deg,#ffab6e,#a34c17)}
+.fcard .stat2{position:absolute;left:0;right:0;bottom:34px;text-align:center;font-size:11px;color:var(--ink2)}
+.fcard .stat2 b{color:#fff}
+.fbtns{display:flex;gap:8px}
+</style>
+
+<div class="sect">entry &amp; hub</div>
+
+<div class="rig"><div class="rig-label">01 · the reddit post — entry point</div>
+<div class="phone"><div id="feed"></div></div>
+<div class="note"><b>Play is one tap from the feed.</b> The post itself shows today's community stats and yesterday's grid shape, so it recruits before anyone opens it.</div></div>
+
+<div class="rig"><div class="rig-label">02 · the camp — hub</div>
+<div class="phone"><div id="camp"></div></div>
+<div class="note">Three doors, one wall: Daily is gear-off and scored, Endless is gear-on and personal, Community is cooperative. The camp is the only warm screen in the game.</div></div>
+
+<div class="rig"><div class="rig-label">03 · hero &amp; abilities — <b>interactive</b></div>
+<div class="phone"><div id="loadout"></div></div>
+<div class="note"><b>Tap to swap.</b> This is where the deckbuilding went: pick 5 of 9, plus one ultimate. Choosing is permanent per delve, so it's a real build decision rather than a menu.</div></div>
+
+<div class="rig"><div class="rig-label">04 · gear &amp; stash</div>
+<div class="phone"><div id="gear"></div></div>
+<div class="note">Gear is code-drawn rarity plates with a glyph — <b>zero new art assets</b>, so you can ship a hundred items without an artist. Compare deltas show green gains and red losses inline.</div></div>
+
+<div class="rig"><div class="rig-label">05 · lantern &amp; shrine</div>
+<div class="phone"><div id="shrine"></div></div>
+<div class="note">The lantern buys foresight — literally lighting more of the threat track. Cosmetics recolour your flame, which means you see your cosmetic in every frame of every fight.</div></div>
+
+<div class="sect">the delve</div>
+
+<div class="rig"><div class="rig-label">06 · combat — <b>playable</b></div>
+<div class="phone"><div id="fight"></div></div>
+<div class="note"><b>Cast abilities, then End turn.</b> Everything below the stage now sits on a lit plinth — compare the button legibility against v4. THEN is locked, not invisible: it shows the reason.</div></div>
+
+<div class="rig"><div class="rig-label">07 · tutorial — coached on the real run</div>
+<div class="phone"><div id="tut"></div></div>
+<div class="note">Five beats, not fifteen, on depth 1 of the actual daily. The board dims and exactly one tap is legal. The coach card is bright by design — it must beat every atmosphere layer.</div></div>
+
+<div class="rig"><div class="rig-label">08 · boons — replaces the draft</div>
+<div class="phone"><div id="boon"></div></div>
+<div class="note">Boons modify abilities rather than adding cards, so nothing dilutes. Skipping pays shards, which only ever buy Endless gear and cosmetics.</div></div>
+
+<div class="rig"><div class="rig-label">09 · descent — between depths</div>
+<div class="phone"><div id="descent"></div></div>
+<div class="note">1.4 seconds. Marks progress, names the stratum, and lands the shared-seed stat as a threat rather than a cheer.</div></div>
+
+<div class="sect">surfacing</div>
+
+<div class="rig"><div class="rig-label">10 · result &amp; share grid</div>
+<div class="phone"><div id="result"></div></div>
+<div class="note">The grid is the shaft: three rows of four, read downward. Spoiler-free — no enemy, no ability, no order revealed.</div></div>
+
+<div class="rig"><div class="rig-label">11 · leaderboard</div>
+<div class="phone"><div id="board"></div></div>
+<div class="note">Play button leads every row. Depth trace and loadout size are the spoiler-free strategic signature.</div></div>
+
+<div class="rig"><div class="rig-label">12 · replay — <b>scrub the track</b></div>
+<div class="phone"><div id="replay"></div></div>
+<div class="note">Scrubbing re-simulates to step N — pure sim, no persistent DOM. Segments are depths, not seconds, so "jump to 9" is one tap.</div></div>
+
+<div class="sect">endless &amp; community</div>
+
+<div class="rig"><div class="rig-label">13 · endless — surface or descend</div>
+<div class="phone"><div id="fork"></div></div>
+<div class="note">Past depth 12 there's no floor and shards only bank when you surface. This is the "one more depth" loop, quarantined from the daily.</div></div>
+
+<div class="rig"><div class="rig-label">14 · endless — death</div>
+<div class="phone"><div id="death"></div></div>
+<div class="note">The loss has to sting or the fork isn't a decision. Unbanked shards are struck through; the depth record and any gear found are kept.</div></div>
+
+<div class="rig"><div class="rig-label">15 · the community delve</div>
+<div class="phone"><div id="comm"></div></div>
+<div class="note">Every depth anyone reaches digs the shared shaft one metre. Resets weekly. The cheapest new mode to build and the most Reddit-native.</div></div>
+
+<div class="rig"><div class="rig-label">16 · the thing at sixty</div>
+<div class="phone"><div id="cboss"></div></div>
+<div class="note">A boss with pooled HP that no individual can kill. Your damage this run is a contribution, shown live against the sub's total.</div></div>
+
+<div class="rig"><div class="rig-label">17 · records</div>
+<div class="phone"><div id="records"></div></div>
+<div class="note">Streak is the retention hook and it belongs to the Daily only. The calendar is coloured by depth reached, so a bad week is visible as a lighter band.</div></div>
+
+<script>
+/* ═══ data ═══════════════════════════════════════════════════ */
+const A={
+  strike :{n:'STRIKE', ic:'ST',c:1,r:'starter', t:'Deal <b>9</b>',        dmg:9,  cd:0},
+  guard  :{n:'GUARD',  ic:'GD',c:1,r:'starter', t:'Gain <i>7</i> block',  blk:7,  cd:0},
+  jab    :{n:'JAB',    ic:'JB',c:0,r:'common',  t:'Deal <b>3</b>',        dmg:3,  cd:0},
+  cleave :{n:'CLEAVE', ic:'CL',c:2,r:'common',  t:'Deal <b>13</b>',       dmg:13, cd:2},
+  flurry :{n:'FLURRY', ic:'FL',c:1,r:'common',  t:'<b>3</b> dmg &times;3',dmg:3,hits:3,cd:2},
+  brace  :{n:'BRACE',  ic:'BC',c:1,r:'common',  t:'Gain <i>11</i> block', blk:11, cd:2},
+  ironwill:{n:'IRON WILL',ic:'IW',c:1,r:'uncommon',t:'<i>8</i> + 1 rage', blk:8,  cd:2},
+  hobble :{n:'HOBBLE', ic:'HB',c:1,r:'uncommon',t:'<b>4</b> &middot; weaken',dmg:4,cd:3},
+  riposte:{n:'RIPOSTE',ic:'RP',c:2,r:'uncommon',t:'<b>8</b> + <i>8</i>',  dmg:8,blk:8,cd:3},
+  execute:{n:'EXECUTE',ic:'EX',c:2,r:'rare',    t:'<b>11</b> dmg &times;2 &middot; ultimate',dmg:11,hits:2,cd:0,ult:1}
+};
+const GLY={attack:'&#9876;',block:'&#128737;',buff:'&#9650;'};
+const WH=['NOW','NEXT','THEN'];
+const stratOf=d=>d<=4?'warrens':d<=8?'camp':d<=12?'crypt':'abyss';
+const inc=s=>{const[k,v]=s.foe.cycle[(s.foe.turn-1)%s.foe.cycle.length];return k==='attack'?v+s.foe.buff:0};
+
+/* ═══ shared fragments ═══════════════════════════════════════ */
+function spine(d,max){
+  max=max||12;let r='<div class="cap">D'+d+'</div>';
+  for(let i=1;i<=max;i++){if(i===5||i===9)r+='<div class="band"></div>';
+    r+='<div class="rung'+(i<d?' past':'')+(i===d?' here':'')+'"></div>';}
+  return '<div class="spine">'+r+'</div><div class="mnu">&#9776;</div>';
+}
+const fog=()=>'<div class="fog"><i style="top:30%;animation-duration:26s"></i><i style="top:64%;animation-duration:34s;animation-delay:-12s"></i></div>';
+function motes(){let m='';for(let i=0;i<7;i++)
+  m+='<div class="mote" style="left:'+(7+i*13)+'%;bottom:'+(8+(i%4)*14)+'%;animation-duration:'+(5+i*.8)+'s;animation-delay:'+(i*1.1)+'s"></div>';return m}
+
+function threat(s,forceLantern){
+  const lant=forceLantern||s.lantern;let o='';
+  const leth=inc(s)>=s.hero.hp;
+  for(let i=0;i<3;i++){
+    const pos=i===0?'now':i===1?'next':'then';
+    if(i>=lant){o+='<div class="ts '+pos+' unlit"><div class="when">'+WH[i]+'</div>'+
+      '<div class="lk">? ? ?</div><div class="why">LANTERN T'+(i+1)+'</div></div>';continue;}
+    const [k,v]=s.foe.cycle[(s.foe.turn-1+i)%s.foe.cycle.length];
+    const cls=k==='attack'?'atk':k==='block'?'blk':'buff';
+    const L=(i===0&&k==='attack'&&leth)?' lethal':'';
+    o+='<div class="ts '+pos+' '+cls+L+'">'+(L?'<div class="lt">LETHAL</div>':'')+
+      '<div class="when">'+WH[i]+'</div><div class="row"><span class="gly">'+GLY[k]+'</span>'+
+      '<span class="val">'+v+'</span>'+(k==='attack'&&s.foe.buff?'<span class="plus">+'+s.foe.buff+'</span>':'')+
+      '</div></div>';
+  }
+  return '<div class="threat">'+o+'</div>';
+}
+function stage(s,lant){
+  const p=(s.foe.hp/s.foe.max*100).toFixed(1);
+  return '<div class="stage"><div class="bd"></div><div class="above"></div>'+motes()+
+    '<div class="stagetop"><span class="depthtag">DEPTH '+s.depth+' &middot; '+stratOf(s.depth).toUpperCase()+'</span>'+
+      '<span class="eyebrow">'+Math.max(0,12-s.depth)+' BELOW</span></div>'+
+    (s.fx&&s.fx.pop?'<div class="pop '+s.fx.pop.c+'" style="left:'+s.fx.pop.x+';top:'+s.fx.pop.y+'">'+s.fx.pop.t+'</div>':'')+
+    '<div class="foe"><div class="pw"><div class="pglow"></div>'+
+      '<div class="port'+(s.fx&&s.fx.hit?' hit':'')+'">PORTRAIT<br>128&times;128<div class="eyes"><b></b><b></b></div></div></div>'+
+      '<div class="fside"><div class="fname">'+s.foe.name+'</div>'+
+      '<div class="ftags">'+s.foe.tags.map(t=>'<span class="tag">'+t+'</span>').join('')+'</div>'+
+      '<div class="fhp"><div class="meter"><div class="fill" style="width:'+p+'%"></div>'+
+      (s.fx&&s.fx.fg?'<div class="ghost" style="left:'+p+'%;width:'+s.fx.fg+'%"></div>':'')+'</div>'+
+      '<div class="fline"><span class="eyebrow">HULL</span><span class="n">'+s.foe.hp+'<small> / '+s.foe.max+'</small></span></div>'+
+      '</div></div></div>'+threat(s,lant)+'<div class="vig"></div></div>';
+}
+function heroBand(s){
+  const i=inc(s),lands=Math.max(0,i-s.hero.block);
+  const hpP=s.hero.hp/s.hero.max*100,lossP=Math.min(lands,s.hero.hp)/s.hero.max*100;
+  const arm=s.hero.block>0?'<div class="scales" style="width:'+Math.min(s.hero.block/s.hero.max*100,100)+'%"></div>'
+    :(s.fx&&s.fx.gb?'<div class="scales gone" style="width:'+(s.fx.gb/s.hero.max*100)+'%"></div>':'<div class="socket"></div>');
+  return '<div class="hero"><div class="hport">HERO<div class="lvl">14</div></div>'+
+    '<div class="hbars">'+(s.fx&&s.fx.perfect?'<div class="perfect">PERFECT BLOCK</div>':'')+
+      '<div class="armour">'+arm+'</div><div class="hprail"><div class="meter">'+
+      '<div class="fill life" style="width:'+hpP+'%"></div>'+
+      (lossP>0?'<div class="loss" style="left:'+(hpP-lossP)+'%;width:'+lossP+'%"></div>':'')+'</div></div></div>'+
+    '<div class="hread"><div class="n'+(hpP<35?' low':'')+'">'+s.hero.hp+'<small>/'+s.hero.max+'</small></div>'+
+    '<div class="d'+(lands?'':' safe')+'">'+(lands?'-'+lands+' HP':'NO DMG')+'</div></div></div>';
+}
+function resRow(s){
+  let p='';for(let i=0;i<s.hero.maxE;i++)p+='<div class="pip'+(i<s.hero.energy?' on':'')+'"></div>';
+  return '<div class="res"><div class="pips">'+p+'</div><span class="lab">ENERGY</span><div class="grow"></div>'+
+    '<div class="rage'+(s.hero.rage>=s.hero.maxRage?' full':'')+'"><div class="meter"><div class="fill" style="width:'+
+    (s.hero.rage/s.hero.maxRage*100)+'%"></div></div><div class="k">RAGE '+s.hero.rage+'/'+s.hero.maxRage+'</div></div></div>';
+}
+function abilityBar(s,live,lockTo){
+  let o='';
+  s.bar.forEach((id,i)=>{
+    const a=A[id],cd=s.cds[id]||0,cant=a.c>s.hero.energy;
+    const locked=lockTo!==undefined&&lockTo!==id;
+    const off=cd>0||cant||locked;
+    o+='<div class="ab r-'+a.r+(off?' off':' ready')+(lockTo===id?' hl':'')+'" style="--i:'+i+'"'+
+      (off||!live?'':' onclick="cast(\''+id+'\')"')+'>'+
+      '<div class="ico">'+a.ic+'</div><div class="cost"><span>'+a.c+'</span></div>'+
+      '<div class="nm">'+a.n+'</div><div class="rx">'+a.t+'</div>'+
+      (a.cd?'<div class="cdtag">CD '+a.cd+'</div>':'')+
+      (cd>0?'<div class="cdmask"><b>'+cd+'</b><i style="width:'+(100-cd/a.cd*100)+'%"></i></div>':'')+'</div>';
+  });
+  const u=A[s.ult],ready=s.hero.rage>=s.hero.maxRage&&lockTo===undefined;
+  o+='<div class="ab ult r-rare'+(ready?' ready charged':' off')+'" style="--i:5"'+
+    (ready&&live?' onclick="cast(\''+s.ult+'\')"':'')+'><div class="sheen"></div>'+
+    '<div class="ico">'+u.ic+'</div><div class="nm">'+u.n+'</div><div class="rx">'+u.t+'</div>'+
+    '<div class="cost"><span>'+u.c+'</span></div><div class="chargebar"><span style="width:'+
+    (s.hero.rage/s.hero.maxRage*100)+'%"></span></div></div>';
+  return '<div class="abgrid">'+o+'</div>';
+}
+
+/* ═══ 06 · COMBAT ════════════════════════════════════════════ */
+const F={depth:10,lantern:2,ult:'execute',
+  foe:{name:'BONE SENTINEL',tags:['undead','guards first'],hp:38,max:52,
+    cycle:[['attack',12],['attack',7],['block',10]],turn:2,buff:2},
+  hero:{hp:19,max:56,block:0,energy:3,maxE:3,rage:2,maxRage:4},
+  bar:['strike','guard','cleave','flurry','riposte'],
+  cds:{cleave:0,flurry:2,riposte:0},
+  log:'Sentinel drew back its blade.',
+  fx:{shake:0,gb:0,fg:0,pop:null,hit:0,perfect:0}};
+function renderFight(){
+  const s=F,lands=Math.max(0,inc(s)-s.hero.block),low=(s.hero.hp/s.hero.max)<.35;
+  document.getElementById('fight').innerHTML=
+  '<div class="app d-'+stratOf(s.depth)+(s.fx.shake?' shake':'')+(low?' panic':'')+'">'+
+    '<div class="lantern"></div>'+fog()+spine(s.depth)+stage(s)+
+    '<div class="plinth">'+heroBand(s)+resRow(s)+
+      '<div class="log"><span>&#9662;</span><em>'+s.log+'</em></div>'+abilityBar(s,true)+
+      '<div class="grow"></div>'+
+      '<div class="act"><button class="btn small" disabled>UNDO</button>'+
+      '<button class="btn '+(lands>0?'danger':'go')+'" onclick="endTurn()">END TURN'+
+      '<span class="sub">'+(lands>0?'TAKE '+lands:'TAKE NOTHING')+'</span>'+
+      (lands>0?'<div class="hz"></div>':'')+'</button></div>'+
+    '</div></div>';
+  s.fx={shake:0,gb:0,fg:0,pop:null,hit:0,perfect:0};
+}
+window.cast=function(id){
+  const s=F,a=A[id];if(a.c>s.hero.energy)return;
+  s.hero.energy-=a.c;
+  if(a.ult)s.hero.rage=0;else if(a.cd)s.cds[id]=a.cd;
+  if(a.dmg){const d=a.dmg*(a.hits||1),b=s.foe.hp;s.foe.hp=Math.max(0,s.foe.hp-d);
+    s.fx.fg=(b-s.foe.hp)/s.foe.max*100;s.fx.hit=1;s.fx.pop={t:'-'+d,c:'dmg',x:'76px',y:'48px'};
+    s.hero.rage=Math.min(s.hero.maxRage,s.hero.rage+1);}
+  if(a.blk){s.hero.block+=a.blk;if(!a.dmg)s.fx.pop={t:'+'+a.blk,c:'blkp',x:'76px',y:'88px'};}
+  s.log='VESK used '+a.n+'.'+(a.hits?' '+a.hits+' hits chew through block.':'');
+  renderFight();
+};
+window.endTurn=function(){
+  const s=F,i=inc(s),lands=Math.max(0,i-s.hero.block),had=s.hero.block;
+  const [k,v]=s.foe.cycle[(s.foe.turn-1)%s.foe.cycle.length];
+  if(k==='attack'){s.hero.hp=Math.max(0,s.hero.hp-lands);
+    s.log=s.foe.name+' struck for '+i+'. '+(lands?lands+' got through.':'Fully blocked.');
+    if(lands){s.fx.shake=1;s.fx.pop={t:'-'+lands,c:'dmg',x:'150px',y:'150px'};
+      s.hero.rage=Math.min(s.hero.maxRage,s.hero.rage+1);}else if(had)s.fx.perfect=1;}
+  if(k==='block')s.log=s.foe.name+' set its guard. '+v+' block.';
+  if(k==='buff'){s.foe.buff+=v;s.log=s.foe.name+' drew strength from the dark. +'+v+'.';}
+  s.fx.gb=had;s.hero.block=0;s.hero.energy=s.hero.maxE;s.foe.turn++;
+  Object.keys(s.cds).forEach(x=>s.cds[x]=Math.max(0,s.cds[x]-1));
+  renderFight();
+};
+
+/* ═══ 01 · FEED ══════════════════════════════════════════════ */
+function renderFeed(){
+  let g='';['a','a','a','b','b','c','a','b','b','c','','' ].forEach(c=>g+='<i class="'+c+'"></i>');
+  document.getElementById('feed').innerHTML='<div class="feed">'+
+    '<div class="fchrome"><div class="fav"></div><div><div class="fsub">r/dailydelve</div>'+
+      '<div class="fmeta">Posted by u/delvebot &middot; 6h</div></div></div>'+
+    '<div class="ftitle">DELVE 128 &mdash; how deep did you get?</div>'+
+    '<div class="fcard"><div class="fl"></div>'+
+      '<div class="fttl">DAILY<br>DELVE</div>'+
+      '<div class="fsub2">DELVE 128 &middot; 12 DEPTHS</div>'+
+      '<div class="frow">'+g+'</div>'+
+      '<div class="stat2"><b>1,284</b> descended &middot; avg depth <b>7.4</b> &middot; <b>3</b> reached the floor</div>'+
+    '</div>'+
+    '<div class="fbtns"><button class="btn small">COMMENTS 412</button>'+
+      '<button class="btn go">DESCEND<span class="sub">~4 MIN &middot; ONE ATTEMPT</span></button></div>'+
+  '</div>';
+}
+
+/* ═══ 02 · CAMP ══════════════════════════════════════════════ */
+function renderCamp(){
+  document.getElementById('camp').innerHTML='<div class="app plain d-surface">'+
+    '<div class="fire"></div>'+fog()+
+    '<div class="camphead"><div class="hport" style="width:54px;height:54px;flex:0 0 54px">HERO<div class="lvl">14</div></div>'+
+      '<div class="grow" style="min-width:0"><div class="chname">VESK</div><div class="chclass">WARDEN &middot; LV 14</div>'+
+        '<div class="xp"><div class="meter"><div class="fill" style="width:62%"></div></div></div></div>'+
+      '<div class="shards"><div class="v">1,340</div><div class="k">SHARDS</div></div></div>'+
+    '<div class="doors">'+
+      '<div class="door daily"><div class="badge">NOT RUN</div><div class="dt">THE DAILY DELVE</div>'+
+        '<div class="dd">12 depths. <b>Issued kit &mdash; gear off.</b> Everyone in r/dailydelve gets this exact shaft.</div>'+
+        '<div class="prog"><div class="meter"><div class="fill" style="width:0%"></div></div></div></div>'+
+      '<div class="door endless"><div class="badge">D24 BEST</div><div class="dt">THE ENDLESS DELVE</div>'+
+        '<div class="dd">No floor. <b>Your gear, your build.</b> Bank shards by surfacing &mdash; or keep going.</div></div>'+
+      '<div class="door community"><div class="dt">THE COMMUNITY DELVE</div>'+
+        '<div class="dd">The sub is at <b>depth 43 / 60</b>. Something is waiting at the bottom.</div>'+
+        '<div class="prog"><div class="meter"><div class="fill" style="width:72%"></div></div></div></div></div>'+
+    '<div class="tiles">'+
+      '<div class="tile"><div class="dot"></div><div class="g">&#9876;</div><div class="k">GEAR</div></div>'+
+      '<div class="tile"><div class="g">&#9788;</div><div class="k">LANTERN</div></div>'+
+      '<div class="tile"><div class="g">&#9830;</div><div class="k">SHRINE</div></div>'+
+      '<div class="tile"><div class="g">&#9635;</div><div class="k">RECORDS</div></div></div>'+
+  '</div>';
+}
+
+/* ═══ 03 · LOADOUT ═══════════════════════════════════════════ */
+const L={bar:['strike','guard','cleave','flurry','riposte'],pool:['jab','brace','ironwill','hobble']};
+function renderLoadout(){
+  const mk=(id,inBar)=>{const a=A[id];
+    return '<div class="rowitem r-'+a.r+(inBar?' sel':'')+'" onclick="swap(\''+id+'\')">'+
+      '<div class="gi"><span>'+a.ic+'</span></div><div class="gm">'+
+      '<div class="gk">'+(a.cd?'COOLDOWN '+a.cd+' TURNS':'NO COOLDOWN')+'</div>'+
+      '<div class="gn">'+a.n+'</div><div class="gs">'+a.t.replace(/<b>/g,'<b>').replace(/<i>/g,'<b>').replace(/<\/i>/g,'</b>')+
+      ' &middot; '+a.c+' energy</div></div>'+
+      '<div style="font:400 9px/1 var(--px);color:'+(inBar?'#6bdd92':'#7c8497')+'">'+(inBar?'&#9679; IN':'&#43; ADD')+'</div></div>';};
+  let equipped='';L.bar.forEach(id=>equipped+=mk(id,true));
+  let pool='';L.pool.forEach(id=>pool+=mk(id,false));
+  document.getElementById('loadout').innerHTML='<div class="app plain d-surface">'+
+    '<div class="fire" style="opacity:.5"></div>'+fog()+
+    '<div class="hd"><span class="eyebrow">the camp &middot; abilities</span><div class="h">WHAT YOU TAKE DOWN</div></div>'+
+    '<div class="pane" style="margin-top:10px"><div class="rowitem" style="cursor:default;background:#191d26">'+
+      '<div class="gm"><div class="gk">EQUIPPED &middot; '+L.bar.length+' / 5</div></div>'+
+      '<div style="font:400 8px/1 var(--px);color:#a8b0c2">TAP TO REMOVE</div></div>'+equipped+'</div>'+
+    '<div class="pane" style="margin-top:9px"><div class="rowitem" style="cursor:default;background:#191d26">'+
+      '<div class="gm"><div class="gk">UNLOCKED &middot; TAP TO EQUIP</div></div></div>'+pool+'</div>'+
+    '<div class="pane lit" style="margin-top:9px;padding:10px"><div class="gk">ULTIMATE &middot; CHARGED BY RAGE</div>'+
+      '<div style="display:flex;gap:9px;align-items:center;margin-top:9px">'+
+      '<div class="gi r-rare" style="width:38px;height:38px;flex:0 0 38px"><span>EX</span></div>'+
+      '<div class="gm"><div class="gn" style="color:#e2b854">EXECUTE</div>'+
+      '<div class="gs">Deal <b>11</b> damage twice. Fires at 4 rage.</div></div></div></div>'+
+    '<div class="grow"></div>'+
+    '<div class="act"><button class="btn small">RESET</button>'+
+      '<button class="btn go">CONFIRM LOADOUT<span class="sub">LOCKED FOR THE DELVE</span></button></div>'+
+  '</div>';
+}
+window.swap=function(id){
+  if(L.bar.includes(id)){if(L.bar.length<=3)return;L.bar=L.bar.filter(x=>x!==id);L.pool.push(id);}
+  else{if(L.bar.length>=5)return;L.pool=L.pool.filter(x=>x!==id);L.bar.push(id);}
+  renderLoadout();
+};
+
+/* ═══ 04 · GEAR ══════════════════════════════════════════════ */
+function renderGear(){
+  const slots=[
+    ['WEAPON','r-rare','EX','Gravebite Axe','<b>+3</b> damage on all strikes'],
+    ['ARMOUR','r-uncommon','AR','Warden Plate','<b>+6</b> max HP &middot; <b>+2</b> block from Guard'],
+    ['TRINKET','r-common','TR','Cinder Knot','Rage builds <b>1</b> faster'],
+    ['RELIC','empty2','--','Empty socket','Relics drop below depth 18']
+  ];
+  let s='';slots.forEach(x=>{s+='<div class="rowitem '+x[1]+'"><div class="gi"><span>'+x[2]+'</span></div>'+
+    '<div class="gm"><div class="gk">'+x[0]+'</div><div class="gn">'+x[3]+'</div><div class="gs">'+x[4]+'</div></div>'+
+    '<div style="font:400 9px/1 var(--px);color:#a8b0c2">&#8250;</div></div>';});
+  document.getElementById('gear').innerHTML='<div class="app plain d-surface">'+
+    '<div class="fire" style="opacity:.45"></div>'+fog()+
+    '<div class="hd"><span class="eyebrow">the camp &middot; loadout</span><div class="h">WHAT YOU CARRY</div></div>'+
+    '<div class="pane" style="margin-top:10px">'+s+'</div>'+
+    '<div class="pane" style="margin-top:9px"><div class="rowitem" style="cursor:default;background:#191d26">'+
+      '<div class="gm"><div class="gk">STASH &middot; 12 ITEMS</div></div>'+
+      '<div style="font:400 8px/1 var(--px);color:#a8b0c2">COMPARE</div></div>'+
+      '<div class="rowitem r-uncommon"><div class="gi"><span>WP</span></div><div class="gm">'+
+        '<div class="gk">WEAPON</div><div class="gn">Chipped Pick</div>'+
+        '<div class="gs"><s>&minus;2 damage</s> &middot; <b>+1 energy on turn 1</b></div></div>'+
+        '<div style="font:400 9px/1 var(--px);color:#e2857c">&minus;2</div></div>'+
+      '<div class="rowitem r-rare"><div class="gi"><span>AR</span></div><div class="gm">'+
+        '<div class="gk">ARMOUR</div><div class="gn">Cryptweave Coat</div>'+
+        '<div class="gs"><b>+11</b> max HP &middot; <s>&minus;1 block from Guard</s></div></div>'+
+        '<div style="font:400 9px/1 var(--px);color:#6bdd92">+5</div></div></div>'+
+    '<div class="statgrid">'+
+      '<div class="st"><div class="k">MAX HP</div><div class="v">56 <em>+6</em></div></div>'+
+      '<div class="st"><div class="k">STRIKE DMG</div><div class="v">12 <em>+3</em></div></div>'+
+      '<div class="st"><div class="k">GUARD BLOCK</div><div class="v">9 <em>+2</em></div></div>'+
+      '<div class="st"><div class="k">FORESIGHT</div><div class="v">2 <em>turns</em></div></div></div>'+
+    '<div class="grow"></div>'+
+    '<div class="act"><button class="btn small">STASH</button>'+
+      '<button class="btn go">ENTER THE ENDLESS<span class="sub">GEAR ON &middot; NO FLOOR</span></button></div>'+
+  '</div>';
+}
+
+/* ═══ 05 · LANTERN & SHRINE ══════════════════════════════════ */
+function renderShrine(){
+  const cos=[['FLAME','r-rare','AM','Amber (equipped)','The default warm delver flame'],
+             ['FLAME','r-uncommon','VD','Voidlight','Cold violet. 600 shards'],
+             ['SIGIL','r-common','SG','Cracked Coin','Shows beside your name on the board']];
+  let c='';cos.forEach(x=>{c+='<div class="rowitem '+x[1]+(x[3].includes('equipped')?' sel':'')+'">'+
+    '<div class="gi"><span>'+x[2]+'</span></div><div class="gm"><div class="gk">'+x[0]+'</div>'+
+    '<div class="gn">'+x[3]+'</div><div class="gs">'+x[4]+'</div></div></div>';});
+  document.getElementById('shrine').innerHTML='<div class="app plain d-surface">'+
+    '<div class="fire" style="opacity:.6"></div>'+fog()+
+    '<div class="hd"><span class="eyebrow">the camp &middot; shrine</span><div class="h">LIGHT &amp; VANITY</div></div>'+
+    '<div class="pane lit" style="margin-top:10px;padding:11px">'+
+      '<div style="font:400 10px/1 var(--px);color:#ffd9a0">&#9788; EMBER LANTERN &middot; TIER 2</div>'+
+      '<div style="font-size:11px;color:var(--ink2);margin-top:8px;line-height:1.5">Your lantern decides <b style="color:#fff">how far ahead you can read the enemy</b>. Tier 3 lights the third slot &mdash; permanently, in every mode.</div>'+
+      '<div class="foresight"><div class="fs lit">NOW</div><div class="fs lit">NEXT</div><div class="fs nxt">THEN &middot; 900</div></div></div>'+
+    '<div class="pane" style="margin-top:9px">'+
+      '<div class="rowitem" style="cursor:default;background:#191d26"><div class="gm">'+
+      '<div class="gk">COSMETICS &middot; NEVER AFFECT NUMBERS</div></div>'+
+      '<div style="font:400 8px/1 var(--px);color:#c4b2ff">1,340 &#9670;</div></div>'+c+'</div>'+
+    '<div class="grow"></div>'+
+    '<div class="act"><button class="btn small">BACK</button>'+
+      '<button class="btn go">UPGRADE TO TIER 3<span class="sub">900 SHARDS &middot; LIGHTS \'THEN\'</span></button></div>'+
+  '</div>';
+}
+
+/* ═══ 07 · TUTORIAL ══════════════════════════════════════════ */
+function renderTut(){
+  const s={depth:1,lantern:3,ult:'execute',
+    foe:{name:'RATLING',tags:['beast','strikes twice'],hp:22,max:22,
+      cycle:[['attack',5],['attack',5],['block',4]],turn:1,buff:0},
+    hero:{hp:56,max:56,block:0,energy:1,maxE:3,rage:0,maxRage:4},
+    bar:['strike','guard','cleave','flurry','riposte'],cds:{},
+    fx:{}};
+  document.getElementById('tut').innerHTML='<div class="app d-warrens">'+
+    '<div class="lantern"></div>'+fog()+spine(1)+stage(s)+
+    '<div class="plinth">'+heroBand(s)+resRow(s)+
+      '<div class="log"><span>&#9662;</span><em>You struck twice. The ratling is at 4.</em></div>'+
+      abilityBar(s,false,'guard')+'<div class="grow"></div>'+
+      '<div class="act"><button class="btn small" disabled>UNDO</button>'+
+      '<button class="btn go" disabled>END TURN<span class="sub">TAKE 5</span></button></div></div>'+
+    '<div class="lockveil"></div>'+
+    '<div class="coach down" style="bottom:206px"><div class="step">3 OF 5 &middot; BLOCK</div>'+
+      '<div class="msg">It hits for <b>5</b>. Guard gives you <b>7 block</b> &mdash; enough to take nothing. But spend it now: <b>block is gone at the start of your next turn.</b></div></div>'+
+  '</div>';
+}
+
+/* ═══ 08 · BOONS ═════════════════════════════════════════════ */
+const B={pick:1};
+function renderBoon(){
+  const list=[['r-common','TE','Twin Edge','Strike hits twice for 5 instead of once for 9.'],
+    ['r-uncommon','SG','Standing Guard','Guard also builds 1 rage. Cooldown unchanged.'],
+    ['r-rare','SL','Second Lung','+1 max energy. Permanent for this delve.']];
+  let o='';list.forEach((b,i)=>{o+='<div class="boon '+b[0]+(B.pick===i?' on':'')+'" onclick="pickBoon('+i+')">'+
+    '<div class="bi">'+b[1]+'</div><div class="gm"><div class="bn">'+b[2]+'</div><div class="bd">'+b[3]+'</div></div></div>';});
+  document.getElementById('boon').innerHTML='<div class="app d-camp">'+
+    '<div class="lantern"></div>'+fog()+spine(6)+
+    '<div class="hd"><span class="eyebrow">depth 5 cleared &middot; shaman down</span>'+
+      '<div class="h">TAKE A BOON<br>OR TAKE THE SHARDS</div></div>'+
+    '<div class="boons">'+o+'</div>'+
+    '<div class="skipb'+(B.pick==='s'?' on':'')+'" onclick="pickBoon(\'s\')"><div class="big">+120</div>'+
+      '<div class="t"><b>LEAVE THEM</b>Shards only buy gear and cosmetics for the Endless. They never touch the Daily.</div></div>'+
+    '<div class="grow"></div>'+
+    '<div class="act" style="margin-bottom:0"><button class="btn go">'+
+      (B.pick==='s'?'TAKE 120 SHARDS':'TAKE THE BOON')+'</button></div></div>';
+}
+window.pickBoon=function(i){B.pick=i;renderBoon()};
+
+/* ═══ 09 · DESCENT ═══════════════════════════════════════════ */
+function renderDescent(){
+  let b='';for(let i=0;i<26;i++)b+='<i style="opacity:'+(.3+(i%5)*.14)+'"></i>';
+  document.getElementById('descent').innerHTML='<div class="app d-crypt"><div class="desc">'+
+    '<div class="strata">'+b+'</div><div class="mid"><div class="lbl">DESCENDING</div>'+
+    '<div class="num">09</div><div class="nmz">THE CRYPT</div>'+
+    '<div class="warn"><b>612 of 1,284</b> never got this far.<br>The air is colder here.</div></div>'+
+    '<div class="foot">SENTINEL WAITS AT TEN</div></div></div>';
+}
+
+/* ═══ 10 · RESULT ════════════════════════════════════════════ */
+function renderResult(){
+  const b=['full','full','full','hurt','hurt','crit','full','hurt','hurt','crit','dead','none'];
+  const lab=['WARRENS','CAMP','CRYPT'];let rows='';
+  for(let r=0;r<3;r++){let sq='';
+    for(let c=0;c<4;c++){const i=r*4+c;sq+='<div class="sq '+(b[i]==='none'?'':b[i])+'" style="--n:'+i+'"></div>';}
+    rows+='<div class="srow"><span class="sl">'+lab[r]+'</span>'+sq+'</div>';}
+  document.getElementById('result').innerHTML='<div class="app d-crypt">'+
+    '<div class="lantern"></div>'+fog()+spine(11)+
+    '<div class="rtop"><div class="stamp">FELL AT DEPTH 11</div><div class="score" id="sc">0</div>'+
+      '<div class="rankline">rank <b>#12</b> of 1,284 delvers today</div></div>'+
+    '<div class="pane" style="margin-top:11px">'+
+      '<div class="bdr"><span>10 depths cleared &times; 100</span><span class="n">1000</span></div>'+
+      '<div class="bdr"><span>37 HP carried out &times; 1</span><span class="n">37</span></div>'+
+      '<div class="bdr miss"><span>Reached the floor</span><span class="n">&mdash;</span></div>'+
+      '<div class="bdr tot"><span>SCORE</span><span class="n">1037</span></div></div>'+
+    '<div class="share"><div class="sh"><span>your comment</span><span>spoiler-free</span></div>'+
+      '<div class="sgrid">'+rows+'</div>'+
+      '<div class="sfoot">Daily Delve #128 &middot; depth <b>11</b>/12<br><b>1037</b> &middot; 37 HP &middot; 5 abilities</div></div>'+
+    '<div class="grow"></div>'+
+    '<div class="act"><button class="btn small">COPY</button>'+
+      '<button class="btn go">WATCH SOMEONE REACH 12<span class="sub">3 DID IT TODAY</span></button></div></div>';
+  const el=document.getElementById('sc');let n=0;
+  const t=setInterval(()=>{n=Math.min(1037,n+41);el.textContent=n;if(n>=1037)clearInterval(t)},18);
+}
+
+/* ═══ 11 · BOARD ═════════════════════════════════════════════ */
+function renderBoard(){
+  const rows=[{r:1,n:'quartzfen',s:1476,d:12,c:4,b:'ffffhhfhhhch'},
+    {r:2,n:'mossgrave',s:1461,d:12,c:5,b:'ffffhhfhhccc'},
+    {r:3,n:'sable_arc',s:1288,d:12,c:5,b:'fffhhcfhhccc'},
+    {r:11,n:'tarnwick',s:1042,d:10,c:5,b:'ffffhhfhhcdn'},
+    {r:12,n:'you',s:1037,d:10,c:5,b:'ffffhcfhhcdn',me:1},
+    {r:13,n:'lantern_ox',s:1030,d:10,c:4,b:'fffhhcfhhcdn'}];
+  let o='';rows.forEach(r=>{let t='';
+    r.b.split('').forEach(ch=>t+='<div class="ds '+(ch==='n'?'':ch)+'"></div>');
+    o+='<div class="row'+(r.me?' me':'')+'"><div class="pb">&#9654;</div>'+
+      '<div class="rk'+(r.r<4?' m'+r.r:'')+'">'+r.r+'</div><div class="who">'+
+      '<div class="nm2">'+(r.me?'YOU':'u/'+r.n)+'</div><div class="dep">'+t+'</div></div>'+
+      '<div class="sc"><div class="v">'+r.s+'</div><div class="d">D'+r.d+' &middot; '+r.c+' AB</div></div></div>';});
+  document.getElementById('board').innerHTML='<div class="app d-crypt">'+
+    '<div class="lantern"></div>'+fog()+spine(11)+
+    '<div class="hd"><span class="eyebrow">delve 128 &middot; the same shaft for everyone</span>'+
+      '<div class="h">WHO WENT DEEPEST</div></div>'+
+    '<div class="lb"><div class="lbcta"><div class="t"><b>ONLY 3 REACHED THE FLOOR</b>'+
+      'All three ran 4 abilities instead of 5.</div><div class="pb" style="flex:0 0 36px;height:36px">&#9654;</div></div>'+o+'</div>'+
+    '<div class="act"><button class="btn small">FILTER</button>'+
+      '<button class="btn go">WATCH #1 FROM D9<span class="sub">2 MIN</span></button></div></div>';
+}
+
+/* ═══ 12 · REPLAY ════════════════════════════════════════════ */
+const R={seg:9};
+function renderReplay(){
+  const s={depth:R.seg,lantern:3,ult:'execute',
+    foe:{name:'GLOOM WRAITH',tags:['undead','empowers'],hp:17,max:40,
+      cycle:[['attack',9],['buff',5],['attack',9]],turn:2,buff:5},
+    hero:{hp:31,max:56,block:8,energy:1,maxE:3,rage:3,maxRage:4},
+    bar:['strike','guard','cleave','flurry','riposte'],cds:{cleave:1,flurry:0,riposte:2},fx:{}};
+  let segs='';for(let i=1;i<=12;i++)
+    segs+='<div class="tseg '+(i<R.seg?'past':i===R.seg?'cur':'')+'" onclick="jump('+i+')"></div>';
+  document.getElementById('replay').innerHTML='<div class="app d-crypt">'+
+    '<div class="lantern"></div>'+fog()+spine(R.seg)+
+    '<div class="watchtag">&#9654; WATCHING u/QUARTZFEN</div>'+stage(s)+
+    '<div class="plinth">'+heroBand(s)+resRow(s)+
+      '<div class="log"><span>&#9662;</span><em>quartzfen used RIPOSTE &rarr; 8 damage, 8 block.</em></div>'+
+      abilityBar(s,false)+'<div class="grow"></div>'+
+      '<div class="transport"><div class="trtop">'+
+        '<div class="trb">&#9664;&#9664;</div><div class="trb">&#9208;</div><div class="trb">&#9654;&#9654;</div>'+
+        '<div class="trb wide">DEPTH '+R.seg+' &middot; TURN 2 OF 4</div><div class="trb">&#10005;</div></div>'+
+        '<div class="track">'+segs+'</div>'+
+        '<div class="trmeta"><span>TAP A DEPTH TO JUMP</span><span>SCORE 1476</span></div></div>'+
+    '</div></div>';
+}
+window.jump=function(i){R.seg=i;renderReplay()};
+
+/* ═══ 13 · FORK ══════════════════════════════════════════════ */
+function renderFork(){
+  let risk='';for(let i=0;i<8;i++)risk+='<i class="'+(i<6?'on':'')+'"></i>';
+  document.getElementById('fork').innerHTML='<div class="app plain d-abyss">'+
+    '<div class="lantern"></div>'+fog()+
+    '<div class="fork"><div class="forkhead"><div class="k">DEPTH REACHED</div><div class="d">17</div>'+
+      '<div class="s"><b>340 shards</b> carried, unbanked.<br>Your record is <b>D24</b>. 3 delvers are deeper right now.</div></div>'+
+      '<div class="optn safe"><div class="ot">&#9650; SURFACE</div>'+
+        '<div class="od">Bank <b>340 shards</b> and walk out. The run ends here and counts.</div></div>'+
+      '<div class="optn risk"><div class="ot">&#9660; DESCEND TO 18</div>'+
+        '<div class="od">Enemies gain <b>+8% HP</b> and the shaft unlights one slot of your lantern. Die and every unbanked shard is gone.</div>'+
+        '<div class="riskbar">'+risk+'</div></div></div>'+
+    '<div class="act"><button class="btn cool">SURFACE</button>'+
+      '<button class="btn danger">DESCEND<span class="sub">340 AT RISK</span></button></div></div>';
+}
+
+/* ═══ 14 · DEATH ═════════════════════════════════════════════ */
+function renderDeath(){
+  document.getElementById('death').innerHTML='<div class="app plain d-abyss">'+
+    '<div class="lantern" style="opacity:.35"></div>'+fog()+
+    '<div class="deathwrap">'+
+      '<div><div class="eyebrow">THE LANTERN WENT OUT AT</div>'+
+      '<div class="big" style="margin-top:10px">DEPTH 18</div></div>'+
+      '<div class="lost"><div class="v">340</div><div class="k">SHARDS LOST &mdash; NEVER BANKED</div></div>'+
+      '<div class="kept"><div class="v">D18 &middot; 2nd BEST</div><div class="k">DEPTH RECORD KEPT</div></div>'+
+      '<div style="font-size:11px;color:var(--ink2);line-height:1.6">You had <b style="color:#fff">340 shards</b> at depth 17 and chose to descend.<br>Cryptweave Coat was found at 16 &mdash; <b style="color:#9df0b8">gear is always kept.</b></div>'+
+    '</div>'+
+    '<div class="act"><button class="btn small">CAMP</button>'+
+      '<button class="btn go">DELVE AGAIN<span class="sub">SURFACE AT 17 NEXT TIME?</span></button></div></div>';
+}
+
+/* ═══ 15 · COMMUNITY ═════════════════════════════════════════ */
+function renderComm(){
+  let marks='';for(let i=1;i<10;i++)marks+='<div class="mark" style="top:'+(i*10)+'%"></div>';
+  const c=[['quartzfen',96],['mossgrave',81],['YOU',64],['sable_arc',52],['lantern_ox',38]];
+  let cs='';c.forEach(x=>{cs+='<div class="cr"><span class="nn">'+x[0]+'</span>'+
+    '<span class="bar"><i style="width:'+x[1]+'%"></i></span><span class="vv">D'+Math.round(x[1]/4)+'</span></div>';});
+  document.getElementById('comm').innerHTML='<div class="app plain d-crypt">'+
+    '<div class="lantern"></div>'+fog()+
+    '<div class="hd"><span class="eyebrow">r/dailydelve &middot; resets sunday</span><div class="h">THE COMMUNITY DELVE</div></div>'+
+    '<div class="cshaft"><div class="ctrack"><div class="filled" style="height:72%"></div>'+marks+
+      '<div class="youare" style="top:72%"></div><div class="bossz"></div></div>'+
+      '<div class="cinfo"><div class="cbig">43<small> / 60</small></div>'+
+        '<div class="cline">Every depth anyone reaches digs the shared shaft one metre deeper. <b>2,104 delvers</b> are carrying it this week.</div>'+
+        '<div class="cline">You have contributed <b>16 depths</b>.</div>'+
+        '<div class="contrib"><span class="eyebrow">TOP THIS WEEK</span>'+cs+'</div></div></div>'+
+    '<div class="cboss"><div class="bt">&#9760; THE THING AT SIXTY</div>'+
+      '<div class="bd2">Unlocks at depth 60. <b>4,200 HP.</b> No single delver can kill it &mdash; damage is pooled until it falls.</div>'+
+      '<div class="meter"><div class="fill" style="width:0%"></div></div></div>'+
+    '<div class="act"><button class="btn small">RULES</button>'+
+      '<button class="btn go">DIG DEEPER<span class="sub">YOUR RUNS COUNT</span></button></div></div>';
+}
+
+/* ═══ 16 · COMMUNITY BOSS ════════════════════════════════════ */
+function renderCBoss(){
+  const s={depth:12,lantern:3,ult:'execute',
+    foe:{name:'THE THING AT SIXTY',tags:['world boss','pooled hp'],hp:1876,max:4200,
+      cycle:[['attack',24],['buff',9],['attack',31]],turn:1,buff:0},
+    hero:{hp:44,max:56,block:0,energy:3,maxE:3,rage:4,maxRage:4},
+    bar:['strike','guard','cleave','flurry','riposte'],cds:{},fx:{}};
+  document.getElementById('cboss').innerHTML='<div class="app d-abyss">'+
+    '<div class="lantern"></div>'+fog()+spine(12)+stage(s)+
+    '<div class="plinth">'+heroBand(s)+resRow(s)+
+      '<div class="log"><span>&#9662;</span><em>2,104 delvers are hitting this. Your damage is pooled.</em></div>'+
+      abilityBar(s,false)+
+      '<div class="pane" style="margin-top:9px;padding:9px 10px;box-shadow:inset 0 0 0 1px #8e2621">'+
+        '<div style="display:flex;justify-content:space-between;align-items:baseline">'+
+        '<span class="eyebrow">SUB DAMAGE POOL</span>'+
+        '<span style="font:400 11px/1 var(--px);color:#ff8b82">2,324 / 4,200</span></div>'+
+        '<div class="meter" style="height:9px;margin-top:7px"><div class="fill" style="width:55%;'+
+        'background:linear-gradient(180deg,#ff8a6c,#a82d26);box-shadow:0 0 14px rgba(255,98,87,.5)"></div></div>'+
+        '<div style="font-size:10px;color:var(--ink2);margin-top:7px">You have contributed <b style="color:#fff">86</b> this run.</div></div>'+
+      '<div class="grow"></div>'+
+      '<div class="act"><button class="btn small" disabled>UNDO</button>'+
+        '<button class="btn danger">END TURN<span class="sub">TAKE 24</span><div class="hz"></div></button></div>'+
+    '</div></div>';
+}
+
+/* ═══ 17 · RECORDS ═══════════════════════════════════════════ */
+function renderRecords(){
+  const days=[2,3,3,1,4,0,2, 3,3,4,2,1,3,3, 4,2,3,3,4,4,2, 1,3,3,2,4,3,3, 3,4,2,3,0,3,3];
+  let cal='';days.forEach((d,i)=>{const cls=d===0?'gx':'g'+d;
+    cal+='<div class="cd '+cls+(i===days.length-1?' today':'')+'"></div>';});
+  document.getElementById('records').innerHTML='<div class="app plain d-surface">'+
+    '<div class="fire" style="opacity:.4"></div>'+fog()+
+    '<div class="hd"><span class="eyebrow">the camp &middot; records</span><div class="h">YOUR FIVE WEEKS</div></div>'+
+    '<div class="cal">'+cal+'</div>'+
+    '<div style="display:flex;gap:7px;align-items:center;margin-top:9px;position:relative;z-index:12">'+
+      '<span class="eyebrow">SHALLOW</span>'+
+      '<div style="display:flex;gap:3px"><div class="cd g1" style="width:14px;aspect-ratio:auto;height:14px"></div>'+
+      '<div class="cd g2" style="width:14px;height:14px"></div><div class="cd g3" style="width:14px;height:14px"></div>'+
+      '<div class="cd g4" style="width:14px;height:14px"></div></div>'+
+      '<span class="eyebrow">FLOOR</span><div class="grow"></div>'+
+      '<div class="cd gx" style="width:14px;height:14px"></div><span class="eyebrow">MISSED</span></div>'+
+    '<div class="streak"><div class="v">31 DAYS</div><div class="k">CURRENT STREAK</div>'+
+      '<div class="s2">Longest run of consecutive delves. <b style="color:#fff">Only the Daily counts</b> &mdash; the Endless can\'t protect a streak.</div></div>'+
+    '<div class="recgrid">'+
+      '<div class="st"><div class="k">BEST SCORE</div><div class="v">1,476</div></div>'+
+      '<div class="st"><div class="k">FLOORS HIT</div><div class="v">9</div></div>'+
+      '<div class="st"><div class="k">AVG DEPTH</div><div class="v">9.2</div></div>'+
+      '<div class="st"><div class="k">TOP FINISH</div><div class="v">#3</div></div>'+
+      '<div class="st"><div class="k">ENDLESS PB</div><div class="v">D24</div></div>'+
+      '<div class="st"><div class="k">DELVES</div><div class="v">128</div></div></div>'+
+    '<div class="grow"></div>'+
+    '<div class="act"><button class="btn small">SHARE</button>'+
+      '<button class="btn go">TODAY\'S DELVE<span class="sub">NOT RUN YET</span></button></div></div>';
+}
+
+renderFeed();renderCamp();renderLoadout();renderGear();renderShrine();
+renderFight();renderTut();renderBoon();renderDescent();
+renderResult();renderBoard();renderReplay();
+renderFork();renderDeath();renderComm();renderCBoss();renderRecords();
+</script>

@@ -9,7 +9,7 @@
 // (`media.dir` in devvit.json) and the local Vite preview.
 //
 // Provenance: everything here is bespoke PixelLab art generated for this project
-// with the GAME_DESIGN.md recipe verbatim.
+// with the `game_design/ART.md` recipe verbatim.
 //
 // Cards are FULL ILLUSTRATIONS (128x176 portraits), not icons — the card is the
 // art, with name and rules text over a scrim. Card motion (hover lift, the rare

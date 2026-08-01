@@ -1,0 +1,350 @@
+{
+	"nodes": [
+		{
+			"id": "ge",
+			"type": "group",
+			"x": 880,
+			"y": -1360,
+			"width": 960,
+			"height": 2880,
+			"color": "6",
+			"label": "🌑 ENDLESS — same delver, geared, no floor"
+		},
+		{
+			"id": "gd",
+			"type": "group",
+			"x": -3040,
+			"y": -1600,
+			"width": 960,
+			"height": 2450,
+			"color": "2",
+			"label": "☀️ DAILY — issued kit, gear OFF"
+		},
+		{
+			"id": "gc",
+			"type": "group",
+			"x": -1120,
+			"y": -800,
+			"width": 960,
+			"height": 1500,
+			"color": "4",
+			"label": "⛏️ COMMUNITY — fed by both, no combat of its own"
+		},
+		{
+			"id": "title",
+			"type": "text",
+			"text": "# ⚔️ ONE FIGHT, THREE MODES\nThe **same combat engine** in all three columns.\nEvery number below is worked through — *illustrative tuning, not spec.*\nNumbers live in `TUNING`; this canvas shows how they move.",
+			"x": -800,
+			"y": -1900,
+			"width": 640,
+			"height": 190
+		},
+		{
+			"id": "dset",
+			"type": "text",
+			"text": "# ☀️ DELVE 128 · DEPTH 10\n**Every delver in the sub is fighting exactly this.**\n\n### 🧍 VESK — issued kit\n`38 / 50 HP` · `⚡ 3` · `🔥 rage 2/4` · `🛡 0`\nforesight **3 / 3 — always, in the Daily**\n*No gear. No class. No level. Nothing an account owns.*\n\n### 🎒 THE BAR — 4 of the day's 9, + 1 of 3 ultimates\n| | ability | ⚡ | cd | school | does |\n|-|-|-|-|-|-|\n|1| STRIKE | 1 | — | physical | 9 dmg |\n|2| WARD | 1 | — | physical | 7 block |\n|3| CLEAVE | 2 | 2 | physical | 13 dmg |\n|4| ICE NOVA | 2 | 3 | spell · frost | 11 dmg + Weaken 4 |\n|★| EXECUTE | rage | — | physical | 11 dmg ×2 |\n\n*Issued but left behind: Flurry · Hobble · Brace · Jab · Riposte*\n**Took 4 slots, not 5** — fewer slots, more uptime on the good ones.\n\n### 👹 BONE SENTINEL — crypt · `warden` · threat 4\n`98 / 98 HP` — base 52, ×1.08⁹ depth ramp, −4% day jitter\n`undead` · `guards first` · **`armoured 2`**\nCycle: ⚔ 23 → ⚔ 14 → 🛡 20",
+			"x": -3010,
+			"y": -1520,
+			"width": 900,
+			"height": 800
+		},
+		{
+			"id": "dt1",
+			"type": "text",
+			"text": "## ▶ TURN 1\n`block → 0` · `energy → 3/3` · cooldowns tick −1\n\n**👁 NOW ⚔ 23 · NEXT ⚔ 14 · THEN 🛡 20**\n*38 HP against 23. Survivable — but two more like it is death.*\n\n🗡 **ICE NOVA** `2⚡`\n→ it's **spell**, so `armoured 2` does nothing → **11 lands whole**\n→ 🩸 `98 → 87`\n→ frost rider: **Weaken 4** · **NOW ⚔ 23 → 19**\n→ +1 rage *(once per cast, not per hit)* · rage **3**\n\n🗡 **WARD** `1⚡` → block **7** · energy **0**\n\n⏹ **END TURN** → it swings for 19, block 7 → **12 lands**\n→ `38 → 26 HP` · +1 rage *(it landed on HP)* → **rage 4/4 ⚡ ULTIMATE READY**",
+			"x": -3010,
+			"y": -690,
+			"width": 900,
+			"height": 430
+		},
+		{
+			"id": "dt3",
+			"type": "text",
+			"text": "## ▶ TURN 3 — the free turn\nCLEAVE cd 2 · ICE NOVA cd 1\n**NOW 🛡 20 · NEXT ⚔ 23 · THEN ⚔ 14**\n\n**It guards this turn — so this turn is free.**\nIts block resolves *after* you end. Damage now lands whole;\ndamage **next** turn eats 20 block first. **Reading that is the fight.**\n\n🗡 **STRIKE ×3** `1⚡ each, no cooldown` → (9−2) × 3 = **21**\n→ 🩸 `58 → 37` · rage capped **4/4**\n\n⏹ **END TURN** → it sets its guard. **+20 block.**",
+			"x": -3010,
+			"y": 220,
+			"width": 900,
+			"height": 330
+		},
+		{
+			"id": "dout",
+			"type": "text",
+			"text": "## 🏁 TURNS 4–6 → **SENTINEL DOWN**\nChew the 20 block · **EXECUTE** again at rage 4 · cleared at **9 HP**\n\n💀 Fell at depth **11**.\n**`10 cleared × 100  +  9 HP  =  1009`** — recomputed server-side.\nShare grid row 3 · daily board · **+11 metres to the sub →**",
+			"x": -3010,
+			"y": 580,
+			"width": 900,
+			"height": 230,
+			"color": "2"
+		},
+		{
+			"id": "dt2",
+			"type": "text",
+			"text": "## ▶ TURN 2\nICE NOVA cd `3 → 2` · energy 3/3 · block 0\n**NOW ⚔ 14 · NEXT 🛡 20 · THEN ⚔ 23**\n\n⚡ **EXECUTE** — rage 4, **0 energy** *(rage is the only cost)*\n→ 11 dmg ×2, and `armoured 2` bites **per hit**: (11−2) × 2 = **18**\n→ 🩸 `87 → 69` · rage → 0, then +1 → **1**\n> *One 22-damage hit would have lost 2. Two hits lose 4.*\n> ***That** is what `armoured` is for — it doesn't shrink the number, it punishes the shape.*\n\n🗡 **CLEAVE** `2⚡` → 13 − 2 = **11** → 🩸 `69 → 58` · rage **2**\n🗡 **WARD** `1⚡` → block **7**\n\n⏹ **END TURN** → 14 − 7 = **7 lands** → `26 → 19 HP` · rage **3**",
+			"x": -3010,
+			"y": -220,
+			"width": 900,
+			"height": 410
+		},
+		{
+			"id": "et2",
+			"type": "text",
+			"text": "## ▶ TURN 2 — the ward breaks\n**NOW 🛡 34 · NEXT ⚔ 52 · THEN ❓❓❓**\n**It guards. One free turn — and the one after it kills you at 10 HP.**\n\n⚡ **PYROCLASM** rage 4 → 14 ×2 spell = **28** → 🩸 `114 → 86`\n→ that was **hit 3 of 3 — `warded` BREAKS**\n→ 🔥 **Bleed 6** applies, **+1 turn** from *Kindling*\n\n🗡 **EMBER BOLT ×2** → 24 → 🩸 `86 → 62` · Bleed **2** stacks on → **8**\n\n⏹ **END TURN** → it sets its guard, **+34 block**\n→ 🔥 Bleed 8 ticks at the start of its turn → 🩸 `62 → 54`\n*Bleed is damage that doesn't care that it's guarding.*",
+			"x": 910,
+			"y": 20,
+			"width": 900,
+			"height": 400
+		},
+		{
+			"id": "et3",
+			"type": "text",
+			"text": "## ▶ TURN 3 — you cannot block 52\n**NOW ⚔ 52** · you: **10 HP** · it: **54 HP behind 34 block**\n\nBest block available is PYRE WARD 7 → **45 would land**. That is lethal.\nSo: all-in and hope Bleed finishes it.\n\n🗡 **FIREBALL** `2⚡` → 19 → block `34 → 15`\n🗡 **EMBER BOLT ×2** → 24 → block gone, **9 to HP** → 🩸 `54 → 45`\n\n⏹ **END TURN** → ⚔ **52**, block 0 → `10 → 0`\n\n> *You could not see ⚔ 52 coming until it was NEXT.*\n> **The lantern is the difficulty.** Not the HP bar.",
+			"x": 910,
+			"y": 460,
+			"width": 900,
+			"height": 380
+		},
+		{
+			"id": "eset",
+			"type": "text",
+			"text": "# 🌑 ENDLESS · DEPTH 27\n**Same delver. Everything else is different.**\n\n### 🧍 VESK — Adept → **PYROMANCER** · Lv 14\n`44 / 67 HP` · `⚡ 4` · `🔥 rage 3/4`\nforesight **2 / 3 — lantern tier 2**\n\n**⚔️ Gravebite Axe** `+3 ATTACK` · **🛡 Cryptweave Coat** `+11 MAX HP`\n**💍 Cinder Knot** `rage builds +1 faster` · **◇ relic — empty socket*\nTalents: *Kindling* `fire riders +1 turn` · *Second Lung* `+1 max energy`\n\n### 🎒 THE BAR — drawn with **spec weights**: spell + fire\n| | ability | ⚡ | cd | school | does |\n|-|-|-|-|-|-|\n|1| EMBER BOLT | 1 | — | spell · fire | 9 (+3) dmg, Bleed 2 |\n|2| PYRE WARD | 1 | — | spell · fire | 7 block, Thorns 3 |\n|3| FIREBALL | 2 | 2 | spell · fire | 16 (+3) dmg, Bleed 4 |\n|4| FLURRY | 1 | 2 | physical | 3 dmg ×3 |\n|★| PYROCLASM | rage | — | spell · fire | 14 ×2, Bleed 6 |\n\n*Same catalog as the Daily. The **weights** differ, not the abilities.*\n\n### 👹 ABYSS KNIGHT — abyss · `warden` · threat 3\n`148 / 148 HP` · `void` · `patrols`\n**`armoured 4`** — physical loses 4 per hit\n**`warded 3`** — **immune to every status rider until hit 3 times**\nCycle: ⚔ 41 → 🛡 34 → ⚔ 52",
+			"x": 910,
+			"y": -1280,
+			"width": 900,
+			"height": 830
+		},
+		{
+			"id": "et1",
+			"type": "text",
+			"text": "## ▶ TURN 1\n**NOW ⚔ 41 · NEXT 🛡 34 · THEN ❓❓❓ `LANTERN T3`**\n*Unlit = **locked, not invisible**. The slot prints its own reason.*\n`44 HP vs 41` — **it will nearly kill you.**\n\n🗡 **FIREBALL** `2⚡` → spell, `armoured 4` does nothing → 16+3 = **19**\n→ 🩸 `148 → 129` · Bleed 4 → ❌ **`warded` eats it — hit 1 of 3**\n\n🗡 **EMBER BOLT** `1⚡` → 12 → 🩸 `129 → 117` · Bleed ❌ — **hit 2 of 3**\n\n🗡 **PYRE WARD** `1⚡` *(the 4th energy is Second Lung)* → block **7**, Thorns 3\n\n⏹ **END TURN** → 41 − 7 = **34 lands** → `44 → 10 HP`\n→ Thorns 3 → 🩸 `117 → 114` · rage 3 → **4** *(Cinder Knot)* ⚡ **READY**",
+			"x": 910,
+			"y": -420,
+			"width": 900,
+			"height": 420
+		},
+		{
+			"id": "edeath",
+			"type": "text",
+			"text": "## 💀 DEATH AT DEPTH 27\n### THE HAUL IS GONE\n**LOST — 340 shards** *(carried, never banked)*\n**LOST — Cryptweave Coat** *(found at 22 — you were wearing it)*\n**LOST — 2 rares, 1 lantern, 9 commons**\n\n**KEPT:** your equipped kit · **depth record D27, a new best** ·\nXP · the depth-20 story fragment · deed progress\n\n*Wearing it did not save it. A death moves you sideways, never backwards —\nyou lose a possible future, not your character.*",
+			"x": 910,
+			"y": 880,
+			"width": 900,
+			"height": 260,
+			"color": "1"
+		},
+		{
+			"id": "efork",
+			"type": "text",
+			"text": "## 🔱 THE FORK — offered after **every** depth\nAt **depth 26** you were holding 340 shards. Your record was D24.\n\n**▲ SURFACE** → bank the haul — 340 shards *and* every item found. Record D26.\n**▼ DESCEND** → enemies `+8% HP` · **the lantern unlights another slot** ·\ntraits arrive and stack · **the entire haul at risk**\n\n**You descended.** That is the whole mode, and it is why the loss has to sting.\n\n→ +27 metres to the sub · weekly Endless board: **D27 · Pyromancer 14 · 4 slots · Pyroclasm**",
+			"x": 910,
+			"y": 1180,
+			"width": 900,
+			"height": 300,
+			"color": "6"
+		},
+		{
+			"id": "c1",
+			"type": "text",
+			"text": "# ⛏️ THE SHAFT — this week\n**Both fights above already counted.**\n\nDaily reached depth 11 → **+11 metres**\nEndless reached depth 27 → **+27 metres**\n### +38 metres. One player. One day.\n\n`▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░` **43 / 60**\n2,104 delvers carrying it this week",
+			"x": -1090,
+			"y": -720,
+			"width": 900,
+			"height": 340,
+			"color": "4"
+		},
+		{
+			"id": "c2",
+			"type": "text",
+			"text": "## Why it has no combat of its own\nThe Community delve **never runs the engine.** It has exactly two inputs —\nthe two arrows on the left — and that is the entire mode.\n\n**Cheapest mode in the game to build.** It is also why\n**The Thing at Sixty** is a bigger jump than it looks: it would be the\nfirst time this column needs a combat entry point at all.",
+			"x": -1090,
+			"y": -340,
+			"width": 900,
+			"height": 300
+		},
+		{
+			"id": "c3",
+			"type": "text",
+			"text": "## ADDITIVE ONLY\nNo action any player can take moves the shaft **backward**.\n*That single property removes almost the entire grief surface.*\n\nA run that dies at depth 3 still contributed **three metres** —\nwhich is the difference between a community feature and a second leaderboard.\n\nDerived from server-verified runs · deduped by run id · rate-limited per user.\n**Resets Sunday** — same clock as the weekly Endless board. Season id in every key.",
+			"x": -1090,
+			"y": 0,
+			"width": 900,
+			"height": 320
+		},
+		{
+			"id": "c4",
+			"type": "text",
+			"text": "## ☠️ AT 60 — THE THING AT SIXTY\n`4,200` pooled HP. No single delver can kill it.\nYour damage this run is a contribution, shown live against the sub's total.\n*Deferred past ship — a bar that fills is a complete feature; a boss with no bar is not.*\n\n### Rewards: cosmetics + shards. **NEVER power.**\nPower arriving on a schedule the Daily can see would break the one rule.",
+			"x": -1090,
+			"y": 360,
+			"width": 900,
+			"height": 300,
+			"color": "1"
+		},
+		{
+			"id": "loop",
+			"type": "text",
+			"text": "## 🔁 THE TURN LOOP — identical in every column above\n**1 · START** `block = 0` · `energy = max` · `cds[i] −= 1` *(by SLOT, never by ability id)*\n**2 · READ** NOW / NEXT / THEN — post-ramp, post-buff, post-weaken. One `resolveIntent` serves the display *and* the resolution, **so the telegraph cannot lie.**\n**3 · CAST** spend ⚡ · set `cds[slot]` · **school** decides which trait bites · **element** carries the rider · **+1 rage per damaging cast, once per cast**\n**4 · ULT** rage-gated, off-bar, rage is the only cost\n**5 · END** the telegraphed NOW resolves → **lands on HP: −HP, +1 rage** · **fully blocked: perfect block, NO rage**\n**6 →** enemy at 0 = depth cleared · you at 0 = run over\n\n*Taking the hit is how you charge. That is the tension the ultimate is built on.*",
+			"x": -2000,
+			"y": 1710,
+			"width": 1900,
+			"height": 420,
+			"color": "5"
+		},
+		{
+			"id": "rules",
+			"type": "text",
+			"text": "## 🔒 WHAT NEVER CHANGES\n**`simulateRun(seed, choices)` — two arguments, forever.**\nA test asserts `.length === 2`. It exists to stop an optional `kit?` letting gear into the Daily.\n\n**The client submits CHOICES, never OUTCOMES.**\nEvery ⚡ and 🗡 above is one `RunChoice`. A whole run is a few hundred small ints — so the server\nreplays it in microseconds, and every leaderboard row is a **watchable solution**.\n\n**Nothing account-owned reaches the Daily.**\nCompare the two setup cards: same engine, same catalog — the left one just can't see your hero.",
+			"x": 120,
+			"y": 1800,
+			"width": 900,
+			"height": 420,
+			"color": "1"
+		}
+	],
+	"edges": [
+		{
+			"id": "c_a",
+			"fromNode": "c1",
+			"fromSide": "bottom",
+			"toNode": "c2",
+			"toSide": "top"
+		},
+		{
+			"id": "c_b",
+			"fromNode": "c2",
+			"fromSide": "bottom",
+			"toNode": "c3",
+			"toSide": "top"
+		},
+		{
+			"id": "c_c",
+			"fromNode": "c3",
+			"fromSide": "bottom",
+			"toNode": "c4",
+			"toSide": "top"
+		},
+		{
+			"id": "t_d",
+			"fromNode": "title",
+			"fromSide": "left",
+			"toNode": "dset",
+			"toSide": "top"
+		},
+		{
+			"id": "t_c",
+			"fromNode": "title",
+			"fromSide": "right",
+			"toNode": "c1",
+			"toSide": "top"
+		},
+		{
+			"id": "d1",
+			"fromNode": "dset",
+			"fromSide": "bottom",
+			"toNode": "dt1",
+			"toSide": "top"
+		},
+		{
+			"id": "d2",
+			"fromNode": "dt1",
+			"fromSide": "bottom",
+			"toNode": "dt2",
+			"toSide": "top",
+			"label": "rage full"
+		},
+		{
+			"id": "d3",
+			"fromNode": "dt2",
+			"fromSide": "bottom",
+			"toNode": "dt3",
+			"toSide": "top"
+		},
+		{
+			"id": "d4",
+			"fromNode": "dt3",
+			"fromSide": "bottom",
+			"toNode": "dout",
+			"toSide": "top"
+		},
+		{
+			"id": "e1",
+			"fromNode": "eset",
+			"fromSide": "bottom",
+			"toNode": "et1",
+			"toSide": "top"
+		},
+		{
+			"id": "e2",
+			"fromNode": "et1",
+			"fromSide": "bottom",
+			"toNode": "et2",
+			"toSide": "top",
+			"label": "rage full"
+		},
+		{
+			"id": "e3",
+			"fromNode": "et2",
+			"fromSide": "bottom",
+			"toNode": "et3",
+			"toSide": "top"
+		},
+		{
+			"id": "e4",
+			"fromNode": "et3",
+			"fromSide": "bottom",
+			"toNode": "edeath",
+			"toSide": "top"
+		},
+		{
+			"id": "e5",
+			"fromNode": "edeath",
+			"fromSide": "bottom",
+			"toNode": "efork",
+			"toSide": "top",
+			"label": "why?"
+		},
+		{
+			"id": "m1",
+			"fromNode": "dout",
+			"fromSide": "right",
+			"toNode": "c1",
+			"toSide": "left",
+			"label": "+11 metres"
+		},
+		{
+			"id": "m2",
+			"fromNode": "efork",
+			"fromSide": "right",
+			"toNode": "c1",
+			"toSide": "left",
+			"label": "+27 metres"
+		},
+		{
+			"id": "l1",
+			"fromNode": "dout",
+			"fromSide": "bottom",
+			"toNode": "loop",
+			"toSide": "top"
+		},
+		{
+			"id": "l2",
+			"fromNode": "efork",
+			"fromSide": "bottom",
+			"toNode": "loop",
+			"toSide": "top"
+		},
+		{
+			"id": "l3",
+			"fromNode": "loop",
+			"fromSide": "right",
+			"toNode": "rules",
+			"toSide": "left"
+		},
+		{
+			"id": "t_e",
+			"fromNode": "title",
+			"fromSide": "bottom",
+			"toNode": "eset",
+			"toSide": "top"
+		}
+	]
+}
