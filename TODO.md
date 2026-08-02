@@ -23,16 +23,21 @@ forward; its combat model does not.
 | | | Carries forward? |
 |---|---|---|
 | **M0** — the sim | `simulateRun(seed, choices)`, pure + deterministic | **Rewritten** at Stage 1. The *contract* survives; the deck does not. |
-| **M1** — the client | Full DOM game, no client-side game state | **Ported at Stage 1** to the new model in the old CSS (901 → ~560 lines). Stage 2 puts the v5 shell on it. |
+| **M1** — the client | Full DOM game, no client-side game state | **Rewritten twice, done.** Stage 1 ported it to the new model in the old CSS; Stage 2 put the v5 shell on it and split it into one module per place. |
 | **M2** — the daily | tRPC, Redis, per-sub leaderboard, server-side replay verification, one-run-per-day guard, daily scheduler post | **Yes, wholesale.** This is the asset. |
-| **M3** — the art | 25 bespoke images | 8 portraits kept, 3 backdrops parked, **14 card illustrations deleted** at Stage 2. |
+| **M3** — the art | 25 bespoke images | 8 portraits kept, **1 hero portrait added**, 3 backdrops parked (the stage is a CSS gradient), **14 card illustrations deleted** at Stage 2. |
 | **M3.5** — tutorial | 15 steps, templated copy, separate choice list | **Deleted at Stage 1** with the deck it was written against. Rebuilt as 5 beats at Stage 3; **both invariants already survive**, as a 2,000-seed sweep in `sim.test.ts`. |
 
-**85 checks green** after Stage 1. `tests/`: `sim.test.ts` (45), `server.test.ts`
-(20), `art.test.ts` (12), plus 8 in the server vitest project. `tutorial.test.ts` was
+**89 checks green** after Stage 2. `tests/`: `sim.test.ts` (45), `server.test.ts`
+(20), `art.test.ts` (16), plus 8 in the server vitest project. `tutorial.test.ts` was
 deleted with the deck it tested; Stage 3 rebuilds it. **`npm run test` runs both
 halves — a tsx pass and a vitest pass — and collapsing it to one has already silently
 skipped an entire suite once.**
+
+`art.test.ts` grew by four at Stage 2 and lost one: the `CARD_ART` size check went with
+the files, and the hero portrait's 64px source, the palette drift-guard against
+`game.css`, the "no second copy of a tile colour" guard, and the ability/boon glyph
+checks arrived.
 
 **Open items inherited:**
 
@@ -226,48 +231,111 @@ Zero UI in this stage. The deck became a seeded ability pool plus a chosen bar �
 > lower bound on what a human with three-turn foresight can do, not an upper one.
 > Watch it once there is real play data; do not chase it with tuning.
 
-## Stage 2 — UI to the v5 shell
+## Stage 2 — UI to the v5 shell ✅
 
-- [ ] Port the mockup CSS as the new `game.css`: strata tokens, plinth, depth spine,
+- [x] Port the mockup CSS as the new `game.css`: strata tokens, plinth, depth spine,
       stage, threat track, ability grid, buttons, meters
-- [ ] Hand → ability bar (3 columns + a full-width ultimate row)
-- [ ] Threat track: NOW/NEXT/THEN, lethal hatching, **unlit = locked with the
+- [x] Hand → ability bar (3 columns + a full-width ultimate row)
+- [x] Threat track: NOW/NEXT/THEN, lethal hatching, **unlit = locked with the
       reason, never invisible**
-- [ ] Loadout screen (03) — renders **the day's issued 9 + 3 ultimates**, not a fixed
+- [x] Loadout screen (03) — renders **the day's issued 9 + 3 ultimates**, not a fixed
       list; boon screen (08), descent screen (09), camp hub (02, **Daily door only**)
-  - [ ] **The camp is the landing screen.** The feed tap opens the app at the camp,
-        not in combat — `feed → camp → tutorial → camp → descend`
-        (`GAME_DESIGN.md` § The first session). One extra tap, and it is what stops a
-        new player reading the whole product as a four-minute puzzle.
-- [ ] Lantern hardcoded to full foresight
-- [ ] Rename the 5–8 stratum `camp` → `hold` everywhere, including `.d-camp` →
-      `.d-hold`. It collides with the hub, and the collision lands in the share
-      grid's middle row label.
-- [ ] **Delete** the card-frame/hand CSS (~43 card/hand selectors) and
-      `public/cards/` (14 files) — then delete `CARD_ART` and the two `art.test.ts`
-      checks that read it (`card art is the expected 128x176 portrait`, and the
-      `CARD_ART` half of the path/strip sweeps)
-- [ ] **Remove `main.ts`'s size exemption from `eslint.config.js`.** It is 558 code
-      lines with an 88-line click handler, and it is exempt *only* because this stage
-      rewrites it (`CODING_BIBLE` §1.9). The rewrite lands under 400/80 and the
-      exemption block loses an entry. **Classes are allowed here** — the dozen
-      module-level `let`s holding board / replay / loadout state are exactly what §1.9
-      permits them for.
-- [ ] **Restore the accent cross-check.** `art.test.ts` currently only proves
-      `ARCHETYPE_ACCENT` is a complete, distinct hex map; the drift guard against
-      `game.css` comes back the moment the v5 tokens are written as
-      `--archetype-accent`. Two copies of a palette drift silently — that is what the
-      check was for.
-- [ ] **The splash breaks with them.** `splash.html` is a fan of three card
-      illustrations. Decide its replacement: ability tiles, one enemy portrait over
-      the CSS stage, or pure CSS. It renders inline in the feed — keep it
-      featherweight either way.
-- [ ] Keep the whole-view `innerHTML` render — the mockup already works that way
-- [ ] Generate the hero portrait (@64, displayed centred @32 in the code-drawn plate)
+  - [x] **The camp is the landing screen.** The feed tap opens the app at the camp,
+        not in combat. Endless and Community are drawn **locked, never omitted** —
+        the whole reason to land here is that a player who only sees combat reads the
+        product as a four-minute puzzle.
+  - [x] The descent (09) is a transient overlay driven off the sim's own view, so it
+        cannot fire on a restore, a replay scrub or a re-render. Skippable by tap, and
+        off entirely under `prefers-reduced-motion`.
+- [x] Lantern hardcoded to full foresight (`TUNING.foresight`, straight off the view)
+- [x] Rename the 5–8 stratum `camp` → `hold` everywhere, including the CSS token
+      (`.d-hold`), the backdrop registry key and `public/backdrops/hold.png`
+- [x] **Delete** the card-frame/hand CSS and `CARD_ART`, and the `art.test.ts` check
+      that read it
+  - [ ] **`public/cards/` (14 files) is still on disk** — `git rm` was refused by a
+        permission guard mid-session. Nothing imports them. One command clears it:
+        `git rm -r public/cards`
+- [x] **Removed `main.ts`'s size exemption from `eslint.config.js`.** The client is
+      now one module per place — `shell` · `camp` · `combat` · `interlude` · `result`
+      · `session` · `main` — and every one passes 400/80 on its own merits
+      (`main.ts` is 266 code lines, largest function 30).
+- [x] **Restored the accent cross-check**, plus a second guard that the tile's plate
+      is *computed* from `--archetype-accent` rather than carrying the mockup's
+      per-rarity `--a1`/`--a2`/`--rar` tokens — otherwise a third copy of the palette
+      exists that the first check cannot see.
+- [x] **Splash rebuilt with zero art**: the v5 mockup's own screen 01 feed card, in
+      pure CSS. Stage 4 makes its numbers real.
+- [x] Keep the whole-view `innerHTML` render — the mockup already works that way
+- [x] Generate the hero portrait (@64, displayed centred @32 in the code-drawn plate)
 
-**GATE — visual.** `npm run dev` at **359×632**: `min-height` not `height: 100%`,
-`#app > * { flex: 0 0 auto }`, **End turn above the fold.** Playtest holds port
-5678 — one instance at a time.
+**GATE — visual. PASSED**, measured at **359×632** in `npm run preview`:
+
+- [x] `min-height` everywhere, no `height: 100%`; `#app > * { flex: 0 0 auto }`
+- [x] **End turn bottom at 612px against a 632px viewport** — above the fold, with the
+      combat screen fitting in exactly one viewport and no scroll
+- [x] No horizontal overflow (`scrollWidth === innerWidth`)
+- [x] Enemy art 128→64 and hero art 64→32, both **integer halves** — the fractional
+      `image-rendering: pixelated` shimmer this repo hit once is closed
+- [x] Verified end to end: camp → loadout → descent → 12 depths → two boons → result,
+      with the lethal hatch, the buff `+N` annotation, the cooldown mask, a
+      portrait-less enemy degrading to the eyes plate, and the WARRENS/HOLD/CRYPT grid
+
+> **Two things the gate caught that review would not have.**
+>
+> **1. `overflow-x: hidden` on `html, body` silently killed the loadout's sticky
+> confirm bar**, because `hidden` on the root forces `overflow-y: auto` and turns the
+> body into a scroll container. The atmosphere layers (the lantern is a 420px ellipse)
+> are contained by `.app { overflow-x: clip }` instead — `clip` does not create a
+> scroll container, which is the whole reason it is the right tool.
+>
+> **2. The backgrounded-tab rule was observed live.** With the preview pane hidden,
+> `document.hidden` is true and every `backwards`-filled entrance animation is pinned
+> at `currentTime: 0` — the tiles sat at `transform: matrix(0.92,…,16)` indefinitely.
+> Because `abin` animates **transform only**, the bar stayed fully visible and fully
+> tappable. An `opacity: 0` first frame would have been an invisible, unplayable
+> ability bar, exactly as `CODING_BIBLE` §6 says. Do not relax that rule.
+
+**Two fields were added to `CombatView`, and the probe proves they changed nothing.**
+`incoming` and `enemyBuff`. Both are *reports*, not rules — but the first one matters:
+the End turn button's `TAKE 22`, the loss segment on the HP rail and the LETHAL flag
+are all the same number, and `max(0, value - block)` is the WRONG way to get it
+(`ethereal` eats block, `frenzied` splits the beat). Computing it in `client/` would
+have been a second state machine drifting from the first, which `CODING_BIBLE` §1.4
+forbids for exactly this reason. `report.ts` now calls `incomingToHp` **once** and both
+the readout and the flag read it. The probe is byte-identical afterwards: floor 6.6/12,
+ceiling 11.6/12, gap 5.0, greedy full-clears 30/8064 (0.37%), median→best 4.5 depths,
+both tutorial invariants clean across 3,000 seeds.
+
+**Deliberately NOT built here, and why:**
+
+- **The camp's four tiles** (GEAR · LANTERN · SHRINE · RECORDS) are screens 04, 05 and
+  17, i.e. Stages 5–7. Shipping four dead buttons is worse than shipping none;
+  `SCREENS.md`'s "the camp has four tiles and should keep having four tiles" is a rule
+  about not adding a *fifth*, not a reason to ship them empty. The camp keeps its
+  shape — head, three doors, an action row — and the tiles land with their screens.
+- **The descent's shared-seed stat** (*"612 of 1,284 never got this far"*) needs the
+  community counts Stage 4 builds. Inventing a plausible number would be worse than
+  omitting it, so the screen carries the honest half: the stratum, and what waits.
+- **Silkscreen is not loaded.** The mockup pulls it from Google Fonts; one blocking
+  external request for a decorative face, inside a feed iframe, is a bad trade. The
+  `--px` stack keeps the name first, so shipping a local subset later is a one-line
+  change. **Owner call** — see the note under Stage 4.
+
+> **⚠ Two design docs disagree about the hero portrait, and one of them is now wrong.**
+>
+> `ART.md` budgets it (*"Hero portrait · 0 · +1 · Generate @64, display centred @32"*)
+> and even solves its scaling trap. `IDENTITY.md` § What there is to customise says
+> flatly: *"The delver has no portrait and no silhouette."*
+>
+> They are reconcilable — IDENTITY.md's argument is against a **dressable** figure
+> (*"a figure to dress would be the paper-doll pipeline this project exists to
+> avoid"*), and one fixed generic portrait is neither dressable nor a paper-doll. It
+> was built to ART.md's spec because the Stage 2 brief asked for it explicitly.
+>
+> **Owner: reconcile it in the folder in one line**, either way. If the answer is "no
+> portrait", the reversal is a deleted PNG, a deleted registry line, a deleted test and
+> two plates that fall back to their code-drawn gradient — the plate is already drawn
+> in CSS and the art only sits inside it.
 
 ## Stage 3 — tutorial: 15 steps → 5 beats
 
@@ -323,7 +391,15 @@ writes is the *script and the coaching*, on top of a guarantee that already hold
 - [ ] Leaderboard (11): play button leads every row; depth trace + **loadout size**
 - [ ] Replay (12): scrubbing **re-simulates to step N** — pure sim, no persistent
       DOM. Segments are **depths, not seconds**; consumes `depthMarks`.
-- [ ] Feed post (01): today's stats + yesterday's grid shape on the card
+- [ ] Feed post (01): today's stats + yesterday's grid shape on the card. `splash.html`
+      already draws the card in pure CSS with a static strip; this makes it real.
+- [ ] The descent screen's shared-seed line — *"612 of 1,284 never got this far"* — is
+      the same data, and it is the one thing Stage 2 left off screen 09.
+- [ ] **Owner call: ship Silkscreen or not?** The v5 look leans on it and the `--px`
+      stack names it first, but nothing loads it — a blocking Google Fonts request
+      inside a feed iframe is a bad trade, so the shell currently renders in the
+      monospace fallback. A local woff2 subset is ~10KB and one `@font-face`. Decide
+      before the share grid's typography is in thousands of comments.
 
 > **SHIP GATE.** Screens 1, 2 (Daily door only), 3, 6, 7, 8, 9, 10, 11, 12 — a
 > complete, comparable, replayable, shareable daily game with **zero account

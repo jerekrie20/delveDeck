@@ -5,22 +5,27 @@
 // checks is a rule that erodes. A sprite strip is detectable — it is wider than it
 // is tall by a whole number of frames — so this file just refuses to let one in.
 //
-// Repointed at Stage 1, when `cards.ts` became `abilities.ts`. Three things changed
-// and each is noted where it lands: the roster is now 30 rows against 8 portraits,
-// ability tiles key on ARCHETYPE rather than rarity, and the invented image cap is
-// gone.
+// Repointed at Stage 1, when `cards.ts` became `abilities.ts`. Re-cut at Stage 2, when
+// the deck's 14 card illustrations were deleted and the v5 shell landed: the two
+// `CARD_ART` checks went with the files, the hero portrait arrived, and the palette
+// drift-guard against `game.css` came back — it had nothing honest to compare against
+// until the `--archetype-accent` tokens existed.
 
 import { assert, check, describe } from './helpers';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { CARD_ART, ENEMY_ART, BACKDROP_ART, ARCHETYPE_ACCENT, backdropArt } from '../src/client/art';
-import { ARCHETYPES } from '../src/shared/abilities';
+import {
+  ABILITY_GLYPH, ARCHETYPE_ACCENT, BACKDROP_ART, ENEMY_ART, HERO_ART, backdropArt, boonGlyph,
+} from '../src/client/art';
+import { ABILITIES, ARCHETYPES } from '../src/shared/abilities';
+import { BOON_LIST } from '../src/shared/boons';
 import { ENEMIES } from '../src/shared/enemies';
 import { enemyForDepth, TUNING } from '../src/shared/sim';
 
 describe('art');
 
 const PUBLIC_DIR = join(import.meta.dirname, '..', 'public');
+const GAME_CSS = join(import.meta.dirname, '..', 'src', 'client', 'game.css');
 
 /** Read a PNG's dimensions straight from the IHDR — no image library needed. */
 function pngSize(publicPath: string): { width: number; height: number } {
@@ -34,9 +39,9 @@ function assetExists(publicPath: string): boolean {
 }
 
 const allArtPaths = [
-  ...Object.values(CARD_ART),
   ...Object.values(ENEMY_ART),
   ...Object.values(BACKDROP_ART),
+  HERO_ART,
 ];
 
 await check('every art entry points at a file that exists', () => {
@@ -70,8 +75,7 @@ await check('NO SPRITE STRIPS — nothing shipped is a row of animation frames',
   // This is the check that makes AGENTS.md rule 1 real: the previous project stalled
   // on the animation pipeline, and one strip slipping in is how it starts again. A
   // strip is N square frames side by side — i.e. wider than tall by a whole
-  // multiple. Card art is a PORTRAIT (taller than wide), so it can never satisfy
-  // that, and the exact-size checks below are the real backstop.
+  // multiple. The exact-size checks below are the real backstop.
   for (const path of allArtPaths) {
     const { width, height } = pngSize(path);
     const looksLikeStrip = width > height && width % height === 0;
@@ -82,18 +86,18 @@ await check('NO SPRITE STRIPS — nothing shipped is a row of animation frames',
   }
 });
 
-await check('card art is the expected 128x176 portrait', () => {
-  // **These 14 files are DELETED at Stage 2** along with this check: they are
-  // portrait-orientation scenes authored for a card face that no longer exists, and
-  // the ability tile is landscape. Re-cropping them would be a pipeline, which is
-  // the exact failure mode this project was founded to avoid. Until then the size
-  // is still pinned, because the card is drawn at native resolution and anything
-  // else scales fractionally and shimmers.
-  for (const path of Object.values(CARD_ART)) {
-    const { width, height } = pngSize(path);
-    assert.equal(width, 128, `${path} is ${width}px wide, expected 128`);
-    assert.equal(height, 176, `${path} is ${height}px tall, expected 176`);
-  }
+await check('the hero portrait is 64px square, for an integer halving to 32', () => {
+  // The mockup draws the hero plate at 44 and 54, neither of which is an integer
+  // multiple of a sensible generation size — and fractional scaling with
+  // `image-rendering: pixelated` shimmers, a trap this repo already hit once when
+  // `box-sizing: border-box` rendered a 128x176 card at 123x169.
+  //
+  // So the PLATE is code-drawn and the art sits centred inside it at 32, an integer
+  // half of 64. This check is what keeps the source size honest; the moment it is not
+  // 64, the display size stops being an integer division of it.
+  const { width, height } = pngSize(HERO_ART);
+  assert.equal(width, 64, `${HERO_ART} is ${width}px wide, expected 64`);
+  assert.equal(height, 64, `${HERO_ART} is ${height}px tall, expected 64`);
 });
 
 await check('enemy portraits are the expected 128px square', () => {
@@ -118,9 +122,7 @@ await check('THERE IS NO IMAGE COUNT CAP — the tripwire is squareness, not a n
   assert.ok(unique.size > 0, 'there is art');
   for (const path of unique) {
     const { width, height } = pngSize(path);
-    const isBackdrop = Object.values(BACKDROP_ART).includes(path);
-    const isCard = Object.values(CARD_ART).includes(path);
-    if (isBackdrop || isCard) continue;
+    if (Object.values(BACKDROP_ART).includes(path)) continue;
     assert.equal(width, height, `${path} is ${width}x${height} — portraits must be square`);
   }
 });
@@ -165,10 +167,6 @@ await check('tile frames are code-drawn, never generated', () => {
 await check('every archetype has a tile accent, and they are all distinct', () => {
   // The mockup keys the tile accent on RARITY; abilities have no rarity, so it keys
   // on archetype — the same axis the daily draw and boon targeting already use.
-  //
-  // The cross-check against `--archetype-accent` in game.css comes back at STAGE 2,
-  // which is when the v5 tokens are written. Until then game.css still carries the
-  // deck-era `--rarity-accent` rules and there is nothing honest to compare against.
   assert.equal(Object.keys(ARCHETYPE_ACCENT).length, ARCHETYPES.length);
   for (const archetype of ARCHETYPES) {
     const accent = ARCHETYPE_ACCENT[archetype];
@@ -176,4 +174,73 @@ await check('every archetype has a tile accent, and they are all distinct', () =
   }
   const distinct = new Set(Object.values(ARCHETYPE_ACCENT));
   assert.equal(distinct.size, ARCHETYPES.length, 'two archetypes share an accent colour');
+});
+
+await check('THE PALETTE DOES NOT DRIFT — art.ts and game.css agree, archetype by archetype', () => {
+  // Restored at Stage 2, which is when `--archetype-accent` came to exist. The palette
+  // is written down twice by necessity — `art.ts` is where a screen module reaches for
+  // it, `game.css` is where it is actually painted — and **two copies of a palette
+  // drift silently**. Nothing about a wrong colour fails at runtime; it just quietly
+  // stops meaning anything, which is the whole reason the tile keys on archetype in
+  // the first place.
+  const css = readFileSync(GAME_CSS, 'utf8');
+  const declared = new Map<string, string>();
+  const pattern = /\.a-([a-z]+)\s*\{\s*--archetype-accent:\s*(#[0-9a-f]{6})\s*;?\s*\}/gi;
+  for (const match of css.matchAll(pattern)) {
+    declared.set(match[1]!.toLowerCase(), match[2]!.toLowerCase());
+  }
+
+  assert.equal(
+    declared.size,
+    ARCHETYPES.length,
+    `game.css declares ${declared.size} archetype accents, the catalog has ${ARCHETYPES.length}`,
+  );
+  for (const archetype of ARCHETYPES) {
+    assert.equal(
+      declared.get(archetype),
+      ARCHETYPE_ACCENT[archetype].toLowerCase(),
+      `${archetype}: game.css says ${declared.get(archetype)}, art.ts says ${ARCHETYPE_ACCENT[archetype]}`,
+    );
+  }
+});
+
+await check('the archetype accent is the ONLY place a tile colour is written', () => {
+  // The plate gradient, the ring and the glow are all computed from the one token with
+  // `color-mix`. A hardcoded second colour per archetype would be a third copy of the
+  // palette — one the check above cannot see.
+  const css = readFileSync(GAME_CSS, 'utf8');
+  const strayTokens = /--a1\s*:|--a2\s*:|--rar\s*:/.exec(css);
+  assert.equal(
+    strayTokens,
+    null,
+    `game.css still carries the mockup's per-rarity plate tokens (${strayTokens?.[0]}); the tile derives its plate from --archetype-accent`,
+  );
+});
+
+// ---- glyphs --------------------------------------------------------------------
+
+await check('every ability has a distinct two-letter glyph', () => {
+  // Authored rather than derived, because the obvious derivation collides: Lash and
+  // Last Stand both start `LA`, and both can be on screen at once — one on the bar,
+  // one in the ultimate row.
+  const ids = Object.keys(ABILITIES);
+  const missing = ids.filter((id) => !ABILITY_GLYPH[id]);
+  assert.deepEqual(missing, [], `abilities with no tile glyph: ${missing.join(', ')}`);
+
+  const stray = Object.keys(ABILITY_GLYPH).filter((id) => !ABILITIES[id]);
+  assert.deepEqual(stray, [], `glyphs for abilities that don't exist: ${stray.join(', ')}`);
+
+  for (const id of ids) {
+    assert.match(ABILITY_GLYPH[id]!, /^[A-Z]{2}$/, `${id}'s glyph must be two capitals`);
+  }
+  const distinct = new Set(Object.values(ABILITY_GLYPH));
+  assert.equal(distinct.size, ids.length, 'two abilities share a glyph');
+});
+
+await check('every boon plate resolves to a two-letter glyph', () => {
+  // Derived from the NAME rather than registered, so adding a boon is still a one-row
+  // data edit. This is the check that says the derivation actually covers the catalog.
+  for (const boon of BOON_LIST) {
+    assert.match(boonGlyph(boon.name), /^[A-Z]{2}$/, `${boon.name} needs a two-letter plate glyph`);
+  }
 });

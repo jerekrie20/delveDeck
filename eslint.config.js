@@ -113,17 +113,18 @@ export default defineConfig([
 
   // ---- size-rule exemptions, each with the stage that removes it ----------------
   //
-  // Two files predate the rule. Neither is exempt because it is fine; both are exempt
-  // because splitting them NOW would be work that gets thrown away, and each carries a
-  // line in TODO.md under the stage that clears it. **Do not add a third without one.**
+  // ONE file left. It is not exempt because it is fine; it is exempt because splitting
+  // it NOW would be work that gets thrown away, and it carries a line in TODO.md under
+  // the stage that clears it. **Do not add a second without one.**
+  //
+  // `src/client/main.ts` was the other entry and it is GONE as of Stage 2: the v5 port
+  // split the client into one module per place — `shell`, `camp`, `combat`,
+  // `interlude`, `result`, `session` — and every one of them, `main.ts` included, is
+  // under 400/80 on its own merits.
   {
     files: [
-      // Stage 2 rewrites this file from the v5 mockup — the CSS, the hand→bar port and
-      // the loadout/boon/descent screens all land there. Splitting the Stage 1 port
-      // first would mean writing it twice.
-      'src/client/main.ts',
       // 45 independent checks. Cheap to split into sim.test.ts + content.test.ts, but
-      // it was out of scope for the change that introduced the rule.
+      // it was out of scope for the change that introduced the rule. Stage 3 clears it.
       'tests/sim.test.ts',
     ],
     rules: {

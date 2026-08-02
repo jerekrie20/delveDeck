@@ -4,14 +4,18 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Daily Delve</title>
-    <!-- Featherweight on purpose: this renders inline in the Reddit feed, so it
-         gets no imports and no framework. One script, one request, done.
+    <!-- Featherweight on purpose: this renders inline in the Reddit feed, so it gets
+         no imports, no framework, and now no images either.
 
-         The only assets are three card illustrations (~78KB total). They earn
-         their weight: this is a card game, and a fan of real cards is the whole
-         pitch. Everything else here — the vignette, the frames, the fan itself —
-         is drawn in CSS so it costs nothing. Do NOT add the 400x320 backdrops
-         here; atmosphere is not worth another 40KB in a feed. -->
+         It used to be a fan of three card illustrations. The cards are gone with the
+         deck (ART.md § Delete the 14 card illustrations), and the replacement is the
+         v5 mockup's own screen 01 — the feed card — drawn entirely in CSS: the fire
+         glow, the title, the twelve-square depth strip. **Zero bytes of art.**
+
+         Stage 4 makes the numbers real (today's descent count, yesterday's grid
+         shape). Until then the strip is a static shape and the copy claims nothing
+         it cannot back up. Do NOT add the 400x320 backdrops here; atmosphere is not
+         worth 40KB in a feed. -->
     <style>
       * {
         box-sizing: border-box;
@@ -24,147 +28,169 @@
         align-items: center;
         justify-content: center;
         min-height: 100vh;
-        padding: 16px;
-        background:
-          radial-gradient(ellipse at 50% 32%, #232a3a 0%, #14161c 62%, #0d0f14 100%);
-        color: #e6e8ee;
-        font: 600 16px/1.4 system-ui, sans-serif;
+        padding: 12px;
+        background: #0e1013;
+        color: #f2f4f9;
+        font: 600 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-variant-numeric: tabular-nums;
         text-align: center;
       }
 
       .splash {
         display: flex;
         flex-direction: column;
-        align-items: center;
-        gap: 14px;
+        gap: 10px;
+        width: 100%;
+        max-width: 340px;
       }
 
-      /* ---- the fan ---- */
+      /* The card: a lit shaft mouth. All gradient, no asset. */
+      .card {
+        position: relative;
+        overflow: hidden;
+        padding: 34px 16px 18px;
+        background: linear-gradient(180deg, #241a13, #0a0b10);
+        box-shadow: inset 0 0 0 1px #2a2f3a;
+      }
 
-      /* Cards render at exactly half their native 128x176 so the pixels stay on
-         grid, then step up to full size when there is room. */
-      .fan {
-        --card-w: 64px;
-        --card-h: 88px;
+      .card::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: -40px;
+        width: 280px;
+        height: 180px;
+        margin-left: -140px;
+        pointer-events: none;
+        background: radial-gradient(
+          ellipse at 50% 100%,
+          rgb(255 186 105 / 35%),
+          transparent 68%
+        );
+        animation: flicker 4s ease-in-out infinite;
+      }
+
+      /* transform only — an `opacity: 0` first frame in a backgrounded tab renders an
+         invisible splash, which is the one thing this file cannot be. */
+      @keyframes flicker {
+        37% {
+          transform: scale(1.04);
+        }
+        62% {
+          transform: scale(0.98);
+        }
+      }
+
+      .ttl {
+        position: relative;
+        font: 700 26px/1.25 ui-monospace, "Courier New", monospace;
+        letter-spacing: 0.04em;
+        text-shadow: 0 3px 0 #000, 0 0 30px rgb(255 186 105 / 60%);
+      }
+
+      .sub2 {
+        position: relative;
+        margin-top: 12px;
+        font: 700 10px/1.8 ui-monospace, "Courier New", monospace;
+        letter-spacing: 0.2em;
+        color: #ffbc6a;
+      }
+
+      /* The depth strip: the share grid's alphabet, one row, spoiler-free. */
+      .strip {
+        position: relative;
         display: flex;
+        gap: 4px;
         justify-content: center;
-        align-items: flex-end;
-        height: calc(var(--card-h) + 14px);
+        margin-top: 20px;
       }
 
-      .fan img {
-        width: var(--card-w);
-        height: var(--card-h);
-        image-rendering: pixelated;
-        border-radius: 5px;
-        border: 2px solid #3a4050;
-        background: #12141a;
-        box-shadow: 0 6px 14px rgb(0 0 0 / 65%);
+      .strip i {
+        width: 20px;
+        height: 20px;
+        background: #1e232d;
+        box-shadow: inset 0 0 0 1px #000;
       }
 
-      /* Overlap and tilt: reads as a hand being held, not three loose images. */
-      .fan img:nth-child(1) {
-        transform: rotate(-11deg) translateY(6px);
-        margin-right: -14px;
-        border-color: #5b9bd5;
+      .strip i.a {
+        background: linear-gradient(160deg, #8aeaae, #2f8a52);
       }
-      .fan img:nth-child(2) {
-        transform: translateY(-6px);
-        z-index: 2;
-        border-color: #d4a843;
-        box-shadow:
-          0 8px 18px rgb(0 0 0 / 70%),
-          0 0 12px rgb(212 168 67 / 30%);
+      .strip i.b {
+        background: linear-gradient(160deg, #f7d97a, #a8811f);
       }
-      .fan img:nth-child(3) {
-        transform: rotate(11deg) translateY(6px);
-        margin-left: -14px;
-        border-color: #e6e8ee;
+      .strip i.c {
+        background: linear-gradient(160deg, #ffab6e, #a34c17);
       }
 
-      /* ---- copy ---- */
-
-      .title {
-        font-size: 26px;
-        font-weight: 700;
-        letter-spacing: 0.02em;
-      }
-
-      .sub {
-        max-width: 20rem;
+      .blurb {
+        position: relative;
+        margin-top: 18px;
         font-weight: 400;
-        font-size: 13px;
-        line-height: 1.45;
-        color: #b0b8cc;
+        font-size: 12px;
+        line-height: 1.5;
+        color: #cdd4e2;
+      }
+
+      .blurb b {
+        color: #fff;
+        font-weight: 700;
       }
 
       .play-btn {
-        margin-top: 2px;
-        padding: 12px 32px;
+        width: 100%;
+        padding: 14px 24px;
         border: none;
-        border-radius: 22px;
-        background: #d93900;
-        color: #ffffff;
-        font: 700 15px system-ui, sans-serif;
-        letter-spacing: 0.02em;
+        color: #fff;
+        font: 700 13px/1 ui-monospace, "Courier New", monospace;
+        letter-spacing: 0.08em;
         cursor: pointer;
         touch-action: manipulation;
-        box-shadow: 0 4px 12px rgb(217 57 0 / 35%);
+        background: linear-gradient(180deg, #a58a49, #6e5427 45%, #3a2b14);
+        box-shadow:
+          inset 0 0 0 1px #000,
+          inset 0 2px 0 rgb(255 235 180 / 45%),
+          0 4px 0 #1c150b,
+          0 0 26px rgb(226 184 84 / 32%);
       }
-      .play-btn:hover {
-        background: #e04500;
-      }
+
       .play-btn:active {
-        background: #b02e00;
-        transform: translateY(1px);
+        transform: translateY(3px);
+        box-shadow: inset 0 0 0 1px #000, 0 1px 0 #1c150b;
       }
 
-      .meta {
-        font-weight: 400;
-        font-size: 11px;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        color: #7c8496;
+      .play-btn span {
+        display: block;
+        margin-top: 6px;
+        font-size: 9px;
+        letter-spacing: 0.14em;
+        color: #fff2d4;
       }
 
-      /* Roomier feed slots get the cards at native resolution. The width gate is
-         400px, not 360: three 128px cards overlapped still span ~320px, and the
-         11deg tilt throws the outer corners another ~15px each side. At 360 that
-         clipped. Only two sizes are offered on purpose — both are integer scales
-         of the 128x176 source, so the art never lands off-grid. */
-      @media (min-height: 420px) and (min-width: 400px) {
-        .fan {
-          --card-w: 128px;
-          --card-h: 176px;
-        }
-        .fan img:nth-child(1) {
-          margin-right: -30px;
-        }
-        .fan img:nth-child(3) {
-          margin-left: -30px;
-        }
-        .title {
-          font-size: 30px;
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          animation: none !important;
         }
       }
     </style>
   </head>
   <body>
     <div class="splash">
-      <div class="fan">
-        <img src="/cards/riposte.png" alt="" width="128" height="176" />
-        <img src="/cards/execute.png" alt="" width="128" height="176" />
-        <img src="/cards/bulwark.png" alt="" width="128" height="176" />
-      </div>
-      <div>
-        <div class="title">Daily Delve</div>
-        <div class="sub">
-          Everyone in this subreddit plays the <strong>same run</strong> today.
-          Same cards, same enemies, same everything. One score to compare.
+      <div class="card">
+        <div class="ttl">DAILY<br />DELVE</div>
+        <div class="sub2">12 DEPTHS &middot; ONE SHAFT</div>
+        <div class="strip">
+          <i class="a"></i><i class="a"></i><i class="a"></i><i class="b"></i>
+          <i class="b"></i><i class="c"></i><i class="a"></i><i class="b"></i>
+          <i class="b"></i><i class="c"></i><i></i><i></i>
+        </div>
+        <div class="blurb">
+          Everyone in this subreddit descends the <b>same shaft</b> today. Same
+          abilities on offer, same enemies, same everything. One score to compare.
         </div>
       </div>
-      <button id="play-btn" class="play-btn">Play today's run</button>
-      <div class="meta">12 encounters · one run a day</div>
+      <button id="play-btn" class="play-btn">
+        DESCEND<span>~4 MIN &middot; ONE ATTEMPT</span>
+      </button>
     </div>
     <script type="module" src="splash-init.ts"></script>
   </body>

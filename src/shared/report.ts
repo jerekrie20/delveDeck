@@ -66,8 +66,12 @@ export function combatView(
     });
   }
   const now = threat[0]!;
-  const lethal = now.kind === 'attack'
-    && incomingToHp(enc, now.value, state.hero.block) >= state.hero.hp;
+  // ONE call, feeding both the readout and the lethal flag. Two calls would be two
+  // places this can be got wrong, and the whole telegraph rests on it being right.
+  const incoming = now.kind === 'attack'
+    ? incomingToHp(enc, now.value, state.hero.block)
+    : 0;
+  const lethal = now.kind === 'attack' && incoming >= state.hero.hp;
 
   return {
     phase: 'combat',
@@ -78,9 +82,11 @@ export function combatView(
     enemyHp: enc.hp,
     enemyMaxHp: enc.maxHp,
     enemyBlock: enc.block,
+    enemyBuff: enc.buff,
     enemyTags: [...(enc.template.tags ?? [])],
     threat,
     foresight: state.kit.foresight,
+    incoming,
     lethal,
     bar: [...state.bar],
     cds: [...state.cds],

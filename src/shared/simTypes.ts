@@ -105,6 +105,10 @@ export interface CombatView {
   enemyHp: number;
   enemyMaxHp: number;
   enemyBlock: number;
+  /** Accumulated `buff`, already folded into every attack value on the track. Reported
+   *  separately only so the track can annotate WHY a beat reads high — the number
+   *  itself is post-buff and stays literally true either way. */
+  enemyBuff: number;
   enemyTags: string[];
   /** NOW / NEXT / THEN — **always length 3**, post-ramp, post-buff, post-weaken, and
    *  reading from the boss's CURRENT cycle so a phase change is visible before you
@@ -112,9 +116,18 @@ export interface CombatView {
   threat: Intent[];
   /** How many of the three slots are lit. `TUNING.foresight` in the Daily, always. */
   foresight: number;
-  /** True when NOW would take the player to 0 — compared against
-   *  `max(0, incoming - block)`, NOT against raw damage. The mockup gets this wrong
-   *  and flags LETHAL while you are fully guarded. */
+  /** What NOW actually costs you in HP after block and the enemy's traits — 0 on a
+   *  block or buff beat, and 0 when you are fully guarded.
+   *
+   *  It is reported rather than derived because `max(0, value - block)` is a COMBAT
+   *  RULE and it is the wrong one: `ethereal` eats part of your block and `frenzied`
+   *  splits the beat. A client computing it would be a second state machine drifting
+   *  from the first (CODING_BIBLE §1.4), and the drift would show up as an End turn
+   *  button promising a number the enemy doesn't deal. */
+  incoming: number;
+  /** True when NOW would take the player to 0 — i.e. `incoming >= hp` on an attack
+   *  beat. The mockup compares against raw damage and flags LETHAL while you are fully
+   *  guarded; that is one of its two bugs. */
   lethal: boolean;
   /** Ability ids in the equipped bar. `{k:'cast', i}` indexes this. */
   bar: string[];

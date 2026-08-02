@@ -1,48 +1,33 @@
-// M3 art registry: the one place that maps game ids to image paths.
+// The art registry: the one place that maps game ids to how they are drawn.
 //
-// Imported by `main.ts` for rendering and by `tests/art.test.ts`, which fails if
-// any card or enemy is missing an entry or points at a file that isn't on disk.
-// Lives in `client/` because art is presentation — the server and the sim must
-// never need to know a card has a picture.
+// Imported by the client's screen modules and by `tests/art.test.ts`, which fails if
+// any entry points at a file that isn't on disk, if a portrait isn't square, or if the
+// archetype palette here drifts from `game.css`. Lives in `client/` because art is
+// presentation — the server and the sim must never need to know an enemy has a
+// picture.
 //
 // Paths are absolute-from-root because `public/` is served at `/` by both Devvit
 // (`media.dir` in devvit.json) and the local Vite preview.
 //
-// Provenance: everything here is bespoke PixelLab art generated for this project
-// with the `game_design/ART.md` recipe verbatim.
+// Provenance: everything here is bespoke PixelLab art generated for this project with
+// the `game_design/ART.md` recipe verbatim.
 //
-// Cards are FULL ILLUSTRATIONS (128x176 portraits), not icons — the card is the
-// art, with name and rules text over a scrim. Card motion (hover lift, the rare
-// sheen, the deal-in) is all CSS in `game.css`; see the note there for why it is
-// code-drawn rather than animated frames.
+// **The v5 design is code-drawn, and that is the whole defence** (ART.md rule 2).
+// Ability tiles, gear plates, boon plates, the stage, the threat track and the share
+// grid are all CSS. The mockup uses exactly TWO image slots — a 128 enemy portrait and
+// a hero portrait — and this file is the list of them.
 //
 // The one thing you must not break: every file referenced here is a SINGLE STATIC
-// IMAGE. No sprite strips, no frame indices, no anchor tables — that pipeline is
-// what stalled the previous project and is banned outright (AGENTS.md rule 1).
-// `tests/art.test.ts` enforces it; `tools/crop-frame.ts` exists to cut a frame out
-// of an inherited strip offline if one is ever needed again.
+// IMAGE. No sprite strips, no frame indices, no anchor tables — that pipeline is what
+// stalled the previous project and is banned outright (AGENTS.md rule 1).
+// `tests/art.test.ts` enforces it; `tools/crop-frame.ts` exists to cut a frame out of
+// an inherited strip offline if one is ever needed again.
 
-import type { Archetype } from '../shared/abilities';
+import { ABILITIES, type Archetype } from '../shared/abilities';
 
-/** Card id → 128x176 full-bleed illustration. */
-export const CARD_ART: Record<string, string> = {
-  strike: '/cards/strike.png',
-  guard: '/cards/guard.png',
-  jab: '/cards/jab.png',
-  cleave: '/cards/cleave.png',
-  flurry: '/cards/flurry.png',
-  brace: '/cards/brace.png',
-  study: '/cards/study.png',
-  ironWill: '/cards/ironWill.png',
-  hobble: '/cards/hobble.png',
-  secondWind: '/cards/secondWind.png',
-  riposte: '/cards/riposte.png',
-  execute: '/cards/execute.png',
-  bloodPact: '/cards/bloodPact.png',
-  bulwark: '/cards/bulwark.png',
-};
-
-/** Enemy id → static portrait (128px or 136px square). */
+/** Enemy id → static portrait (128px square), displayed centred at 64 in a code-drawn
+ *  plate. 128 shown at 100 would be fractional scaling, and fractional scaling with
+ *  `image-rendering: pixelated` shimmers. */
 export const ENEMY_ART: Record<string, string> = {
   ratling: '/enemies/ratling.png',
   caveHound: '/enemies/hound.png',
@@ -54,39 +39,51 @@ export const ENEMY_ART: Record<string, string> = {
   goblinChieftain: '/enemies/chieftain.png',
 };
 
-/** Backdrop behind the combat panel, chosen by which enemy you're facing so the
- *  gauntlet reads as a journey rather than one room repeated twelve times. */
+/** The delver, generated at 64 and displayed centred at **32** — an integer half —
+ *  inside the code-drawn plate. The mockup draws that plate at 44 and 54, neither of
+ *  which is an integer multiple of a sensible generation size (ART.md § The hero
+ *  portrait's scaling trap). The plate scales freely; the art never does. */
+export const HERO_ART = '/hero/delver.png';
+
+/** Stratum → wide backdrop scene. **PARKED, deliberately.** The v5 stage backdrop is
+ *  a CSS gradient (`.stage .bd`), not a PNG, so nothing renders these today. ART.md
+ *  keeps them as the *sanctioned* addition if a visual gate ever says the CSS stage
+ *  reads too flat at depth — and only then. They stay registered and tested so that
+ *  decision costs a line rather than a regeneration. */
 export const BACKDROP_ART: Record<string, string> = {
   warrens: '/backdrops/warrens.png',
-  camp: '/backdrops/camp.png',
+  hold: '/backdrops/hold.png',
   crypt: '/backdrops/crypt.png',
 };
 
-/** Which backdrop each enemy fights on. Beasts in the warrens, goblins at the
- *  camp, undead in the crypt. */
+/** Which backdrop each enemy would fight on. Beasts in the warrens, goblins in the
+ *  hold, undead in the crypt.
+ *
+ *  `hold`, never `camp` — the 5–8 band is HOLD. The mockup's name collides with the
+ *  hub, which is also "the camp", and the collision lands in the share grid's middle
+ *  row label, i.e. in every pasted comment. GAME_DESIGN.md override #6. */
 const BACKDROP_FOR_ENEMY: Record<string, string> = {
   ratling: 'warrens',
   caveHound: 'warrens',
-  goblinScrapper: 'camp',
-  goblinBrute: 'camp',
-  goblinShaman: 'camp',
-  goblinChieftain: 'camp',
+  goblinScrapper: 'hold',
+  goblinBrute: 'hold',
+  goblinShaman: 'hold',
+  goblinChieftain: 'hold',
   boneSentinel: 'crypt',
   gloomWraith: 'crypt',
 };
 
-/** Archetype → the accent colour its code-drawn tile is stroked in. Tiles are drawn
- *  in CSS, never generated — an image per tile would be seven more files that can
- *  drift out of sync with the palette.
+/** Archetype → the accent colour its code-drawn tile is stroked in. Tiles are drawn in
+ *  CSS, never generated — an image per tile would be seven more files that can drift
+ *  out of sync with the palette.
  *
  *  **The mockup keys this on RARITY, and abilities do not have one.** ABILITIES.md
  *  tags every row with archetype / school / element / class and no rarity at all, so
  *  the tile's accent keys on ARCHETYPE instead — which is also the axis the daily
- *  draw, boon targeting and class weighting already use. Recorded here rather than
- *  changed silently; Stage 2 owns the visual port.
+ *  draw, boon targeting and class weighting already use.
  *
- *  These MIRROR the `--archetype-accent` values in `game.css`, which is where they
- *  are actually applied. `tests/art.test.ts` fails if the two drift apart. */
+ *  These MIRROR the `--archetype-accent` values in `game.css`, which is where they are
+ *  actually applied. `tests/art.test.ts` fails if the two drift apart. */
 export const ARCHETYPE_ACCENT: Record<Archetype, string> = {
   strike: '#e6e8ee',
   guard: '#5a6070',
@@ -97,17 +94,60 @@ export const ARCHETYPE_ACCENT: Record<Archetype, string> = {
   control: '#c96a6a',
 };
 
-export function cardArt(cardId: string): string | undefined {
-  return CARD_ART[cardId];
-}
+/** Ability id → the two-letter glyph on its tile (ART.md: *"rarity-tinted gradient +
+ *  2px ring + two-letter glyph (`ST`, `GD`, `CL`)"*).
+ *
+ *  Authored rather than derived from the name, because the obvious derivation collides:
+ *  Lash and Last Stand both start `LA`, and both can be on screen at once — one on the
+ *  bar, one in the ultimate row. A test pins that every ability has one and that no two
+ *  share. */
+export const ABILITY_GLYPH: Record<string, string> = {
+  strike: 'ST', slam: 'SL', piercingShot: 'PS', lash: 'LA',
+  guard: 'GD', fortify: 'FT', ward: 'WD', hunker: 'HK',
+  cleave: 'CL', whirlwind: 'WW', fireball: 'FB', iceNova: 'IN',
+  brace: 'BR', bulwark: 'BW', aegisOath: 'AO',
+  riposte: 'RP', tumble: 'TB', ironWill: 'IW',
+  jab: 'JB', flurry: 'FL', volley: 'VY',
+  hobble: 'HB', tauntingShout: 'TS', deadeye: 'DE',
+  execute: 'EX', pyroclasm: 'PY', lastStand: 'LS',
+  reckoning: 'RK', sunder: 'SD', bloodtide: 'BT',
+};
 
 export function enemyArt(enemyId: string): string | undefined {
   return ENEMY_ART[enemyId];
 }
 
-/** The backdrop for an encounter. Falls back to the warrens so an enemy added
- *  without a backdrop entry still renders on something. */
+/** The backdrop for an encounter. Falls back to the warrens so an enemy added without
+ *  a backdrop entry still resolves to something. */
 export function backdropArt(enemyId: string): string {
   const key = BACKDROP_FOR_ENEMY[enemyId] ?? 'warrens';
   return BACKDROP_ART[key] ?? BACKDROP_ART['warrens']!;
+}
+
+/** Falls back to the first two letters of the id so an ability added without a glyph
+ *  renders something readable instead of an empty tile corner. */
+export function abilityGlyph(abilityId: string): string {
+  return ABILITY_GLYPH[abilityId] ?? abilityId.slice(0, 2).toUpperCase();
+}
+
+/** Boon plates take the initials of the boon's NAME — "Twin Edge" → `TE` — which is
+ *  the mockup's own convention and needs no registry to maintain. Single-word boons
+ *  (Overwhelm, Relentless) fall back to their first two letters. */
+export function boonGlyph(name: string): string {
+  const words = name.trim().split(/\s+/);
+  const glyph = words.length > 1 ? words.slice(0, 2).map((w) => w[0] ?? '').join('') : name.slice(0, 2);
+  return glyph.toUpperCase();
+}
+
+/** The class that carries an ability's `--archetype-accent`. One token, one place: the
+ *  tile's plate gradient, ring and glow are all computed from it in CSS, so an
+ *  archetype's colour is written down exactly once per side of the mirror. */
+export function archetypeClass(archetype: Archetype): string {
+  return `a-${archetype}`;
+}
+
+/** The archetype class for an ability id, for the screens that only hold the id. */
+export function abilityClass(abilityId: string): string {
+  const archetype = ABILITIES[abilityId]?.archetype;
+  return archetypeClass(archetype ?? 'strike');
 }

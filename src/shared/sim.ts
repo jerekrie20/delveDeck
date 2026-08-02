@@ -490,6 +490,12 @@ export { dayKey, depthRng, issuedKitForDay, issuedPoolForDay, seedForDay } from 
 export { damageRampAt, difficultyAt, enemyForDepth } from './encounter';
 export { effectiveAbility, resolveIntent } from './combat';
 export { scoreRun } from './report';
+// The client colours a screen by the stratum it is standing in, including the two —
+// boon and descent — that sit BETWEEN depths and so have no `CombatView` to read it
+// off. Depth → stratum is the same banding the roster and the share grid use, so it
+// resolves here rather than becoming a second copy in `client/`.
+export { isBossDepth, stratumForDepth } from './enemies';
+export type { Intent, IntentKind, Stratum } from './enemies';
 export type {
   BoonView, CombatView, DailyModifier, DepthBand, ForkView, IssuedKit, LoadoutView,
   RunChoice, RunFacts, RunOutcome, RunResult, RunView, StatusRow,

@@ -1,7 +1,107 @@
-/* M1 game styles — dark theme, coloured rectangles and text only.
-   No art, no gradients, no animations. Ugly on purpose. */
+/* Daily Delve — the v5 shell.
+ *
+ * Ported from `game_design/daily-delve-v5.html`, which is the truth unless a design
+ * doc overrides it in writing. Every override below is labelled in place with its
+ * reason; nothing here diverges silently.
+ *
+ * Read the layering rule first, because v4 got it wrong and the atmosphere ate the
+ * buttons:
+ *
+ *     atmosphere z0-4  ·  stage z5-9  ·  HUD z10-19  ·  overlays z20-29  ·  FX z30+
+ *
+ * All the darkness lives in the STAGE. Everything below the stage sits on a lit
+ * PLINTH — your lantern lighting your own hands — which is constant at every depth and
+ * never darkened by anything. That is what keeps End turn legible at depth 12.
+ *
+ * Four things you must not break:
+ *
+ *  1. **`min-height`, never `height: 100%`.** `height: 100%` on a flex body stretches
+ *     the app to exactly the viewport and its flex children then SHRINK to fit — which
+ *     silently sliced the hand to a third of a card once. It is `min-height` plus
+ *     `flex: 0 0 auto` on everything in a column. Verify at 359x632.
+ *  2. **Entrance animations animate `transform` only, never `opacity`.** A backgrounded
+ *     tab pins a `backwards`-filled animation at frame one, and an `opacity: 0` first
+ *     frame means an invisible, unplayable ability bar.
+ *  3. **Disabled is not invisible.** Off states desaturate and hatch and keep readable
+ *     text. An unlit threat slot prints the reason it is unlit.
+ *  4. **The archetype accents below are MIRRORED in `src/client/art.ts`** and
+ *     `tests/art.test.ts` fails if the two drift. Two copies of a palette drift
+ *     silently; that is what the check is for.
+ *
+ * Contrast floor: any type under 10px uses `--dim` or brighter. `--ghost` is
+ * decorative only, never meaning.
+ */
 
-/* ---- reset & base --------------------------------------------------------- */
+/* ═══ tokens ═══════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ink scale, measured on --shell */
+  --ink: #f2f4f9;      /* primary          ~16:1 */
+  --ink2: #cdd4e2;     /* body / secondary ~11:1 */
+  --dim: #a8b0c2;      /* labels, small caps ~7:1 */
+  --faint: #7c8497;    /* 11px+ meta only  ~4.7:1 */
+  --ghost: #525a6b;    /* decorative ONLY */
+
+  --atk: #ff6257;
+  --atk-deep: #7d211d;
+  --atk-glow: rgb(255 98 87 / 50%);
+  --blk: #6cdcec;
+  --blk-deep: #164e5c;
+  --blk-glow: rgb(108 220 236 / 45%);
+  --buff: #bf9dff;
+  --nrg: #ffc85c;
+  --nrg-glow: rgb(255 200 92 / 55%);
+  --ok: #6bdd92;
+  --ok-glow: rgb(107 221 146 / 40%);
+  --rage: #ff9450;
+  --rage-glow: rgb(255 148 80 / 50%);
+  --shard: #a892ec;
+
+  /* Silkscreen is NOT loaded. The mockup pulls it from Google Fonts; a Devvit post
+     renders inside a feed iframe and one blocking external request for a decorative
+     face is a bad trade. The stack keeps the name first so shipping a local subset
+     later is a one-line change. */
+  --px: "Silkscreen", ui-monospace, "Courier New", monospace;
+  --ui: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --lantern: rgb(255 186 105 / 15%);
+
+  /* the plinth — the lit control surface, constant at every depth */
+  --plinth-1: #272d3a;
+  --plinth-2: #1a1e27;
+  --plinth-3: #141821;
+}
+
+/* ── archetype accents ───────────────────────────────────────────────────────
+   The mockup keys the ability tile on RARITY. Abilities have no rarity — ABILITIES.md
+   tags every row with archetype / school / element and nothing else — so the tile
+   keys on ARCHETYPE, which is also the axis the daily draw, boon targeting and class
+   weighting already use. Recorded in `art.ts` and enforced by `tests/art.test.ts`.
+
+   One token per archetype. The plate gradient is COMPUTED from it with color-mix so
+   there is exactly one place an archetype's colour is written down. */
+
+.a-strike { --archetype-accent: #e6e8ee; }
+.a-guard { --archetype-accent: #5a6070; }
+.a-burst { --archetype-accent: #d4a843; }
+.a-wall { --archetype-accent: #5b9bd5; }
+.a-counter { --archetype-accent: #9b7fd4; }
+.a-tempo { --archetype-accent: #6fc28a; }
+.a-control { --archetype-accent: #c96a6a; }
+
+/* ── strata: shells raised so nothing is pure black ─────────────────────────── */
+
+.d-surface { --stratum: #ffbc6a; --stratum-soft: rgb(255 188 106 / 22%); --shell: #241a13; --shell2: #181109; --vig: 0.42; --chill: 0; }
+.d-warrens { --stratum: #d4813f; --stratum-soft: rgb(212 129 63 / 20%); --shell: #1b1610; --shell2: #12100c; --vig: 0.52; --chill: 0; }
+/* HOLD, not the mockup's CAMP. The string is the share grid's middle row label, i.e.
+   it lands in every pasted comment, and "the camp" is also the hub. Override #6 in
+   GAME_DESIGN.md. */
+.d-hold { --stratum: #9bc94f; --stratum-soft: rgb(155 201 79 / 16%); --shell: #151a12; --shell2: #0e120c; --vig: 0.62; --chill: 0.35; }
+.d-crypt { --stratum: #a790ee; --stratum-soft: rgb(167 144 238 / 18%); --shell: #10121b; --shell2: #0a0c12; --vig: 0.72; --chill: 0.75; }
+.d-abyss { --stratum: #ff6257; --stratum-soft: rgb(255 98 87 / 16%); --shell: #150c0d; --shell2: #0b0708; --vig: 0.78; --chill: 1; }
+
+/* ═══ the layout law ═══════════════════════════════════════════════════════════
+   MIN-height, never height:100%. Nothing in a column may be squeezed to make the
+   layout fit — every section keeps its natural height and the page grows instead. */
 
 *,
 *::before,
@@ -9,20 +109,26 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html,
 body {
-  /* MIN-height, not height. `height: 100%` on a flex body stretches #app to
-     exactly the viewport, and its flex children then SHRINK to fit — which is
-     what was slicing the hand down to a third of a card on a phone. The page is
-     allowed to be taller than the screen; it scrolls. */
   min-height: 100%;
-  background: #14161c;
-  color: #e6e8ee;
-  font: 600 14px/1.45 system-ui, sans-serif;
+  background: #040507;
+  color: var(--ink);
+  font: 600 14px/1.45 var(--ui);
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
 }
+
+/* The atmosphere layers are wider than the shell on purpose — the lantern is a 420px
+   ellipse — so something has to contain them or a phone gets a horizontal scrollbar.
+   That job belongs to `.app` and its `overflow-x: clip` below, NOT to `html, body`:
+   `overflow-x: hidden` on the root forces `overflow-y: auto`, which turns the body
+   into a scroll container and silently kills `position: sticky` on the loadout's
+   confirm bar. Measured, not guessed. `clip` does not create a scroll container,
+   which is the whole reason it is the right tool here. */
 
 body {
   display: flex;
@@ -32,1020 +138,2023 @@ body {
 
 #app {
   width: 100%;
-  max-width: 560px;
-  padding: 12px;
+  max-width: 440px;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 10px;
 }
 
-/* Nothing in the column may be squeezed to make the layout fit. Every section
-   keeps its natural height and the page grows instead. */
 #app > * {
   flex: 0 0 auto;
 }
 
-@media (max-width: 460px) {
-  #app {
-    padding: 8px;
-    gap: 8px;
+/* ═══ shell + layering ═════════════════════════════════════════════════════════ */
+
+.app {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px 10px 20px;
+  overflow-x: clip;
+  background: linear-gradient(180deg, var(--shell), var(--shell2) 78%, #07080c);
+}
+
+/* Same law one level down: the plinth's rows never shrink either. */
+.app > *,
+.plinth > * {
+  flex: 0 0 auto;
+}
+
+/* No spine on the hub screens, so they get their left gutter back. */
+.app.plain {
+  padding-left: 12px;
+}
+
+/* z1 · grain — BELOW the HUD */
+.app::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.34;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/><feColorMatrix type='saturate' values='0'/></filter><rect width='120' height='120' filter='url(%23n)' opacity='.14'/></svg>");
+}
+
+/* z2 · gentle global falloff, capped — the drama lives in the stage */
+.app::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background: radial-gradient(120% 74% at 50% 40%, transparent 46%, rgb(0 0 0 / 50%) 100%);
+}
+
+.app.panic .plinth {
+  animation: panic 1.15s ease-in-out infinite;
+}
+
+@keyframes panic {
+  50% {
+    box-shadow:
+      inset 0 1px 0 rgb(255 215 170 / 18%),
+      inset 0 0 0 1px #000,
+      inset 0 0 70px rgb(255 60 48 / 30%),
+      0 -10px 26px rgb(255 186 105 / 7%);
   }
 }
 
-/* ---- header --------------------------------------------------------------- */
+.grow {
+  flex: 1 0 auto;
+}
 
-.header {
+/* ── atmosphere ─────────────────────────────────────────────────────────────── */
+
+/* The mockup hangs this 70px below the frame (`bottom: -70px`) so only the upper
+   falloff shows — which is free inside a `.phone` with `overflow: hidden`, and is a
+   70px vertical scrollbar on a real page. Same picture, no geometry: sit flush at the
+   bottom and push the gradient's hot spot 25% of 280px — i.e. exactly 70px — below the
+   box instead. Horizontal overflow is `.app`'s `overflow-x: clip` to handle; vertical
+   overflow is nobody's, so it must not be created. */
+.lantern {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 420px;
+  height: 280px;
+  margin-left: -210px;
+  pointer-events: none;
+  z-index: 3;
+  background: radial-gradient(ellipse at 50% 125%, var(--lantern), transparent 66%);
+  animation: flicker 4.6s ease-in-out infinite;
+}
+
+@keyframes flicker {
+  37% { transform: scale(1.05); }
+  62% { transform: scale(0.97); }
+}
+
+.fire {
+  position: absolute;
+  left: 50%;
+  top: 70px;
+  width: 300px;
+  height: 220px;
+  margin-left: -150px;
+  pointer-events: none;
+  z-index: 3;
+  background: radial-gradient(ellipse at 50% 60%, rgb(255 176 84 / 30%), transparent 66%);
+  animation: flicker 3.2s ease-in-out infinite;
+}
+
+.fog {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  overflow: hidden;
+}
+
+.fog i {
+  position: absolute;
+  width: 250px;
+  height: 120px;
+  border-radius: 50%;
+  filter: blur(24px);
+  background: var(--stratum-soft);
+  animation: drift linear infinite;
+}
+
+@keyframes drift {
+  from { transform: translateX(-270px); }
+  to { transform: translateX(390px); }
+}
+
+/* ── depth spine ────────────────────────────────────────────────────────────── */
+
+.spine {
+  position: absolute;
+  left: 4px;
+  top: 10px;
+  bottom: 10px;
+  width: 11px;
+  z-index: 14;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.spine .cap {
+  font: 400 8px/1 var(--px);
+  color: var(--dim);
+  text-align: center;
+  margin-bottom: 3px;
+}
+
+.rung {
+  flex: 1;
+  background: #1a1f28;
+  box-shadow: inset 0 0 0 1px #05060a;
+  position: relative;
+}
+
+.rung.past {
+  background: linear-gradient(180deg, var(--stratum), transparent);
+  opacity: 0.6;
+}
+
+.rung.here {
+  background: linear-gradient(180deg, #fff, var(--stratum));
+  box-shadow: 0 0 12px var(--stratum), inset 0 0 0 1px #000;
+  animation: hererung 1.7s ease-in-out infinite;
+}
+
+@keyframes hererung {
+  50% { transform: scaleX(1.5); }
+}
+
+.rung.here::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  margin-top: -4px;
+  border: 4px solid transparent;
+  border-left: 6px solid #fff;
+  filter: drop-shadow(0 0 5px var(--stratum));
+}
+
+.spine .band {
+  flex: 0 0 2px;
+  background: rgb(255 255 255 / 28%);
+  margin: 2px 0;
+}
+
+.mnu {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 16;
+  width: 26px;
+  height: 26px;
+  font: 400 12px/24px var(--px);
+  text-align: center;
+  color: var(--ink2);
+  cursor: pointer;
+  background: rgb(20 24 32 / 92%);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 18%);
+}
+
+/* ── shared atoms ───────────────────────────────────────────────────────────── */
+
+.eyebrow {
+  font: 400 8px/1.5 var(--px);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.meter {
+  position: relative;
+  overflow: hidden;
+  background: #0a0d13;
+  box-shadow: inset 0 0 0 1px #000, inset 0 2px 5px rgb(0 0 0 / 90%);
+}
+
+.meter .fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.meter::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(90deg, transparent 0 5px, rgb(0 0 0 / 60%) 5px 7px);
+}
+
+.hd {
+  position: relative;
+  z-index: 12;
+  margin-top: 8px;
+}
+
+.hd .h {
+  font: 400 15px/1.3 var(--px);
+  margin-top: 6px;
+  text-shadow: 0 2px 0 #000;
+}
+
+/* ═══ stage — all the darkness lives in here ═══════════════════════════════════ */
+
+.stage {
+  position: relative;
+  height: 208px;
+  z-index: 5;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 7%);
+}
+
+/* The stage backdrop is a GRADIENT, not a PNG (ART.md rule 2). `public/backdrops/`
+   is parked: if the visual gate ever says this reads too flat at depth, stratum
+   backdrops are the sanctioned addition — not before. */
+.stage .bd {
+  position: absolute;
+  inset: 0;
+  image-rendering: pixelated;
+  pointer-events: none;
+  z-index: 1;
+  background:
+    radial-gradient(58% 44% at 50% 32%, var(--stratum-soft), transparent 72%),
+    repeating-linear-gradient(90deg, rgb(255 255 255 / 2.5%) 0 3px, transparent 3px 9px);
+}
+
+.stage .vig {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+  background: radial-gradient(72% 62% at 50% 42%, transparent 26%, rgb(3 4 7 / var(--vig)) 100%);
+}
+
+.stage .above {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 120px;
+  height: 22px;
+  margin-left: -60px;
+  z-index: 2;
+  background: radial-gradient(ellipse at 50% 0%, rgb(255 205 140 / calc(0.24 - var(--chill) * 0.2)), transparent 70%);
+}
+
+.mote {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: var(--stratum);
+  box-shadow: 0 0 7px var(--stratum);
+  animation: rise linear infinite;
+  z-index: 2;
+}
+
+@keyframes rise {
+  from { transform: translateY(30px); }
+  to { transform: translateY(-175px) translateX(18px); }
+}
+
+.stagetop {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  right: 40px;
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding-bottom: 8px;
-  border-bottom: 2px solid #3a4050;
+  z-index: 8;
 }
 
-.title {
-  font-size: 18px;
-  letter-spacing: 0.02em;
+.depthtag {
+  font: 400 9px/1 var(--px);
+  letter-spacing: 0.14em;
+  color: var(--stratum);
+  text-shadow: 0 0 12px var(--stratum);
 }
 
-.day {
-  display: block;
-  font-weight: 400;
-  font-size: 12px;
-  color: #98a0b3;
-  margin-top: 2px;
-}
-
-.header-stats {
+.foe {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 26px;
+  padding: 0 10px;
   display: flex;
-  align-items: center;
-  /* Wrap as whole items: without this the "How to play" button squeezes the
-     stats until "Encounter 1 / 12" breaks across two lines mid-label. */
-  flex-wrap: wrap;
-  gap: 6px 14px;
-  font-weight: 400;
-  font-size: 13px;
-  color: #98a0b3;
+  gap: 11px;
+  z-index: 7;
 }
 
-.header-stats > span {
-  white-space: nowrap;
-}
-
-.header-stats strong {
-  color: #e6e8ee;
-}
-
-/* ---- panels -------------------------------------------------------------- */
-
-.panel {
-  border: 2px solid #3a4050;
-  border-radius: 8px;
-  padding: 12px;
-}
-
-/* M3: the enemy panel becomes the stage — backdrop behind, portrait beside the
-   stats. The backdrop is set inline (it varies per encounter); everything that
-   makes it readable behind text lives here. */
-
-.panel.enemy {
-  border-color: #5a3040;
+.pw {
   position: relative;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  background-size: cover;
-  background-position: center 35%;
-  /* Backdrops are 400x320 art behind live text. Scrim only the LEFT-to-RIGHT
-     span behind the stats, so the backdrop still reads as a place instead of
-     being flattened to a dark rectangle. */
-  box-shadow: inset 0 0 0 999px rgb(20 22 28 / 62%);
+  width: 100px;
+  height: 100px;
+  flex: 0 0 100px;
 }
 
-.enemy-portrait {
-  width: 112px;
-  height: 112px;
-  flex-shrink: 0;
+.pglow {
+  position: absolute;
+  inset: -18px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--stratum-soft), transparent 66%);
+  animation: breathe 3.6s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  50% { transform: scale(1.14); }
+}
+
+/* The plate is CODE-DRAWN and the art sits centred inside it. That is not decoration:
+   a 128px portrait shown at 100px is fractional scaling, and fractional scaling with
+   `image-rendering: pixelated` shimmers — this repo has already hit that trap once.
+   The art displays at 64 (an integer half of 128) and the plate scales freely. */
+.port {
+  position: absolute;
+  inset: 0;
   image-rendering: pixelated;
-  /* Lifts the portrait off the backdrop without an outline sprite. */
-  filter: drop-shadow(0 3px 5px rgb(0 0 0 / 85%));
+  background: linear-gradient(158deg, #37324a, #191826 55%, #0b0b12);
+  box-shadow:
+    inset 0 0 0 1px #000,
+    inset 0 0 30px rgb(0 0 0 / 85%),
+    inset 0 2px 0 var(--stratum-soft),
+    0 10px 22px rgb(0 0 0 / 70%);
+  display: grid;
+  place-items: center;
+  font: 400 8px/1.6 var(--px);
+  color: rgb(240 242 248 / 30%);
+  text-align: center;
+  animation: sway 5s ease-in-out infinite;
 }
 
-.enemy-body {
+.port img {
+  width: 64px;
+  height: 64px;
+  image-rendering: pixelated;
+}
+
+@keyframes sway {
+  50% { transform: translateY(-5px); }
+}
+
+.port.hit {
+  animation: recoil 0.3s steps(3);
+}
+
+@keyframes recoil {
+  33% { transform: translate(-6px, 2px); }
+  66% { transform: translate(5px, -2px); }
+}
+
+/* 22 of the 30 roster rows have no portrait yet and the renderer degrades to the bare
+   plate — so the plate gets eyes, and the absence reads as something lurking rather
+   than as a missing asset. */
+.eyes {
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  margin-left: -15px;
+  display: flex;
+  gap: 18px;
+  z-index: 2;
+}
+
+.eyes b {
+  width: 5px;
+  height: 5px;
+  background: var(--atk);
+  box-shadow: 0 0 12px var(--atk), 0 0 24px var(--atk);
+  animation: blink 5.5s steps(1) infinite;
+}
+
+@keyframes blink {
+  94%, 97% { transform: scaleY(0.1); }
+}
+
+.fside {
   flex: 1;
   min-width: 0;
+  padding-top: 4px;
+}
+
+.fname {
+  font: 400 13px/1.2 var(--px);
+  text-shadow: 0 2px 0 #000, 0 0 18px var(--stratum);
+}
+
+.ftags {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.tag {
+  font: 400 7px/1 var(--px);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink2);
+  padding: 3px 5px;
+  background: rgb(14 17 24 / 92%);
+  box-shadow: inset 0 0 0 1px rgb(240 242 248 / 20%);
+}
+
+/* A trait is printed before turn one on purpose: a trait the player discovers by
+   losing HP is a trap, not a puzzle. */
+.tag.trait {
+  color: #ffd9a0;
+  box-shadow: inset 0 0 0 1px rgb(255 188 106 / 55%);
+}
+
+.tag.status {
+  color: #c4b2ff;
+  box-shadow: inset 0 0 0 1px rgb(167 144 238 / 55%);
+}
+
+.fhp {
+  margin-top: 8px;
+}
+
+.fhp .meter {
+  height: 12px;
+}
+
+.fhp .fill {
+  background: linear-gradient(180deg, #ff8a6c, #a82d26 60%, #661814);
+  box-shadow: 0 0 14px var(--atk-glow);
+}
+
+.fline {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  align-items: baseline;
+}
+
+.fline .n {
+  font: 400 12px/1 var(--px);
+  color: var(--ink);
+}
+
+.fline .n small {
+  color: var(--dim);
+  font-size: 8px;
+}
+
+/* ── threat track ───────────────────────────────────────────────────────────── */
+
+.threat {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+  z-index: 9;
+}
+
+.ts {
+  position: relative;
+  flex: 1;
+  padding: 5px 6px 6px;
+  background: rgb(10 13 19 / 96%);
+  box-shadow: inset 0 0 0 1px #000, inset 0 1px 0 rgb(255 255 255 / 12%);
+}
+
+.ts .when {
+  font: 400 7px/1 var(--px);
+  letter-spacing: 0.18em;
+  color: var(--dim);
+}
+
+.ts .row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.ts .gly {
+  font-size: 13px;
+  line-height: 1;
+  filter: drop-shadow(0 0 7px currentcolor);
+}
+
+.ts .val {
+  font: 400 14px/1 var(--px);
+}
+
+.ts .plus {
+  font: 400 8px/1 var(--px);
+  color: var(--nrg);
+  padding: 2px 3px;
+  box-shadow: inset 0 0 0 1px rgb(255 200 92 / 50%);
+}
+
+.ts.now {
+  flex: 1.65;
+  padding: 8px 9px 11px;
+  margin-bottom: -4px;
+  box-shadow:
+    inset 0 0 0 1px #000,
+    inset 0 2px 0 rgb(255 255 255 / 18%),
+    inset 0 -4px 0 rgb(0 0 0 / 70%),
+    0 4px 0 rgb(0 0 0 / 60%),
+    0 0 26px var(--tg, transparent);
+  animation: loom 2.3s ease-in-out infinite;
+}
+
+@keyframes loom {
+  50% { transform: translateY(-3px); }
+}
+
+.ts.now .val { font-size: 26px; }
+.ts.now .gly { font-size: 19px; }
+.ts.next { opacity: 0.95; }
+.ts.then { opacity: 0.8; }
+
+.ts.attack { --tg: var(--atk-glow); }
+.ts.attack .val,
+.ts.attack .gly,
+.ts.attack .when { color: var(--atk); }
+.ts.attack.now { background: linear-gradient(180deg, #55231e, #181011); }
+
+.ts.block { --tg: var(--blk-glow); }
+.ts.block .val,
+.ts.block .gly,
+.ts.block .when { color: var(--blk); }
+.ts.block.now { background: linear-gradient(180deg, #154551, #0d151b); }
+
+.ts.buff { --tg: rgb(191 157 255 / 45%); }
+.ts.buff .val,
+.ts.buff .gly,
+.ts.buff .when { color: var(--buff); }
+.ts.buff.now { background: linear-gradient(180deg, #352a5c, #161422); }
+
+/* unlit = LOCKED, not invisible. Readable, and it prints the reason. */
+.ts.unlit {
+  background: rgb(16 20 28 / 96%);
+  box-shadow: inset 0 0 0 1px #000, inset 0 0 0 1px rgb(255 200 92 / 14%);
+}
+
+.ts.unlit .when { color: #6f7788; }
+
+.ts.unlit .lk {
+  font: 400 13px/1 var(--px);
+  color: #8d95a7;
+  margin-top: 4px;
+}
+
+.ts.unlit .why {
+  font: 400 6px/1.3 var(--px);
+  letter-spacing: 0.1em;
+  color: #b08b4e;
+  margin-top: 4px;
+}
+
+/* LETHAL is measured against `max(0, incoming - block)`, never raw damage — the
+   mockup flags it while you are fully guarded and that is one of its two bugs. The
+   sim owns the decision; this only draws it. */
+.ts.lethal::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(115deg, rgb(255 98 87 / 28%) 0 6px, transparent 6px 14px);
+  animation: crawl 1s linear infinite;
+}
+
+@keyframes crawl {
+  to { transform: translateX(14px); }
+}
+
+.lt {
+  position: absolute;
+  top: -10px;
+  right: -2px;
+  font: 400 8px/1 var(--px);
+  letter-spacing: 0.1em;
+  color: #fff;
+  background: #8e2621;
+  padding: 3px 5px;
+  box-shadow: inset 0 0 0 1px var(--atk), 0 0 14px var(--atk-glow);
+}
+
+/* ═══ the plinth — lit control surface, never darkened by anything ═════════════ */
+
+.plinth {
+  position: relative;
+  z-index: 12;
+  margin-top: 8px;
+  padding: 9px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+  background: linear-gradient(180deg, var(--plinth-1), var(--plinth-2) 46%, var(--plinth-3));
+  box-shadow:
+    inset 0 1px 0 rgb(255 215 170 / 18%),
+    inset 0 0 0 1px #000,
+    inset 0 -3px 0 rgb(0 0 0 / 50%),
+    0 -10px 26px rgb(255 186 105 / 7%);
+}
+
+.plinth::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(255 205 150 / 55%), transparent);
+}
+
+.hero {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+}
+
+.hport {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  image-rendering: pixelated;
+  background: linear-gradient(150deg, #5b4f3a, #2a241d);
+  box-shadow:
+    inset 0 0 0 1px #000,
+    inset 0 2px 0 rgb(255 210 155 / 35%),
+    0 0 16px rgb(255 186 105 / 20%);
+  display: grid;
+  place-items: center;
+  font: 400 7px/1.4 var(--px);
+  color: rgb(255 230 195 / 62%);
+  text-align: center;
+}
+
+/* Generated at 64 and displayed at 32 — an integer half. See the note on `.port`. */
+.hport img {
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+}
+
+.hport.big {
+  width: 54px;
+  height: 54px;
+  flex: 0 0 54px;
+}
+
+.hbars {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+
+.armour {
+  height: 8px;
+  position: relative;
+  margin-bottom: 3px;
+}
+
+.armour .socket {
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 0 1px rgb(108 220 236 / 30%);
+  background: repeating-linear-gradient(90deg, rgb(108 220 236 / 8%) 0 5px, transparent 5px 7px);
+}
+
+.armour .scales {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  transform-origin: 50% 0;
+  background: repeating-linear-gradient(90deg, var(--blk) 0 5px, var(--blk-deep) 5px 7px);
+  box-shadow: 0 0 16px var(--blk-glow);
+}
+
+.hprail {
+  height: 15px;
+  position: relative;
+}
+
+.hprail .meter {
+  position: absolute;
+  inset: 0;
+}
+
+.hprail .life {
+  background: linear-gradient(180deg, #fdfeff, #b3bccf 65%, #818b9e);
+}
+
+.hprail .loss {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, #ff7365, #8c2621);
+  background-image: repeating-linear-gradient(48deg, rgb(0 0 0 / 28%) 0 3px, transparent 3px 7px);
+  box-shadow: 0 0 14px var(--atk-glow);
+  animation: threat 1.05s ease-in-out infinite;
+}
+
+@keyframes threat {
+  50% { transform: scaleY(1.2); }
+}
+
+.hread {
+  text-align: right;
+  line-height: 1;
+}
+
+.hread .n {
+  font: 400 18px/1 var(--px);
+  text-shadow: 0 2px 0 #000;
+}
+
+.hread .n small {
+  font-size: 8px;
+  color: var(--dim);
+}
+
+.hread .n.low {
+  color: var(--atk);
+  animation: heart 1.15s ease-in-out infinite;
+}
+
+@keyframes heart {
+  50% { transform: scale(1.09); }
+}
+
+.hread .d {
+  font: 400 10px/1 var(--px);
+  margin-top: 5px;
+  color: var(--atk);
+}
+
+.hread .d.safe {
+  color: var(--ok);
+}
+
+/* ── energy + rage ──────────────────────────────────────────────────────────── */
+
+.res {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.pips {
+  display: flex;
+  gap: 4px;
+}
+
+.pip {
+  width: 14px;
+  height: 14px;
+  transform: rotate(45deg);
+  background: #0d1017;
+  box-shadow: inset 0 0 0 1px rgb(255 200 92 / 38%);
+}
+
+.pip.on {
+  background: linear-gradient(140deg, #fff6dd, var(--nrg) 55%, #cd8a17);
+  box-shadow: 0 0 14px var(--nrg-glow);
+  animation: pipglow 2.3s ease-in-out infinite;
+}
+
+@keyframes pipglow {
+  50% { transform: rotate(45deg) scale(1.1); }
+}
+
+.lab {
+  font: 400 8px/1 var(--px);
+  letter-spacing: 0.14em;
+  color: var(--dim);
+}
+
+.rage {
+  flex: 0 0 94px;
+}
+
+.rage .meter {
+  height: 9px;
+}
+
+.rage .fill {
+  background: linear-gradient(180deg, #ffbe80, var(--rage) 60%, #ad4a13);
+  box-shadow: 0 0 14px var(--rage-glow);
+}
+
+.rage .k {
+  font: 400 7px/1 var(--px);
+  letter-spacing: 0.12em;
+  color: var(--dim);
+  margin-top: 4px;
+  text-align: right;
+}
+
+.rage.full .fill {
+  animation: ragefull 0.9s ease-in-out infinite;
+}
+
+@keyframes ragefull {
+  50% { transform: scaleY(1.35); }
+}
+
+.log {
+  margin-top: 8px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.log em {
+  font-style: normal;
+  color: var(--ink2);
+}
+
+/* ═══ ability bar ══════════════════════════════════════════════════════════════
+   Three columns plus a full-width ultimate row. The ultimate is OFF-BAR — a 5-ability
+   loadout is really six actions — and it is rage-gated, never cooldown-gated. */
+
+.abgrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.ab {
+  --accent: var(--archetype-accent, #e6e8ee);
+  position: relative;
+  height: 64px;
+  cursor: pointer;
+  overflow: hidden;
+  border: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  /* One accent per archetype, and the plate is COMPUTED from it — so there is exactly
+     one place an archetype's colour is written down and nothing to drift. */
+  background: linear-gradient(158deg,
+    color-mix(in srgb, var(--accent) 34%, #22262f),
+    #22262f 72%, #12151c);
+  box-shadow:
+    inset 0 0 0 1px #000,
+    inset 0 0 0 2px var(--accent),
+    inset 0 0 0 3px rgb(0 0 0 / 85%),
+    inset 0 0 18px rgb(0 0 0 / 45%),
+    0 3px 0 rgb(0 0 0 / 55%);
+  animation: abin 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.05) backwards;
+  animation-delay: calc(var(--i) * 40ms);
+  transition: transform 0.1s;
+}
+
+/* transform ONLY. A backgrounded tab pins a `backwards`-filled animation at frame
+   one, so an `opacity: 0` first frame is an invisible, unplayable ability bar. */
+@keyframes abin {
+  from { transform: translateY(16px) scale(0.92); }
+}
+
+.ab:not(.off):active {
+  transform: translateY(2px);
+}
+
+.ab .ico {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  font: 400 15px/1 var(--px);
+  color: #fff;
+  text-shadow: 0 2px 0 #000, 0 0 12px var(--accent);
+}
+
+.ab .cost {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 17px;
+  height: 17px;
+  transform: rotate(45deg);
+  background: linear-gradient(140deg, #fff6dd, var(--nrg) 55%, #cd8a17);
+  box-shadow: inset 0 0 0 1px #2c1c00, 0 0 10px var(--nrg-glow);
+}
+
+.ab .cost span {
+  display: block;
+  transform: rotate(-45deg);
+  color: #2c1c00;
+  font: 700 10px/16px var(--px);
+  text-align: center;
+}
+
+.ab .nm {
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  bottom: 19px;
+  font: 400 8px/1 var(--px);
+  color: #fff;
+  text-shadow: 0 2px 0 #000;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ab .rx {
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  bottom: 5px;
+  font: 600 9px/1.2 var(--ui);
+  color: var(--ink2);
+  max-height: 22px;
+  overflow: hidden;
+}
+
+.ab .cdtag {
+  position: absolute;
+  bottom: 5px;
+  right: 6px;
+  font: 400 7px/1 var(--px);
+  color: var(--dim);
+}
+
+.ab.ready {
+  box-shadow:
+    inset 0 0 0 1px #000,
+    inset 0 0 0 2px var(--accent),
+    inset 0 0 0 3px rgb(0 0 0 / 85%),
+    inset 0 0 18px rgb(0 0 0 / 45%),
+    0 3px 0 rgb(0 0 0 / 55%),
+    0 0 16px var(--accent);
+}
+
+/* OFF: desaturate + hatch. Text stays readable — disabled is not invisible. */
+.ab.off {
+  filter: saturate(0.28);
+  cursor: default;
+}
+
+.ab.off::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(125deg, rgb(0 0 0 / 42%) 0 5px, transparent 5px 11px);
+}
+
+.ab.off .rx,
+.ab.off .nm { color: #b6bdcb; }
+
+.ab.off .cost {
+  background: linear-gradient(140deg, #8c4a41, #3a1c19);
+  box-shadow: inset 0 0 0 1px #b0453c;
+}
+
+.ab.off .cost span { color: #ffd0ca; }
+
+.ab .cdmask {
+  position: absolute;
+  inset: 0;
+  background: rgb(9 12 18 / 70%);
+  display: grid;
+  place-items: center;
+  z-index: 3;
+}
+
+.ab .cdmask b {
+  font: 400 26px/1 var(--px);
+  color: #e2e7f0;
+  text-shadow: 0 2px 0 #000, 0 0 14px rgb(108 220 236 / 50%);
+}
+
+.ab .cdmask i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--blk);
+  box-shadow: 0 0 8px var(--blk-glow);
+}
+
+.ab.ult {
+  grid-column: span 3;
+  height: 50px;
+}
+
+.ab.ult .nm { bottom: 21px; left: 50px; font-size: 10px; }
+.ab.ult .rx { left: 50px; bottom: 7px; }
+.ab.ult .ico { top: 15px; left: 15px; font-size: 20px; }
+
+.ab.ult.charged {
+  animation:
+    abin 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.05) backwards,
+    ultpulse 1.6s ease-in-out infinite 0.4s;
+}
+
+@keyframes ultpulse {
+  50% { transform: scale(1.012); }
+}
+
+.ab.ult .sheen {
+  position: absolute;
+  top: -60%;
+  left: -40%;
+  width: 26%;
+  height: 220%;
+  transform: rotate(20deg);
+  background: linear-gradient(90deg, transparent, rgb(255 240 200 / 40%), transparent);
+  animation: sheen 4.4s ease-in-out infinite;
+}
+
+@keyframes sheen {
+  0% { transform: translateX(0) rotate(20deg); }
+  58%, 100% { transform: translateX(200px) rotate(20deg); }
+}
+
+.ab.ult .chargebar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: #232833;
+  z-index: 4;
+}
+
+.ab.ult .chargebar span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, #ffbe80, var(--rage));
+  box-shadow: 0 0 12px var(--rage-glow);
+}
+
+/* ═══ buttons — brighter base, hard lip, always above the atmosphere ═══════════ */
+
+.act {
+  display: flex;
+  gap: 8px;
+  margin-top: 9px;
+  z-index: 14;
+  position: relative;
+}
+
+.btn {
+  position: relative;
+  height: 48px;
+  flex: 1;
+  cursor: pointer;
+  border: 0;
+  color: #fff;
+  font: 400 12px/1 var(--px);
+  letter-spacing: 0.06em;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: linear-gradient(180deg, #5b6479, #3a4251 45%, #252b36);
+  box-shadow:
+    inset 0 0 0 1px #000,
+    inset 0 2px 0 rgb(255 255 255 / 24%),
+    inset 0 -3px 0 rgb(0 0 0 / 55%),
+    0 4px 0 #0a0d12,
+    0 8px 16px rgb(0 0 0 / 65%);
+  transition: transform 0.08s, box-shadow 0.08s;
+  text-shadow: 0 1px 0 rgb(0 0 0 / 75%);
+}
+
+.btn:active {
+  transform: translateY(3px);
+  box-shadow: inset 0 0 0 1px #000, inset 0 2px 0 rgb(255 255 255 / 14%), 0 1px 0 #0a0d12;
+}
+
+.btn .sub {
+  font: 400 8px/1 var(--px);
+  letter-spacing: 0.14em;
+  color: #e2e7f0;
+  opacity: 0.9;
+}
+
+.btn.go {
+  background: linear-gradient(180deg, #a58a49, #6e5427 45%, #3a2b14);
+  box-shadow:
+    inset 0 0 0 1px #000,
+    inset 0 2px 0 rgb(255 235 180 / 45%),
+    inset 0 -3px 0 rgb(0 0 0 / 55%),
+    0 4px 0 #1c150b,
+    0 0 26px rgb(226 184 84 / 32%);
+}
+
+.btn.go .sub { color: #fff2d4; }
+
+.btn.danger {
+  background: linear-gradient(180deg, #b34a40, #7a2621 45%, #3d1512);
+  box-shadow:
+    inset 0 0 0 1px #000,
+    inset 0 2px 0 rgb(255 190 180 / 40%),
+    inset 0 -3px 0 rgb(0 0 0 / 55%),
+    0 4px 0 #200907,
+    0 0 28px var(--atk-glow);
+}
+
+.btn.cool {
+  background: linear-gradient(180deg, #3a7a89, #1e5260 45%, #0f2830);
+  box-shadow: inset 0 0 0 1px #000, inset 0 2px 0 rgb(175 240 252 / 40%), 0 4px 0 #08151a, 0 0 26px var(--blk-glow);
+}
+
+.btn.good {
+  background: linear-gradient(180deg, #3f9a63, #25683f 45%, #123420);
+  box-shadow: inset 0 0 0 1px #000, inset 0 2px 0 rgb(180 250 205 / 40%), 0 4px 0 #071a10, 0 0 26px var(--ok-glow);
+}
+
+.btn.small {
+  flex: 0 0 74px;
+  font-size: 10px;
+  background: linear-gradient(180deg, #3a4251, #20252f);
+}
+
+.btn[disabled] {
+  filter: saturate(0.3);
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.btn[disabled]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(125deg, rgb(0 0 0 / 40%) 0 5px, transparent 5px 11px);
+}
+
+.btn .hz {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: repeating-linear-gradient(115deg, var(--atk) 0 5px, #000 5px 10px);
+}
+
+/* ═══ panes — the generic readable surface every menu screen uses ══════════════ */
+
+.pane {
+  position: relative;
+  z-index: 12;
+  background: linear-gradient(180deg, #20252f, #161a22);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 11%), inset 0 0 0 1px #000;
+}
+
+.pane.lit {
+  box-shadow: inset 0 1px 0 rgb(255 205 150 / 28%), inset 0 0 0 1px #000, 0 0 22px rgb(255 186 105 / 10%);
+}
+
+/* The loadout is the one screen that legitimately outgrows the viewport: nine
+   abilities and three ultimates is a lot to READ, and reading them is the daily
+   puzzle. The layout law says the page grows and scrolls rather than squeezing its
+   children — so it does, and the confirm bar rides along instead of being stranded
+   at the bottom of a 900px column.
+
+   Nested scroll panes were tried first and are worse: a scroll area inside a
+   scrolling page steals the gesture and hides how much is left. */
+.act.sticky {
+  position: sticky;
+  bottom: 0;
+  padding-bottom: 10px;
+  margin-bottom: -10px;
+  background: linear-gradient(180deg, transparent, var(--shell2) 34%);
+}
+
+.rowitem {
+  --accent: var(--archetype-accent, #5c6577);
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  padding: 9px 10px;
+  cursor: pointer;
+  box-shadow: inset 0 -1px 0 rgb(0 0 0 / 60%);
+}
+
+.rowitem:last-child { box-shadow: none; }
+
+.rowitem.head {
+  cursor: default;
+  background: #191d26;
+}
+
+.rowitem.sel {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 16%, transparent), transparent);
+  box-shadow: inset 3px 0 0 var(--accent), inset 0 -1px 0 rgb(0 0 0 / 60%);
+}
+
+.gi {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  position: relative;
+  image-rendering: pixelated;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--accent) 40%, #171b22), #171b22);
+  box-shadow: inset 0 0 0 1px #000, inset 0 0 0 2px var(--accent), inset 0 0 0 3px rgb(0 0 0 / 80%);
+}
+
+.gi span {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: 400 11px/1 var(--px);
+  color: #fff;
+  text-shadow: 0 0 10px var(--accent);
+}
+
+.gm {
+  flex: 1;
+  min-width: 0;
+}
+
+.gk {
+  font: 400 7px/1 var(--px);
+  letter-spacing: 0.16em;
+  color: var(--dim);
+}
+
+.gn {
+  font: 400 10px/1.2 var(--px);
+  margin-top: 6px;
+  color: var(--accent);
+}
+
+.gs {
+  font-size: 10px;
+  color: var(--ink2);
+  margin-top: 5px;
+  line-height: 1.4;
+}
+
+.gtail {
+  flex: 0 0 auto;
+  font: 400 9px/1 var(--px);
+  color: var(--faint);
+}
+
+.gtail.in { color: var(--ok); }
+
+/* ═══ camp ═════════════════════════════════════════════════════════════════════ */
+
+.camphead {
+  position: relative;
+  z-index: 12;
+  display: flex;
+  gap: 11px;
+  align-items: center;
+  margin-top: 6px;
+  padding: 10px;
+  background: linear-gradient(180deg, #2c2419, #1a1610);
+  box-shadow: inset 0 1px 0 rgb(255 205 150 / 30%), inset 0 0 0 1px #000;
+}
+
+.chname {
+  font: 400 14px/1 var(--px);
+  text-shadow: 0 2px 0 #000;
+}
+
+.chclass {
+  font: 400 8px/1 var(--px);
+  letter-spacing: 0.16em;
+  color: #ffbc6a;
+  margin-top: 6px;
+}
+
+.chnext {
+  font-size: 10px;
+  color: var(--ink2);
+  margin-top: 7px;
+}
+
+.doors {
+  position: relative;
+  z-index: 12;
+  margin-top: 9px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-/* The enemy name and intent must survive whatever the backdrop is doing. */
-.panel.enemy .name,
-.panel.enemy .intent {
-  text-shadow: 0 1px 3px rgb(0 0 0 / 95%);
+.door {
+  position: relative;
+  padding: 11px 12px;
+  cursor: pointer;
+  overflow: hidden;
+  background: linear-gradient(120deg, #20252f, #141821);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%), inset 0 0 0 1px #000, 0 3px 0 rgb(0 0 0 / 55%);
+  transition: transform 0.12s;
 }
 
-@media (max-width: 460px) {
-  .panel.enemy {
-    gap: 8px;
-    padding: 8px 10px;
-  }
-  .enemy-portrait {
-    width: 84px;
-    height: 84px;
-  }
+.door:active { transform: translateY(2px); }
+
+.door::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--dc);
+  box-shadow: 0 0 16px var(--dc);
 }
 
-.panel.player {
-  border-color: #3a5060;
+.door .dt {
+  font: 400 12px/1 var(--px);
+  letter-spacing: 0.05em;
+}
+
+.door .dd {
+  font-size: 11px;
+  color: var(--ink2);
+  margin-top: 7px;
+  line-height: 1.45;
+}
+
+.door .dd b { color: #fff; }
+
+.door .badge {
+  position: absolute;
+  top: 11px;
+  right: 12px;
+  font: 400 8px/1 var(--px);
+  letter-spacing: 0.1em;
+  padding: 4px 6px;
+  color: #0a0c10;
+  background: var(--dc);
+  box-shadow: 0 0 14px var(--dc);
+}
+
+.door .prog { margin-top: 9px; }
+.door .prog .meter { height: 8px; }
+
+.door.daily { --dc: #ffbc6a; }
+.door.endless { --dc: #a790ee; }
+.door.community { --dc: #6bdd92; }
+
+.door.daily .prog .fill { background: linear-gradient(180deg, #ffddb0, #d4813f); }
+
+/* Locked doors desaturate and hatch and keep their text — the reason is printed in
+   the badge, exactly as an unlit threat slot prints LANTERN T3. */
+.door.locked {
+  cursor: default;
+  filter: saturate(0.25);
+}
+
+.door.locked::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(125deg, rgb(0 0 0 / 40%) 0 5px, transparent 5px 11px);
+}
+
+.door.locked .badge {
+  color: var(--ink2);
+  background: rgb(14 17 24 / 92%);
+  box-shadow: inset 0 0 0 1px rgb(240 242 248 / 25%);
+}
+
+/* ── the foresight strip ────────────────────────────────────────────────────── */
+
+.foresight {
+  display: flex;
+  gap: 5px;
+  margin-top: 9px;
+}
+
+.fs {
+  flex: 1;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  font: 400 8px/1 var(--px);
+  letter-spacing: 0.1em;
+  background: #12151d;
+  color: #7d8698;
+  box-shadow: inset 0 0 0 1px #000;
+}
+
+.fs.lit {
+  color: #241703;
+  background: linear-gradient(180deg, #ffddb0, #d4813f);
+  box-shadow: 0 0 16px rgb(255 186 105 / 50%);
+}
+
+.statgrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  margin-top: 9px;
+  z-index: 12;
+  position: relative;
+}
+
+.st {
+  padding: 9px;
+  background: linear-gradient(180deg, #20252f, #161a22);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 10%), inset 0 0 0 1px #000;
+}
+
+.st .k {
+  font: 400 7px/1 var(--px);
+  letter-spacing: 0.14em;
+  color: var(--dim);
+}
+
+.st .v {
+  font: 400 14px/1 var(--px);
+  margin-top: 7px;
+}
+
+/* ═══ boons / skip ═════════════════════════════════════════════════════════════ */
+
+.boons {
+  position: relative;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 11px;
+}
+
+/* A boon plate is stroked in the accent of the archetype it MODIFIES — boons target
+   an archetype, never an ability id, so that is the only honest colour for it. */
+.boon {
+  --accent: var(--archetype-accent, #5c6577);
+  position: relative;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 11px 10px;
+  cursor: pointer;
+  background: linear-gradient(120deg, #20252f, #141821);
+  box-shadow: inset 0 0 0 1px #000, inset 0 0 0 2px var(--accent), inset 0 0 0 3px rgb(0 0 0 / 80%);
+  transition: transform 0.14s;
+}
+
+.boon.on {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 0 0 1px #000,
+    inset 0 0 0 2px var(--accent),
+    inset 0 0 0 3px rgb(0 0 0 / 80%),
+    0 0 22px var(--accent);
+}
+
+.boon .bi {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  display: grid;
+  place-items: center;
+  font: 400 13px/1 var(--px);
+  color: #fff;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--accent) 40%, #12151c), #12151c);
+  text-shadow: 0 0 12px var(--accent);
+  box-shadow: inset 0 0 0 1px #000;
+}
+
+.boon .bn {
+  font: 400 10px/1 var(--px);
+  color: var(--accent);
+}
+
+.boon .bd {
+  font-size: 11px;
+  color: var(--ink2);
+  margin-top: 7px;
+  line-height: 1.4;
+}
+
+.skipb {
+  position: relative;
+  z-index: 12;
+  margin-top: 7px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 10px;
+  cursor: pointer;
+  background: linear-gradient(120deg, #18251d, #0e1512);
+  box-shadow: inset 0 0 0 1px rgb(107 221 146 / 45%), inset 0 1px 0 rgb(255 255 255 / 8%);
+}
+
+.skipb.on {
+  box-shadow: inset 0 0 0 2px var(--ok), 0 0 22px var(--ok-glow);
+}
+
+.skipb .big {
+  font: 400 17px/1 var(--px);
+  color: var(--ok);
+  text-shadow: 0 0 14px var(--ok-glow);
+}
+
+.skipb .t {
+  flex: 1;
+  font-size: 11px;
+  color: var(--ink2);
+  line-height: 1.45;
+}
+
+.skipb .t b {
+  display: block;
+  font: 400 10px/1 var(--px);
+  color: #fff;
+  margin-bottom: 6px;
+  letter-spacing: 0.06em;
+}
+
+/* ═══ descent ══════════════════════════════════════════════════════════════════ */
+
+.desc {
+  position: absolute;
+  inset: 0;
+  z-index: 24;
+  overflow: hidden;
+  cursor: pointer;
+  background: linear-gradient(180deg, #0e1119, #07080d);
+}
+
+.strata {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -100%;
+  height: 300%;
+  animation: fall 2.4s cubic-bezier(0.35, 0, 0.2, 1) infinite;
+}
+
+@keyframes fall {
+  to { transform: translateY(46%); }
+}
+
+.strata i {
+  display: block;
+  height: 22px;
+  margin-bottom: 14px;
+  background: linear-gradient(90deg, transparent, var(--stratum-soft), transparent);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 8%);
+}
+
+.desc .mid {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0 20px;
+}
+
+.desc .lbl {
+  font: 400 9px/1 var(--px);
+  letter-spacing: 0.38em;
+  color: var(--dim);
+}
+
+.desc .num {
+  font: 400 68px/1 var(--px);
+  margin-top: 14px;
+  text-shadow: 0 5px 0 #000, 0 0 40px var(--stratum);
+  animation: slam 0.45s cubic-bezier(0.2, 1.7, 0.4, 1);
+}
+
+@keyframes slam {
+  from { transform: scale(2.4); }
+}
+
+.desc .nmz {
+  font: 400 15px/1 var(--px);
+  letter-spacing: 0.2em;
+  color: var(--stratum);
+  margin-top: 16px;
+  text-shadow: 0 0 22px var(--stratum);
+}
+
+.desc .warn {
+  margin-top: 22px;
+  font-size: 11px;
+  color: var(--ink2);
+  line-height: 1.7;
+}
+
+.desc .warn b { color: var(--atk); }
+
+.desc .foot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 22px;
+  text-align: center;
+  font: 400 8px/1 var(--px);
+  letter-spacing: 0.18em;
+  color: var(--dim);
+}
+
+/* ═══ result / share ═══════════════════════════════════════════════════════════ */
+
+.rtop {
+  position: relative;
+  z-index: 12;
+  margin-top: 10px;
+  text-align: center;
+  padding: 8px 0 4px;
+}
+
+.stamp {
+  display: inline-block;
+  font: 400 9px/1 var(--px);
+  letter-spacing: 0.18em;
+  color: #ff8b82;
+  padding: 6px 10px;
+  transform: rotate(-2.5deg);
+  background: rgb(140 38 33 / 35%);
+  box-shadow: inset 0 0 0 1px var(--atk), 0 0 20px var(--atk-glow);
+}
+
+.stamp.won {
+  color: #ffe9c0;
+  background: rgb(110 84 39 / 45%);
+  box-shadow: inset 0 0 0 1px #e2b854, 0 0 20px rgb(226 184 84 / 45%);
+}
+
+.score {
+  font: 400 42px/1 var(--px);
+  margin-top: 13px;
+  text-shadow: 0 4px 0 #000, 0 0 34px rgb(226 184 84 / 55%);
+}
+
+.rankline {
+  font-size: 11px;
+  color: var(--ink2);
+  margin-top: 9px;
+}
+
+.rankline b {
+  color: #f0cd74;
+  font-family: var(--px);
+  font-size: 12px;
+}
+
+.bdr {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--ink2);
+  box-shadow: inset 0 -1px 0 rgb(0 0 0 / 60%);
+}
+
+.bdr .n {
+  font: 400 12px/1 var(--px);
+  color: var(--ink);
+}
+
+.bdr.miss { color: var(--faint); }
+.bdr.miss .n { color: var(--faint); }
+
+.bdr.tot {
+  background: linear-gradient(180deg, #2b3240, #1a1f28);
+  box-shadow: none;
+}
+
+.bdr.tot .n {
+  color: #f0cd74;
+  font-size: 14px;
+  text-shadow: 0 0 14px rgb(226 184 84 / 50%);
+}
+
+.share {
+  position: relative;
+  z-index: 12;
+  margin-top: 11px;
+  padding: 10px;
+  background: #0d1017;
+  box-shadow: inset 0 0 0 1px #262c38, inset 0 1px 0 rgb(255 255 255 / 8%);
+}
+
+.sh {
+  display: flex;
+  justify-content: space-between;
+  font: 400 8px/1 var(--px);
+  letter-spacing: 0.12em;
+  color: var(--dim);
+  text-transform: uppercase;
+}
+
+.sgrid {
+  margin: 10px 0 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+}
+
+.srow {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.srow .sl {
+  flex: 0 0 52px;
+  font: 400 7px/1 var(--px);
+  color: var(--dim);
+  letter-spacing: 0.12em;
+}
+
+/* Stage 4 owns the real grid, including the SECOND CHANNEL every band needs — this is
+   the most-pasted artifact in the game and four hues, two of them adjacent, cannot
+   carry the whole message. The distinct lightness below is the start of that, not the
+   end of it. */
+.sq {
+  width: 26px;
+  height: 26px;
+  background: #1c212b;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 70%);
+  animation: sqin 0.32s cubic-bezier(0.2, 1.5, 0.4, 1) backwards;
+  animation-delay: calc(var(--n) * 45ms);
+}
+
+@keyframes sqin {
+  from { transform: scale(0) rotate(-40deg); }
+}
+
+.sq.full { background: linear-gradient(160deg, #8aeaae, #2f8a52); box-shadow: 0 0 10px var(--ok-glow); }
+.sq.hurt { background: linear-gradient(160deg, #f7d97a, #a8811f); }
+.sq.crit { background: linear-gradient(160deg, #ffab6e, #a34c17); }
+
+.sq.dead {
+  background: linear-gradient(160deg, #ff7365, #6d1a16);
+  box-shadow: 0 0 14px var(--atk-glow);
+  position: relative;
+}
+
+.sq.dead::after {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  background: #fff;
+}
+
+.sfoot {
+  font-size: 11px;
+  color: var(--ink2);
+  line-height: 1.65;
+  text-align: center;
+}
+
+.sfoot b {
+  color: #fff;
+  font-family: var(--px);
+  font-size: 11px;
+}
+
+/* ═══ leaderboard ══════════════════════════════════════════════════════════════ */
+
+.lb {
+  position: relative;
+  z-index: 12;
+  overflow: auto;
+  max-height: 46vh;
+  margin-top: 9px;
+  background: #12161e;
+  box-shadow: inset 0 0 0 1px #000, inset 0 1px 0 rgb(255 255 255 / 9%);
 }
 
 .row {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
-}
-
-.name {
-  font-size: 15px;
-  letter-spacing: 0.01em;
-}
-
-/* ---- bars ----------------------------------------------------------------- */
-
-.bar {
-  position: relative;
-  height: 20px;
-  border-radius: 10px;
-  overflow: hidden;
-  margin-top: 8px;
-  background: #2a2d35;
-  border: 1px solid #3a4050;
-}
-
-.bar-fill {
-  height: 100%;
-  border-radius: 10px;
-  transition: width 0.2s ease;
-}
-
-.bar-player-hp {
-  background: #4caf50;
-}
-
-.bar-enemy-hp {
-  background: #d93900;
-}
-
-.bar-text {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
-  color: #e6e8ee;
-  text-shadow: 0 0 4px rgba(0, 0, 0, 0.7);
-}
-
-/* ---- intents ------------------------------------------------------------- */
-
-.intent {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 5px;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-}
-
-.intent-attack {
-  background: #5a2020;
-  color: #ff6b6b;
-  border: 1px solid #8b3838;
-}
-
-.intent-block {
-  background: #1e3050;
-  color: #6bb5ff;
-  border: 1px solid #385a80;
-}
-
-.intent-buff {
-  background: #3a3020;
-  color: #e6c860;
-  border: 1px solid #6b5830;
-}
-
-.intent-note {
-  font-weight: 400;
-  font-size: 11px;
-  font-style: italic;
-  color: #98a0b3;
-}
-
-/* ---- chips --------------------------------------------------------------- */
-
-.chips {
-  display: flex;
-  gap: 6px;
-  margin-top: 6px;
-  flex-wrap: wrap;
-}
-
-.chip {
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-.chip-block {
-  background: #1e3050;
-  color: #6bb5ff;
-  border: 1px solid #385a80;
-}
-
-.chip-buff {
-  background: #3a3020;
-  color: #e6c860;
-  border: 1px solid #6b5830;
-}
-
-.chip-dim {
-  background: #2a2d35;
-  color: #98a0b3;
-  border: 1px solid #3a4050;
-}
-
-/* ---- energy pips --------------------------------------------------------- */
-
-.energy {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.pip {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: 2px solid #3a4050;
-  background: transparent;
-}
-
-.pip-on {
-  border-color: #e6e8ee;
-  background: #e6e8ee;
-}
-
-.energy-text {
-  font-size: 12px;
-  color: #98a0b3;
-  margin-left: 4px;
-}
-
-/* ---- hand ----------------------------------------------------------------- */
-
-/* A hand scrolls sideways rather than stacking: five full-art cards are ~700px,
-   which would wrap to three rows on a phone and push the End Turn button off
-   screen. `padding-top` leaves room for the hover lift, which `overflow-x`
-   would otherwise clip. */
-.hand {
-  display: flex;
-  gap: 8px;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  overflow-y: hidden;
-  /* Top room for the hover lift and the deal-in; bottom room for the horizontal
-     scrollbar, which lives in the padding and would otherwise sit on the cards'
-     bottom edge. `overflow-y: hidden` means anything outside this box is cut. */
-  padding: 10px 2px 12px;
-  scrollbar-width: thin;
-  scrollbar-color: #3a4050 transparent;
-}
-
-.hand::-webkit-scrollbar {
-  height: 6px;
-}
-.hand::-webkit-scrollbar-thumb {
-  background: #3a4050;
-  border-radius: 3px;
-}
-
-/* ---- cards --------------------------------------------------------------- */
-
-/* Full-bleed illustration with the text laid over a scrim. The art is the card;
-   everything else floats on top of it. Sized to the native 128x176 art so the
-   pixels map 1:1 — a fractional scale would shimmer against `pixelated`. */
-
-.card {
-  position: relative;
-  /* content-box + no flex shrink: the art box stays EXACTLY 128x176 so the
-     illustration maps 1:1 to device pixels. The global border-box reset and a
-     shrinking flex row both pull it off-grid, and `pixelated` at a fractional
-     scale shimmers badly. */
-  box-sizing: content-box;
-  flex: 0 0 auto;
-  width: 128px;
-  height: 176px;
-  border: 2px solid #3a4050;
-  border-radius: 8px;
-  overflow: hidden;
-  background: #12141a;
-  user-select: none;
-  isolation: isolate;
-}
-
-.card-art {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  image-rendering: pixelated;
-  z-index: 0;
-}
-
-/* Text sits in the lower third. The gradient is what keeps it legible over
-   whatever the illustration happens to be doing there. */
-.card-scrim {
-  position: absolute;
-  inset: auto 0 0 0;
-  z-index: 2;
-  padding: 16px 7px 6px;
-  background: linear-gradient(
-    to top,
-    rgb(10 11 15 / 97%) 0%,
-    rgb(10 11 15 / 92%) 55%,
-    rgb(10 11 15 / 0%) 100%
-  );
-}
-
-.card-name {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  line-height: 1.15;
-  color: #f0f2f8;
-  text-shadow: 0 1px 2px rgb(0 0 0 / 90%);
-}
-
-.card-text {
-  margin-top: 2px;
-  font-size: 10px;
-  font-weight: 400;
-  line-height: 1.25;
-  color: #c3cadb;
-  text-shadow: 0 1px 2px rgb(0 0 0 / 90%);
-}
-
-.card-cost {
-  position: absolute;
-  top: 5px;
-  left: 5px;
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: #10121a;
-  border: 2px solid var(--rarity-accent, #3a4050);
-  font-size: 13px;
-  font-weight: 700;
-  color: #f0f2f8;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 80%);
-}
-
-.card-rarity {
-  position: absolute;
-  top: 7px;
-  right: 6px;
-  z-index: 3;
-  font-size: 8px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--rarity-accent, #98a0b3);
-  text-shadow: 0 1px 3px rgb(0 0 0 / 95%);
-}
-
-/* No illustration yet: fall back to the M1 look so the card is still playable. */
-.card-artless .card-scrim {
-  inset: 0;
-  padding-top: 32px;
-  background: #1a1d25;
-}
-
-/* ---- card art + code-drawn rarity frames --------------------------------- */
-
-/* M3: a 64px icon, nothing more. The frame around it is drawn here in CSS and
-   never generated — four rarity frames as images would be four more files that
-   can drift away from these colours. */
-
-.card-art {
-  display: flex;
-  justify-content: center;
-  padding: 2px 0;
-}
-
-.card-art img {
-  width: 64px;
-  height: 64px;
-  /* Pixel art: never let the browser smooth it. */
-  image-rendering: pixelated;
-  /* The code-drawn frame: a tinted well the icon sits in, stroked in the card's
-     rarity accent. `--rarity-accent` is set by the rarity rules below. */
-  border: 1px solid var(--rarity-accent, #3a4050);
-  border-radius: 6px;
-  background: #12141a;
-  box-shadow: inset 0 0 12px rgb(0 0 0 / 60%);
-}
-
-.card-rare .card-art img {
-  /* Rare cards get the one glow in the game — it is the "lucky offer" tell. */
-  box-shadow:
-    inset 0 0 12px rgb(0 0 0 / 60%),
-    0 0 8px rgb(212 168 67 / 45%);
-}
-
-/* rarity accents — the single source of truth for rarity colour.
-   `src/client/art.ts` mirrors these into RARITY_ACCENT, and `tests/art.test.ts`
-   fails if the two ever drift apart. */
-
-.card-starter {
-  --rarity-accent: #5a6070;
-  border-color: var(--rarity-accent);
-}
-.card-starter .card-cost {
-  background: var(--rarity-accent);
-}
-
-.card-common {
-  --rarity-accent: #e6e8ee;
-  border-color: var(--rarity-accent);
-}
-.card-common .card-cost {
-  background: var(--rarity-accent);
-  color: #14161c;
-}
-
-.card-uncommon {
-  --rarity-accent: #5b9bd5;
-  border-color: var(--rarity-accent);
-}
-.card-uncommon .card-cost {
-  background: var(--rarity-accent);
-}
-
-.card-rare {
-  --rarity-accent: #d4a843;
-  border-color: var(--rarity-accent);
-}
-.card-rare .card-cost {
-  background: var(--rarity-accent);
-  color: #14161c;
-}
-
-.card-unknown {
-  border-color: #d93900;
-  border-style: dashed;
-}
-
-/* ---- card motion --------------------------------------------------------- */
-
-/* All of it is code-drawn. Frame-animated card art would mean shipping sprite
-   strips (AGENTS.md rule 1) and would tax every future card with another
-   generation; these effects cost nothing and apply to cards that don't exist
-   yet. Everything here is disabled under prefers-reduced-motion. */
-
-.card-clickable {
+  padding: 8px 9px;
   cursor: pointer;
-  touch-action: manipulation;
-  transition:
-    transform 120ms ease-out,
-    box-shadow 120ms ease-out,
-    border-color 120ms ease-out;
+  box-shadow: inset 0 -1px 0 rgb(0 0 0 / 55%);
 }
 
-/* Lift: the card you're about to play comes up off the table. */
-.card-clickable:hover {
-  transform: translateY(-8px);
-  border-color: var(--rarity-accent, #ffffff);
-  box-shadow: 0 10px 18px rgb(0 0 0 / 55%);
-  z-index: 4;
-}
-
-.card-clickable:active {
-  transform: translateY(-3px);
-  border-color: #d93900;
-  transition-duration: 60ms;
-}
-
-/* Rare cards catch the light — a slow specular sweep across the illustration.
-   This is the "lucky offer" tell, and the one thing on screen that moves on its
-   own. Deliberately slow and low-contrast so it reads as sheen, not as a blink. */
-.card-rare::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  background: linear-gradient(
-    105deg,
-    transparent 40%,
-    rgb(212 168 67 / 22%) 50%,
-    transparent 60%
-  );
-  background-size: 300% 100%;
-  animation: card-sheen 4.5s ease-in-out infinite;
-}
-
-@keyframes card-sheen {
-  0%,
-  70% {
-    background-position: 160% 0;
-  }
-  100% {
-    background-position: -60% 0;
-  }
-}
-
-/* Draft offers deal in from the deck rather than snapping into place. */
-.hand .card {
-  animation: card-deal 220ms ease-out backwards;
-}
-.hand .card:nth-child(2) {
-  animation-delay: 45ms;
-}
-.hand .card:nth-child(3) {
-  animation-delay: 90ms;
-}
-.hand .card:nth-child(4) {
-  animation-delay: 135ms;
-}
-.hand .card:nth-child(5) {
-  animation-delay: 180ms;
-}
-
-/* Transform only — deliberately NOT opacity. A frozen or backgrounded tab pins a
-   `backwards`-filled animation at its first frame, and an opacity-0 first frame
-   means an invisible, unplayable hand. Offset-and-scaled is a degradation you can
-   still play through; invisible is not. This project has been bitten by
-   hidden-tab rendering before — don't reintroduce it for a flourish. */
-@keyframes card-deal {
-  from {
-    transform: translateY(14px) scale(0.96);
-  }
-  to {
-    transform: none;
-  }
-}
-
-/* disabled cards — can't afford it, so it stays down and desaturates */
-
-.card-disabled {
-  opacity: 0.5;
-  filter: saturate(0.35);
-}
-
-.card-disabled.card-clickable {
-  cursor: not-allowed;
-}
-.card-disabled.card-clickable:hover {
-  transform: none;
-  border-color: inherit;
-  box-shadow: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .card-clickable,
-  .card-clickable:hover,
-  .card-clickable:active {
-    transition: none;
-    transform: none;
-  }
-  .card-rare::after,
-  .hand .card {
-    animation: none;
-  }
-}
-
-/* ---- buttons ------------------------------------------------------------- */
-
-.actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.button {
-  padding: 10px 22px;
-  border: 2px solid #3a4050;
-  border-radius: 8px;
-  background: #1a1d25;
-  color: #e6e8ee;
-  font: 600 14px system-ui, sans-serif;
-  cursor: pointer;
-  touch-action: manipulation;
-  letter-spacing: 0.02em;
-}
-
-.button:hover {
-  border-color: #e6e8ee;
-}
-
-.button:active {
-  background: #2a2d35;
-}
-
-.button-primary {
-  background: #d93900;
-  border-color: #d93900;
-  color: #ffffff;
-}
-
-.button-primary:hover {
-  border-color: #ff5a2a;
-  background: #e04500;
-}
-
-.button-primary:active {
-  background: #b02e00;
-}
-
-.button-disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
-/* ---- badges --------------------------------------------------------------- */
-
-.badge {
-  display: inline-block;
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: #3a4050;
-  color: #e6e8ee;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  vertical-align: middle;
-}
-
-/* ---- tutorial ------------------------------------------------------------- */
-
-/* The coach panel sits directly under the header, so on a phone the instruction
-   and the thing it points at are both on screen without scrolling. Gold, because
-   gold is already this game's "pay attention to this" colour (rare cards). */
-
-.coach {
-  border-color: #d4a843;
-  background: #1a1710;
-}
-
-.coach-step {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #a08340;
-}
-
-.coach-title {
-  margin-top: 3px;
-  font-size: 15px;
-  font-weight: 700;
-  color: #f0e4c0;
-  letter-spacing: 0.01em;
-}
-
-.coach-body {
-  margin-top: 5px;
-  font-size: 13px;
-  font-weight: 400;
-  line-height: 1.5;
-  color: #d8d4c8;
-}
-
-.coach-list {
-  margin: 7px 0 0 18px;
-  font-size: 13px;
-  font-weight: 400;
-  line-height: 1.5;
-  color: #d8d4c8;
-}
-
-.coach-list li {
-  margin-bottom: 4px;
-}
-
-.coach-actions {
-  margin-top: 11px;
-}
-
-.coach-nudge-text {
-  margin-top: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #ffb84d;
-}
-
-/* The outro replaces the board, so it gets a little room to breathe. */
-.tutorial-outro .coach {
-  padding: 18px 16px;
-}
-
-/* A smaller button for the header's "How to play" / "Skip" affordances — they
-   must not compete with End turn for the eye or for the tap. */
-.button-small {
-  padding: 3px 10px;
+.pb {
+  flex: 0 0 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
   font-size: 11px;
-  border-width: 1px;
-  border-radius: 5px;
+  padding-left: 2px;
+  color: #fff;
+  background: linear-gradient(180deg, #3c4454, #20252f);
+  box-shadow: inset 0 0 0 1px #000, inset 0 1px 0 rgb(255 255 255 / 20%), 0 2px 0 rgb(0 0 0 / 55%);
 }
 
-.badge-tutorial {
-  background: #d4a843;
-  color: #14161c;
+.row.me {
+  background: linear-gradient(90deg, rgb(107 221 146 / 16%), transparent);
+  box-shadow: inset 3px 0 0 var(--ok), inset 0 -1px 0 rgb(0 0 0 / 55%);
 }
 
-/* The highlight. An outline rather than a border: borders reflow the layout, and
-   the enemy panel and the hand are both size-critical here. */
-.tut-focus {
-  outline: 2px solid #d4a843;
-  outline-offset: 3px;
-  border-radius: 8px;
-  animation: tut-pulse 1.8s ease-in-out infinite;
+.row.me .pb {
+  color: #9df0b8;
+  box-shadow: inset 0 0 0 1px var(--ok), 0 0 14px var(--ok-glow);
 }
 
-/* Cards the current step doesn't want: pushed out of reach visually and by
-   pointer-events, so the gate in main.ts is a backstop rather than the only
-   thing stopping a misfire. */
-.card.tut-offscript {
-  opacity: 0.32;
-  filter: saturate(0.15);
-  pointer-events: none;
-}
-
-.card.tut-target {
-  outline: 2px solid #d4a843;
-  outline-offset: 2px;
-  animation: tut-pulse 1.8s ease-in-out infinite;
-}
-
-/* Glow only — no `backwards` fill and no opacity keyframes, so a frozen or
-   backgrounded tab pins this at a plain visible outline rather than at nothing.
-   Same lesson as the deal-in animation above. */
-@keyframes tut-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 rgb(212 168 67 / 0%);
-  }
-  50% {
-    box-shadow: 0 0 12px rgb(212 168 67 / 45%);
-  }
-}
-
-/* Refused input: a short nudge on the panel, transform-only. */
-.coach-nudging {
-  animation: coach-nudge 240ms ease-in-out;
-}
-
-@keyframes coach-nudge {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-  25% {
-    transform: translateX(-5px);
-  }
-  75% {
-    transform: translateX(5px);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .tut-focus,
-  .card.tut-target,
-  .coach-nudging {
-    animation: none;
-  }
-}
-
-/* ---- log ------------------------------------------------------------------ */
-
-.log {
-  border: 1px solid #3a4050;
-  border-radius: 6px;
-  padding: 8px 10px;
-  max-height: 140px;
-  overflow-y: auto;
-  background: #0e1015;
-  font-size: 11px;
-  line-height: 1.6;
-}
-
-.log-line {
-  color: #98a0b3;
-  font-weight: 400;
-}
-
-/* ---- hints --------------------------------------------------------------- */
-
-.hint {
-  margin-top: 6px;
-  font-size: 12px;
-  font-weight: 400;
-  color: #98a0b3;
-  line-height: 1.5;
-}
-
-/* ---- result screen ------------------------------------------------------- */
-
-.result {
+.rk {
+  flex: 0 0 22px;
   text-align: center;
-  padding: 32px 16px;
+  font: 400 10px/1 var(--px);
+  color: var(--dim);
 }
 
-.result-title {
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  margin-bottom: 8px;
+.rk.m1 { color: #ffd85e; text-shadow: 0 0 12px rgb(255 216 94 / 70%); }
+.rk.m2 { color: #e2e7f0; }
+.rk.m3 { color: #e6a978; }
+
+.who {
+  flex: 1;
+  min-width: 0;
 }
 
-.result-score {
-  font-size: 48px;
-  font-weight: 700;
-  color: #d4a843;
-  letter-spacing: 0.02em;
-  line-height: 1.1;
+.nm2 {
+  font: 400 10px/1 var(--px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink);
 }
 
-/* ---- board ----------------------------------------------------------------- */
-
-.board {
-  padding: 12px;
-}
-
-.board-row {
+.dep {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 6px;
-  border-bottom: 1px solid #2a2d35;
-  font-size: 13px;
-  flex-wrap: wrap;
+  gap: 2px;
+  margin-top: 6px;
 }
 
-.board-row:last-child {
-  border-bottom: none;
+.ds {
+  width: 7px;
+  height: 7px;
+  background: #2a303b;
 }
 
-.board-row[data-action] {
-  cursor: pointer;
-  touch-action: manipulation;
-}
+.ds.full { background: #48a86e; }
+.ds.hurt { background: #b8901f; }
+.ds.crit { background: #b05c22; }
+.ds.dead { background: #a02c26; box-shadow: 0 0 7px var(--atk-glow); }
 
-.board-row[data-action]:hover {
-  background: #1e2130;
-}
-
-.board-row-you {
-  background: #1e2820;
-}
-
-.board-row-you[data-action]:hover {
-  background: #263528;
-}
-
-.board-rank {
-  font-weight: 700;
-  color: #98a0b3;
-  min-width: 24px;
-}
-
-.board-user {
-  font-weight: 600;
-  min-width: 80px;
-  flex-shrink: 0;
-}
-
-.board-score {
-  font-weight: 700;
-  color: #d4a843;
-  min-width: 50px;
+.sc {
+  flex: 0 0 auto;
   text-align: right;
 }
 
-.board-detail {
+.sc .v {
+  font: 400 13px/1 var(--px);
+  color: var(--ink);
+}
+
+.sc .d {
+  font: 400 8px/1 var(--px);
+  color: var(--dim);
+  margin-top: 6px;
+}
+
+.notice {
+  padding: 12px 10px;
   font-size: 11px;
-  color: #98a0b3;
-}
-
-.board-loading {
+  line-height: 1.5;
+  color: var(--ink2);
   text-align: center;
-  color: #98a0b3;
-  padding: 16px;
 }
 
-/* ---- replay controls ------------------------------------------------------- */
+/* ═══ replay transport ═════════════════════════════════════════════════════════ */
 
-.replay-controls {
-  padding: 10px 12px;
+.transport {
+  position: relative;
+  z-index: 14;
+  margin-top: 9px;
+  padding: 9px 10px;
+  background: linear-gradient(180deg, #262c38, #161a22);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 14%), inset 0 0 0 1px #000;
 }
 
-.replay-controls .actions {
-  margin-top: 8px;
+.trtop {
+  display: flex;
+  align-items: center;
+  gap: 7px;
 }
 
-.bar-replay {
-  background: #5b9bd5;
+.trb {
+  width: 34px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  color: #fff;
+  cursor: pointer;
+  border: 0;
+  background: linear-gradient(180deg, #3c4454, #20252f);
+  box-shadow: inset 0 0 0 1px #000, inset 0 1px 0 rgb(255 255 255 / 20%);
 }
 
-.button:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
+.trb[disabled] {
+  filter: saturate(0.3);
+  opacity: 0.7;
+  pointer-events: none;
 }
 
-/* ---- phone layout -------------------------------------------------------- */
+.trb.wide {
+  flex: 1;
+  font: 400 9px/1 var(--px);
+  color: var(--ink2);
+  letter-spacing: 0.08em;
+  cursor: default;
+}
 
-/* Last in the file on purpose: these override same-specificity rules declared
-   above. The target is a Reddit feed iframe at ~360px, where the whole combat
-   screen — enemy, you, hand, End turn — has to be reachable without scrolling.
-   Everything below buys vertical room back for the cards. */
+.track {
+  display: flex;
+  gap: 2px;
+  margin-top: 9px;
+}
 
-@media (max-width: 460px) {
-  .header {
-    padding-bottom: 6px;
-    gap: 4px;
-  }
+.tseg {
+  flex: 1;
+  height: 7px;
+  background: #2a303b;
+  cursor: pointer;
+}
 
-  .title {
-    font-size: 16px;
-  }
+.tseg.past { background: linear-gradient(180deg, #6bdd92, #2f8a52); }
+.tseg.cur { background: #fff; box-shadow: 0 0 10px rgb(255 255 255 / 80%); }
 
-  .day {
-    font-size: 11px;
-  }
+.trmeta {
+  display: flex;
+  justify-content: space-between;
+  font: 400 7px/1 var(--px);
+  color: var(--dim);
+  margin-top: 7px;
+  letter-spacing: 0.12em;
+}
 
-  .header-stats {
-    gap: 10px;
-    font-size: 12px;
-  }
+.watchtag {
+  position: absolute;
+  top: 8px;
+  left: 20px;
+  z-index: 16;
+  font: 400 8px/1 var(--px);
+  letter-spacing: 0.14em;
+  color: #0d1017;
+  background: #a790ee;
+  padding: 4px 6px;
+  box-shadow: 0 0 16px rgb(167 144 238 / 60%);
+}
 
-  .panel {
-    padding: 10px;
-  }
+/* ═══ motion off ═══════════════════════════════════════════════════════════════ */
 
-  .bar {
-    height: 18px;
-    margin-top: 6px;
-  }
-
-  /* The log is reference material, not something you act on — it gives up its
-     height first so the hand keeps its own. */
-  .log {
-    max-height: 92px;
-  }
-
-  .button {
-    padding: 10px 18px;
-  }
-
-  /* Full-width primary action: the biggest tap target on the screen should be
-     the one you hit every turn. */
-  .actions .button-primary {
-    flex: 1 1 100%;
-  }
-
-  /* The coach panel is pure overhead on a phone — every pixel it takes is a
-     pixel the board doesn't get, so it tightens up more than the panels do. */
-  .coach {
-    padding: 9px 10px;
-  }
-
-  .coach-body,
-  .coach-list {
-    font-size: 12px;
-    line-height: 1.45;
-  }
-
-  .coach-actions {
-    margin-top: 9px;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
   }
 }

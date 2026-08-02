@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="h-full">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta
@@ -9,8 +9,12 @@
     <title>Daily Delve</title>
     <link rel="stylesheet" href="game.css" />
   </head>
-  <body class="h-full">
-    <div id="app" class="h-full"></div>
+  <!-- No `h-full` here. Tailwind's `h-full` is `height: 100%`, and `height: 100%` on a
+       flex body stretches #app to the viewport and makes its children SHRINK to fit —
+       the layout trap that sliced the hand to a third of a card once. game.css sets
+       `min-height` deliberately; a stray utility class would undo it. -->
+  <body>
+    <div id="app"></div>
     <script type="module" src="main.ts"></script>
   </body>
 </html>
