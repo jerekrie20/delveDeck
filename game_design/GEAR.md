@@ -179,9 +179,16 @@ is pure content: rows over the same budget, no new systems.
 - **Set bonuses should change a rule, not add a number.** *"Your `wall` abilities
   also apply Thorns"* is a build. *"+N block"* is a stat stick.
 
+**Named items get their own sprite** — the one sanctioned exception to *one sprite per
+base type*, because a famous item that looks generic is a worse reward than a rare one.
+Procedural rolls never do: `Legendary Gravebite Axe` is the axe sprite in a code-drawn
+frame, and a rarity is not a name. The rule and its tripwires are in
+[ART.md](ART.md) § The exception.
+
 Both are **backlog rows, not v1 systems** — the procedural model ships first, and
-named items are added forever after. That is the content treadmill this game wants,
-and it costs no art.
+named items are added forever after. That is the content treadmill this game wants.
+**Each row now costs one sprite**, which is deliberate: growing the named list grows
+the art budget one-for-one, in a place where that is visible.
 
 ---
 
@@ -202,6 +209,14 @@ the server stores, never a number a client sends.
 **Stash size grows with progression** rather than sitting at a hard cap. Eleven slots
 of gear needs somewhere to live, and an inventory that forces a discard every run is
 a chore rather than a decision.
+
+**Salvaging a trophy takes it off the wall.** An item you surfaced with carries
+`surfacedAt` (the depth it dropped at) and `displayed`; the trophy wall in
+[IDENTITY.md](IDENTITY.md) is a *view* of the stash, not a separate ledger, because
+you cannot display something you no longer have. So salvage is a real trade rather
+than pure overflow disposal: the shards have to beat the brag. Stored trophies are
+bounded by the stash; **displayed ones are capped at eleven**, matching the gear
+slots, so the wall reads as a second loadout you chose to show.
 
 ---
 

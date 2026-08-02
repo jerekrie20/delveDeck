@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { transformer } from '../shared/transformer';
 import type { Context } from './context';
 import { context, reddit } from '@devvit/web/server';
-import { dayKey, seedForDay } from '../shared/sim';
+import { dayKey, seedForDay, MAX_RUN_CHOICES, TUNING } from '../shared/sim';
 import { submitRun, getBoard, getRun, hasSubmitted, isSubmittableDay } from './core/run';
 import { redisRunStore } from './core/runStore';
 
@@ -23,16 +23,32 @@ export const router = t.router;
 export const publicProcedure = t.procedure;
 
 const runChoiceSchema = z.discriminatedUnion('k', [
-  z.object({ k: z.literal('draft'), i: z.number().int().min(0) }),
-  z.object({ k: z.literal('play'), i: z.number().int().min(0) }),
-  z.object({ k: z.literal('skip') }),
+  z.object({
+    k: z.literal('load'),
+    bar: z.array(z.number().int().min(0).max(TUNING.poolSize - 1))
+      .min(TUNING.barMin).max(TUNING.barMax),
+    ult: z.number().int().min(0).max(TUNING.ultimateOffers - 1),
+  }),
+  z.object({ k: z.literal('cast'), i: z.number().int().min(0).max(TUNING.barMax - 1) }),
+  z.object({ k: z.literal('ult') }),
   z.object({ k: z.literal('end') }),
+  z.object({ k: z.literal('boon'), i: z.number().int().min(0).max(TUNING.boonOffers - 1) }),
+  z.object({ k: z.literal('skip') }),
+  // The consumable / encounter seam. The Daily carries no consumables and the sim
+  // refuses every `use`, but the variant is accepted at the schema so a Stage 6
+  // Endless run does not need a run-format change.
+  z.object({ k: z.literal('use'), i: z.number().int().min(0).max(15) }),
+  z.object({ k: z.literal('descend') }),
+  z.object({ k: z.literal('surface') }),
 ]);
 
 const dayRegex = /^\d{4}-\d{2}-\d{2}$/;
 
 const submitInput = z.object({
-  choices: z.array(runChoiceSchema).min(1).max(500),
+  // DERIVED, never guessed: `MAX_RUN_CHOICES` falls out of the depth count, the
+  // per-depth turn cap and the energy budget. The previous 500 was sized for card
+  // plays, and a cap that does not match its model is not a cap.
+  choices: z.array(runChoiceSchema).min(1).max(MAX_RUN_CHOICES),
   /** The day the run was PLAYED, from `init.get`. A ~4 minute delve can start
    *  before UTC midnight and finish after it; scoring against the submit-time day
    *  would replay it on the wrong seed and reject it. `isSubmittableDay` bounds

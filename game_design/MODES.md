@@ -43,6 +43,13 @@ here, it is the feature that is wrong.
 defended by a test — `simulateRun.length === 2`, the composition-template sweep, the
 server-side score recompute. Do not soften a cell to make a feature easier.
 
+**"Reads account state" means the *sim* reads it.** The Daily renders your flame,
+lantern object, sigil and title like any other mode ([IDENTITY.md](IDENTITY.md) § The
+Daily shows your cosmetics) — cosmetics are applied at render time and are never
+arguments to `simulateRun`, members of `IssuedKit`, or elements of the choice list.
+The cell stays "Never" because the thing it is protecting is the number, not the
+screen.
+
 ---
 
 # The Daily Delve
@@ -309,40 +316,49 @@ dropped power would be the largest hole ever punched in the Daily's wall.
 
 ---
 
-## ⚠️ Sub-vs-sub — blocked pending a technical answer
+## Sub-vs-sub — unblocked: shared state exists
 
-Competing *between* subreddits is wanted, and it has a real architectural problem that
-must be resolved before any of it is designed.
+Competing *between* subreddits had one architectural question in front of it, and the
+answer is yes.
 
-**Devvit Redis is scoped per app installation, i.e. per subreddit.** That is already a
-recorded, accepted decision (`GAME_DESIGN.md` § Accounts) and it is why heroes are
-per-sub. Inter-sub competition needs shared state across installations, which is
-exactly what that scoping prevents.
+> **Devvit Redis has a global scope.** `redis.global` — `RedisKeyScope.GLOBAL`,
+> described in `@devvit/redis` as state *across subreddit installations*, reachable
+> from the same `import { redis } from '@devvit/web/server'` this repo already uses.
 
-### The question to answer first
+So the live branch is available: **one shaft total per subreddit in one shared store**,
+which is all a head-to-head week actually needs. Every installation writes its own
+sub's row and reads everyone's.
 
-> **Does Devvit provide any supported mechanism for state shared across
-> installations of the same app?**
+**This corrects a premise, not a decision.** Per-installation is the *default* scope
+and it is still the right one for the hero (`GAME_DESIGN.md` § Accounts). What changes
+is that per-sub heroes are now a **choice with a reason** rather than a limit with no
+alternative — and that three features which were written off as impossible are merely
+unbuilt: sub-vs-sub, cross-sub camp visiting ([IDENTITY.md](IDENTITY.md)) and the
+cosmetic entitlement mirror.
 
-This has not been verified. It must be, against the Devvit docs, **before mechanics
-are specced** — because the two possible answers support completely different features:
+### The posture, now that both roads are open
 
-| If shared state EXISTS | If it does NOT |
-|---|---|
-| Live shaft races, head-to-head weekly matchups, real-time rival bars | Only *asynchronous comparison* |
+**Ship the asynchronous version first anyway.** A weekly ladder of sub totals is a
+scheduled read of a handful of global keys; a live race is a write-hot shared counter
+with every installation on the planet contending for it. The cheap one delivers most
+of the feeling — *r/foo out-dug us last week* — and it is the version that keeps
+working when the app is in two hundred subs instead of two.
 
-### The fallback, if the answer is no
+Three rules that come with using the global scope at all, and they are not optional:
 
-Each installation **publicly posts its weekly total** — the app already holds
-`SUBMIT_POST` — and a scheduled job reads a known hub subreddit and renders a ladder.
-Eventually-consistent, no shared store, works with what exists today.
+- **Every global key is season-scoped and subreddit-scoped from its first write** —
+  the same rule the community keys already carry. A global namespace shared by every
+  install is exactly where an unprefixed key becomes a migration.
+- **Global keys are additive and derived**, like the community shaft. No player action
+  may lower another sub's number; that single property carries the whole anti-grief
+  story across installations too.
+- **Contention is a design constraint.** Anything in the global scope is written by
+  every installation at once, so it holds totals and snapshots — never a per-run
+  ledger, and never anything on the submit path that a per-sub key could hold instead.
 
-Rivalry would then be **comparative, never interactive**: you can see that r/foo
-out-dug you last week, but you cannot race them live. For a weekly digging contest
-that is probably enough, and it costs almost nothing.
-
-**No mechanics are specced here on purpose.** Designing for the wrong answer throws the
-whole feature away, and this is a cheap question to answer first.
+**Mechanics are still not specced here**, and that is now an ordering call rather than
+a blocker: sub-vs-sub sits behind the community shaft shipping and being played
+(Stage 8), because a rivalry between two bars nobody fills is a feature about nothing.
 
 ### The Thing at Sixty
 

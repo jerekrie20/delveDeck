@@ -199,29 +199,39 @@ is a lost account — so its shape is a design decision, not an implementation d
 **Shape** (fields, not types — the schema lives in code):
 
 ```
-version · name · class · spec · level · xp · shards
+version · class · spec · level · xp · shards
 talents{} · unlocked[] · cosmetics[] · equippedTitle
 gear{ weapon, offhand, head, body, hands, legs, feet, ring1, ring2, amulet, lantern, relic }
-stash[]
+stash[]             ← items carry surfacedAt + displayed; the trophy wall is a view of this
+camp{ site, fire, objects[] }
 run{ ... }          ← the in-progress Endless run, so it survives a closed tab
 records{ endlessBest, dailyStreak, dailyBest, floorsHit, delves }
 codex{ seen[], fragments[] }
 deeds[]
 ```
 
-**`name` is not decoration.** In a game about building one hero over months, a delver
-you cannot name is a spreadsheet row. It costs one string, it appears on the Endless
-board beside your class, and it is the cheapest identity in the design. Moderation:
-it is user-generated text shown to other people — filter it, allow a rename, and let
-it be reported.
+**There is no `name`, and that is a decision.** An earlier draft gave the hero a
+delver name set once at first Endless entry. **The delver is `u/you`** — the Reddit
+account is the identity, it is already what people recognise in a comment thread, and
+a second name beside it buys two names on one board row plus a word filter, a rename
+path and a report flow that Reddit already runs for us. The shipped leaderboard
+renders `u/{username}` today; the code was right before the design was. Full reasoning
+in [IDENTITY.md](IDENTITY.md) § The delver is your Reddit account.
+
+**There is no `trophies[]` either.** A trophy is an item you still hold, flagged as
+displayed — so it lives in `stash[]` with two fields on the item, and salvaging the
+item takes it off the wall. Storage is capped by the stash; **display is capped at
+eleven**, matching the gear slots.
 
 Rules, all of which come from being bitten before:
 
 - **Versioned from the first write.** A version constant and a migration step table
   from day one. Never drop unknown fields, never downgrade, never throw.
-- **Per-subreddit.** Devvit Redis is scoped per app installation. Your delver in
-  r/foo is a different delver from your delver in r/bar. Stated, accepted, unfixable
-  later — see `GAME_DESIGN.md` § Accounts.
+- **Per-subreddit.** Devvit Redis defaults to per app installation. Your delver in
+  r/foo is a different delver from your delver in r/bar. A **global** scope does
+  exist (`redis.global`) and the hero deliberately does not use it — see
+  `GAME_DESIGN.md` § Accounts for what does, and why the per-sub hero survives the
+  correction on its own merits.
 - **All writes go through a compare-and-set loop with mutation replay**, and
   **mutators must be pure functions of the hero they receive**, because a conflict
   re-runs them.

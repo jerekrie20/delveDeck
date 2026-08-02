@@ -43,7 +43,7 @@ map — open it in Obsidian.
 | **Process** | |
 | [SCREENS.md](SCREENS.md) | The 17 mockup screens → what each is, which stage builds it |
 | [MIGRATION.md](MIGRATION.md) | Why delvedeck and not infinite-delve · the salvage manifest · the risks |
-| [QUESTIONS.md](QUESTIONS.md) | **Temporary.** Open decisions for the owner — two of them blocked on Devvit answers. |
+| [QUESTIONS.md](QUESTIONS.md) | **Temporary.** Down to one open decision — leaderboard moderation. The two Devvit blockers are answered and retired. |
 | [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) | **Temporary.** The contradiction log. Exists to be emptied, then deleted. |
 | **Visual** | |
 | [COMBAT-FLOW.canvas](COMBAT-FLOW.canvas) | Obsidian canvas — **a fight actually played out**, turn by turn, in all three modes |

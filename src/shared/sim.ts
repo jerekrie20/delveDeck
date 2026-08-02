@@ -1,436 +1,496 @@
-// The run simulation. PURE and deterministic: `simulateRun(seed, choices)` is the
-// single source of truth for what happened, and it is the same function on the
-// client (to play) and the server (to verify).
+// The run loop, and the public surface of the whole simulation.
 //
-// Two properties everything else depends on:
+// `simulateRun(seed, choices)` is the single source of truth for what happened, and it
+// is the same function on the client (to play), the server (to verify) and the probe
+// (to measure).
 //
-//  1. **Same seed + same choices → identical result, always.** The daily seed IS
-//     the game; if this drifts, two players "on the same day" are playing different
-//     games and the leaderboard is meaningless. No `Math.random` in this file, ever.
+// Five properties everything else depends on:
 //
-//  2. **The player submits CHOICES, never outcomes.** A choice list is tiny
-//     (a few hundred small ints), so the server can re-run it in microseconds and
-//     compute the score itself. A client claiming a score it didn't earn is
-//     rejected because the server never trusts the number — it recomputes it.
+//  1. **Same seed + same choices → identical result, always.** The daily seed IS the
+//     game; if this drifts, two players "on the same day" are playing different games.
+//     No `Math.random` anywhere in `src/shared/`, ever.
 //
-// That second property is also what makes top runs replayable, which is the
-// social hook: a leaderboard entry is a watchable solution, not just a number.
-
-import { createRng, randInt, shuffle, type Rng } from './rng';
-import { CARDS, DRAFT_POOL, RARITY_WEIGHT, STARTER_DECK, type Card } from './cards';
-import { GAUNTLET, enemyById, type Enemy, type Intent } from './enemies';
-
-// ---- tuning knobs (one place, so balance is a data edit) ----------------------
-
-export const TUNING = {
-  startingHp: 50,
-  energyPerTurn: 3,
-  handSize: 5,
-  /** Enemy HP and damage scale by this much per encounter, compounding, so the
-   *  gauntlet actually ramps instead of being flat with one boss on the end.
-   *  Tuned against `scratchpad/probe.ts`: a greedy "play left-to-right, never
-   *  think" policy MUST fall short of a full clear, or there is no headroom for
-   *  skill and the shared-seed leaderboard has nothing to measure. */
-  rampPerEncounter: 0.08,
-  /** Cards offered per draft, plus the option to skip. */
-  draftOffers: 3,
-  /** Enemy HP is jittered per day so a memorised line doesn't transfer. */
-  hpJitterPct: 12,
-  /** Score weights. Clearing encounters DOMINATES; leftover HP only breaks ties.
-   *  Invariant worth keeping: `startingHp * scorePerHpLeft < scorePerEncounter`,
-   *  so a full-health player can never out-score someone who got further. The
-   *  first version violated this (60 HP × 2 = 120 > 100) and rewarded turtling. */
-  scorePerEncounter: 100,
-  scorePerHpLeft: 1,
-  scoreFullClearBonus: 250,
-} as const;
-
-// ---- choices -------------------------------------------------------------------
-
-/** Everything a player can decide. Deliberately tiny — this is what gets stored,
- *  replayed and verified. `i` means: which offer (draft), or which hand slot (play). */
-export type RunChoice =
-  | { k: 'draft'; i: number }
-  | { k: 'skip' }
-  | { k: 'play'; i: number }
-  | { k: 'end' };
-
-/** Why a run stopped — `outOfChoices` is the normal "still playing" state, not an error. */
-export type RunOutcome = 'won' | 'died' | 'outOfChoices' | 'invalid';
-
-// ---- the live view ---------------------------------------------------------------
+//  2. **The player submits CHOICES, never outcomes.** A whole run is a few hundred
+//     small ints, so the server re-runs it in microseconds and computes the score
+//     itself. There is no parameter through which a client could supply a number.
 //
-// What the player is looking at while the run is paused waiting for their next
-// input. Produced ONLY on `outOfChoices`, which is exactly the live-play case.
+//  3. **The Daily is issued-kit: TWO ARGUMENTS, FOREVER.** No account state can reach
+//     `simulateRun`. Gear, class and level go through `simulateEndless`, whose kit is
+//     derived server-side. `tests/sim.test.ts` asserts `simulateRun.length === 2` —
+//     that test is load-bearing, not decorative.
 //
-// The client renders from this instead of keeping its own copy of the game state,
-// so there is no second state machine that can drift away from the simulation.
-// Everything here is a snapshot copy — nothing aliases the sim's internals or the
-// enemy registry.
+//  4. **Cooldowns are keyed by SLOT INDEX**, parallel to the bar — never by ability
+//     id. The same ability in two slots must not share one cooldown.
+//
+//  5. **The `ABILITIES` registry is never mutated.** See `combat.ts`.
+//
+// The telegraph is the game: `resolveIntent` serves BOTH the displayed threat track
+// and the enemy's actual turn, on purpose. An intent that shows one number and deals
+// another would break the "solvable by reasoning" premise the whole project rests on.
+//
+// **Structure.** This file owns the LOOP; the arithmetic, the content draw and the
+// shapes live beside it (CODING_BIBLE §1.9):
+//
+//     tuning.ts  ←  simTypes.ts  ←  daily.ts
+//                                ←  encounter.ts  ←  combat.ts  ←  sim.ts
+//
+// Everything outside `src/shared/` still imports from HERE — see the re-exports at the
+// foot of the file.
 
-export interface DraftView {
-  phase: 'draft';
-  /** The encounter this draft happens BEFORE (0-based). */
-  encounterIndex: number;
-  /** Card ids on offer, in the order a `{k:'draft', i}` choice indexes them. */
-  offers: string[];
-  hp: number;
-  maxHp: number;
-  deck: string[];
-}
-
-export interface CombatView {
-  phase: 'combat';
-  encounterIndex: number;
-  enemyId: string;
-  enemyName: string;
-  enemyHp: number;
-  enemyMaxHp: number;
-  enemyBlock: number;
-  /** The raw registry row for what the enemy does the moment you end your turn. */
-  intent: Intent;
-  /** That intent AFTER ramp, the enemy's accumulated buff and your Weaken — i.e.
-   *  the number that will actually happen. Computed by the same `resolveIntent`
-   *  the enemy's turn uses, so the telegraph cannot lie. */
-  intentValue: number;
-  /** Turn number within this encounter (0-based) — the intent cycle position. */
-  turn: number;
-  enemyWeak: number;
-  enemyBuff: number;
-  hp: number;
-  maxHp: number;
-  block: number;
-  energy: number;
-  /** Card ids in hand, in the order a `{k:'play', i}` choice indexes them. */
-  hand: string[];
-  drawCount: number;
-  discardCount: number;
-}
-
-export type RunView = DraftView | CombatView;
-
-export interface RunResult {
-  outcome: RunOutcome;
-  /** Encounters fully cleared. The headline number. */
-  cleared: number;
-  hp: number;
-  score: number;
-  /** Cards held at the end — the "deck you built", shown on the result screen. */
-  deck: string[];
-  /** Index of the choice that was illegal, when outcome is 'invalid'. */
-  badChoiceIndex?: number;
-  /** What the player should be shown next. Present iff outcome is 'outOfChoices'. */
-  view?: RunView;
-  /** Human-readable trace; the client renders from this, tests assert on it. */
-  log: string[];
-}
-
-// ---- internal state ------------------------------------------------------------
-
-interface Combatant {
-  hp: number;
-  maxHp: number;
-  block: number;
-}
-
-interface SimState {
-  rng: Rng;
-  player: Combatant;
-  deck: string[];
-  drawPile: string[];
-  hand: string[];
-  discard: string[];
-  energy: number;
-  /** Damage reduction applied to the enemy's NEXT attack (from Weaken). */
-  enemyWeak: number;
-  /** Bonus damage the enemy has accumulated from its own buff intents. */
-  enemyBuff: number;
-  log: string[];
-}
-
-/** Weighted draft pick — rare stays scarce. */
-function offerCards(rng: Rng, count: number): Card[] {
-  const pool: Card[] = [];
-  for (const card of DRAFT_POOL) {
-    const weight = RARITY_WEIGHT[card.rarity];
-    for (let i = 0; i < weight; i += 10) pool.push(card);
-  }
-  const offers: Card[] = [];
-  const seen = new Set<string>();
-  // Draw distinct cards; the weighted pool makes repeats likely, so retry a bounded
-  // number of times rather than looping forever on a small pool.
-  for (let attempt = 0; attempt < 200 && offers.length < count; attempt++) {
-    const card = pool[randInt(rng, 0, pool.length)]!;
-    if (seen.has(card.id)) continue;
-    seen.add(card.id);
-    offers.push(card);
-  }
-  return offers;
-}
-
-function reshuffle(state: SimState): void {
-  if (state.drawPile.length > 0 || state.discard.length === 0) return;
-  state.drawPile = shuffle(state.rng, state.discard);
-  state.discard = [];
-}
-
-function drawCards(state: SimState, n: number): void {
-  for (let i = 0; i < n; i++) {
-    reshuffle(state);
-    const id = state.drawPile.shift();
-    if (!id) return; // genuinely out of cards — allowed, just means a short hand
-    state.hand.push(id);
-  }
-}
-
-/**
- * What an intent will actually do this turn, after the encounter ramp, the enemy's
- * accumulated buff and the player's Weaken.
- *
- * Used BOTH to resolve the enemy's turn and to fill in the telegraph the player
- * reads. One function on purpose: an intent that displays one number and deals
- * another would break the "solvable by reasoning" premise the whole game rests on.
- */
-export function resolveIntent(
-  intent: Intent,
-  ramp: number,
-  enemyBuff: number,
-  enemyWeak: number
-): number {
-  if (intent.kind !== 'attack') return intent.value;
-  const scaled = Math.round(intent.value * ramp);
-  return Math.max(0, scaled + enemyBuff - enemyWeak);
-}
-
-/** Apply damage through block; returns damage that actually landed on HP. */
-function damage(target: Combatant, amount: number): number {
-  const absorbed = Math.min(target.block, amount);
-  target.block -= absorbed;
-  const through = amount - absorbed;
-  target.hp -= through;
-  return through;
-}
+import { ABILITIES, type Ability } from './abilities';
+import { isBossDepth, stratumForDepth, type Intent, type Stratum } from './enemies';
+import { TUNING } from './tuning';
+import { boonOffers, issuedKitForDay } from './daily';
+import {
+  activeIntents, buildEncounter, damageRampAt, traitMagnitude, type Encounter,
+} from './encounter';
+import {
+  castAbility, consumeStun, effectiveAbility, incomingToHp, resolveIntent,
+  statusMagnitude, tickStatuses,
+} from './combat';
+import type {
+  DepthBand, IssuedKit, RunChoice, RunOutcome, RunResult, RunView, SimState,
+} from './simTypes';
+import { bandFor, combatView, emptyFacts, finish } from './report';
 
 // ---- the run -------------------------------------------------------------------
 
+type Mode = 'daily' | 'endless';
+
 /**
- * Resolve a run. Consumes `choices` in order; when they run out the run stops
- * where it is and scores what was achieved (that is the live-play case — the
- * client calls this after every input with the choices so far).
+ * Everything the steps of one run share.
+ *
+ * Bundled rather than threaded through six positional parameters — that bundling is
+ * the whole point of splitting `runDepths` up (CODING_BIBLE §1.9). `index` is the
+ * choice cursor and, with `state`, `cleared` and the two arrays, the only thing that
+ * moves; a step reads the rest.
+ */
+interface Run {
+  readonly seed: number;
+  readonly kit: IssuedKit;
+  readonly mode: Mode;
+  readonly choices: readonly RunChoice[];
+  index: number;
+  readonly state: SimState;
+  readonly depthMarks: number[];
+  readonly depthBands: DepthBand[];
+  cleared: number;
+}
+
+/**
+ * How a step ended.
+ *
+ * A run can stop from four levels of nesting — out of choices mid-cast, an illegal
+ * choice, a death, the floor — and every one of those has to produce the same
+ * `RunResult`. Returning a signal instead of calling `finish` in twenty places means
+ * there is exactly ONE place a run is scored, which is the property the anti-cheat
+ * story rests on.
+ */
+type Step =
+  | { k: 'go' }
+  | { k: 'halt'; outcome: RunOutcome; view?: RunView }
+  | { k: 'invalid' };
+
+const GO: Step = { k: 'go' };
+const INVALID: Step = { k: 'invalid' };
+const halt = (outcome: RunOutcome, view?: RunView): Step =>
+  view === undefined ? { k: 'halt', outcome } : { k: 'halt', outcome, view };
+
+const nextChoice = (run: Run): RunChoice | undefined => run.choices[run.index++];
+
+/** The equipped row with kit mods and boons folded over a COPY. Read fresh on every
+ *  cast, because taking a boon mid-run changes what the bar does from that point. */
+const equipped = (run: Run, id: string): Ability =>
+  effectiveAbility(ABILITIES[id]!, run.kit.mods, run.state.boons);
+
+/**
+ * DAILY. **Two arguments, forever.** No account state can reach this — everything the
+ * run needs is derived from the seed. A test asserts `simulateRun.length === 2`.
  */
 export function simulateRun(seed: number, choices: readonly RunChoice[]): RunResult {
-  const rng = createRng(seed);
-  const state: SimState = {
-    rng,
-    player: { hp: TUNING.startingHp, maxHp: TUNING.startingHp, block: 0 },
-    deck: [...STARTER_DECK],
-    drawPile: [], hand: [], discard: [],
-    energy: 0, enemyWeak: 0, enemyBuff: 0,
-    log: [],
-  };
-
-  let choiceIndex = 0;
-  const next = (): RunChoice | undefined => choices[choiceIndex++];
-  const invalid = (at: number): RunResult => finish(state, 'invalid', 0, { badChoiceIndex: at });
-
-  let cleared = 0;
-
-  for (let encounterIndex = 0; encounterIndex < GAUNTLET.length; encounterIndex++) {
-    // ---- draft before every encounter except the first --------------------
-    if (encounterIndex > 0) {
-      const offers = offerCards(rng, TUNING.draftOffers);
-      const choice = next();
-      if (!choice) {
-        return finish(state, 'outOfChoices', cleared, {
-          view: {
-            phase: 'draft',
-            encounterIndex,
-            offers: offers.map((card) => card.id),
-            hp: state.player.hp,
-            maxHp: state.player.maxHp,
-            deck: [...state.deck],
-          },
-        });
-      }
-      if (choice.k === 'draft') {
-        const picked = offers[choice.i];
-        if (!picked) return invalid(choiceIndex - 1);
-        state.deck.push(picked.id);
-        state.log.push(`draft: took ${picked.name}`);
-      } else if (choice.k === 'skip') {
-        state.log.push('draft: skipped');
-      } else {
-        return invalid(choiceIndex - 1);
-      }
-    }
-
-    // ---- set up the encounter ---------------------------------------------
-    const template = enemyById(GAUNTLET[encounterIndex]!);
-    if (!template) return invalid(choiceIndex - 1);
-    // Per-day HP jitter so a memorised line from yesterday doesn't just replay,
-    // times the compounding ramp so late encounters are genuinely threatening.
-    const jitter = 1 + (randInt(rng, -TUNING.hpJitterPct, TUNING.hpJitterPct + 1) / 100);
-    const ramp = difficultyAt(encounterIndex);
-    const enemyHp = Math.max(1, Math.round(template.hp * jitter * ramp));
-    const enemy: Combatant = { hp: enemyHp, maxHp: enemyHp, block: 0 };
-    state.enemyWeak = 0;
-    state.enemyBuff = 0;
-    state.drawPile = shuffle(rng, state.deck);
-    state.hand = [];
-    state.discard = [];
-    state.log.push(`— encounter ${encounterIndex + 1}: ${template.name} (${enemy.hp} hp)`);
-
-    let turn = 0;
-    // ---- turn loop ---------------------------------------------------------
-    while (enemy.hp > 0 && state.player.hp > 0) {
-      // Player turn: block clears, energy resets, draw a fresh hand.
-      state.player.block = 0;
-      state.energy = TUNING.energyPerTurn;
-      state.discard.push(...state.hand);
-      state.hand = [];
-      drawCards(state, TUNING.handSize);
-
-      for (;;) {
-        const choice = next();
-        if (!choice) {
-          return finish(state, 'outOfChoices', cleared, {
-            view: combatView(state, encounterIndex, template, enemy, ramp, turn),
-          });
-        }
-
-        if (choice.k === 'end') break;
-        if (choice.k !== 'play') return invalid(choiceIndex - 1);
-
-        const cardId = state.hand[choice.i];
-        if (!cardId) return invalid(choiceIndex - 1);
-        const card = CARDS[cardId];
-        if (!card) return invalid(choiceIndex - 1);
-        if (card.cost > state.energy) return invalid(choiceIndex - 1);
-
-        // Resolve the card.
-        state.energy -= card.cost;
-        state.hand.splice(choice.i, 1);
-        state.discard.push(cardId);
-        if (card.energy) state.energy += card.energy;
-        if (card.selfDamage) state.player.hp -= card.selfDamage;
-        if (card.block) state.player.block += card.block;
-        if (card.draw) drawCards(state, card.draw);
-        if (card.damage) {
-          for (let h = 0; h < (card.hits ?? 1); h++) damage(enemy, card.damage);
-        }
-        if (card.weak) state.enemyWeak += card.weak;
-        state.log.push(`play ${card.name}`);
-
-        if (state.player.hp <= 0) return finish(state, 'died', cleared);
-        if (enemy.hp <= 0) break;
-      }
-
-      if (enemy.hp <= 0) break;
-
-      // Enemy turn: act on the telegraphed intent for this turn.
-      const intent: Intent = template.intents[turn % template.intents.length]!;
-      if (intent.kind === 'attack') {
-        const raw = resolveIntent(intent, ramp, state.enemyBuff, state.enemyWeak);
-        state.enemyWeak = 0; // Weaken applies to the next attack only
-        damage(state.player, raw);
-        state.log.push(`${template.name} attacks for ${raw}`);
-      } else if (intent.kind === 'block') {
-        enemy.block += intent.value;
-        state.log.push(`${template.name} blocks ${intent.value}`);
-      } else {
-        state.enemyBuff += intent.value;
-        state.log.push(`${template.name} empowers (+${intent.value})`);
-      }
-
-      if (state.player.hp <= 0) return finish(state, 'died', cleared);
-      turn++;
-    }
-
-    if (state.player.hp <= 0) return finish(state, 'died', cleared);
-    cleared++;
-    state.log.push(`cleared ${template.name}`);
-  }
-
-  return finish(state, 'won', cleared);
+  return runDepths(seed, issuedKitForDay(seed, 'none'), choices, 'daily');
 }
 
-/** Snapshot the combat the player is sitting in. Copies everything — the caller
- *  gets no handle on the sim's arrays or the enemy registry's intent rows. */
-function combatView(
-  state: SimState,
-  encounterIndex: number,
-  template: Enemy,
-  enemy: Combatant,
-  ramp: number,
-  turn: number
-): CombatView {
-  const intent = template.intents[turn % template.intents.length]!;
-  return {
-    phase: 'combat',
-    encounterIndex,
-    enemyId: template.id,
-    enemyName: template.name,
-    enemyHp: enemy.hp,
-    enemyMaxHp: enemy.maxHp,
-    enemyBlock: enemy.block,
-    intent: { kind: intent.kind, value: intent.value },
-    intentValue: resolveIntent(intent, ramp, state.enemyBuff, state.enemyWeak),
-    turn,
-    enemyWeak: state.enemyWeak,
-    enemyBuff: state.enemyBuff,
-    hp: state.player.hp,
-    maxHp: state.player.maxHp,
-    block: state.player.block,
-    energy: state.energy,
-    hand: [...state.hand],
-    drawCount: state.drawPile.length,
-    discardCount: state.discard.length,
-  };
-}
-
-function finish(
-  state: SimState,
-  outcome: RunOutcome,
-  cleared: number,
-  extra: { badChoiceIndex?: number; view?: RunView } = {}
+/**
+ * ENDLESS. `kit` is derived SERVER-SIDE from the stored hero and is never
+ * client-sent; the client sends only `{runId, seed, choices}`.
+ */
+export function simulateEndless(
+  seed: number,
+  choices: readonly RunChoice[],
+  kit: IssuedKit,
 ): RunResult {
-  const hp = Math.max(0, state.player.hp);
-  const score = outcome === 'invalid' ? 0 : scoreRun(cleared, hp);
-  return {
-    outcome,
-    cleared,
-    hp,
-    score,
-    deck: [...state.deck],
-    ...(extra.badChoiceIndex !== undefined ? { badChoiceIndex: extra.badChoiceIndex } : {}),
-    ...(extra.view !== undefined ? { view: extra.view } : {}),
-    log: state.log,
+  return runDepths(seed, kit, choices, 'endless');
+}
+
+/** The whole run: the loadout, then depths until the floor, a death, or the choices
+ *  run out. Every exit routes through the single `finish` at the bottom. */
+function runDepths(
+  seed: number,
+  kit: IssuedKit,
+  choices: readonly RunChoice[],
+  mode: Mode,
+): RunResult {
+  const run: Run = {
+    seed,
+    kit,
+    mode,
+    choices,
+    index: 0,
+    state: {
+      hero: { hp: kit.maxHp, maxHp: kit.maxHp, block: 0 },
+      kit,
+      bar: [],
+      ultimate: '',
+      cds: [],
+      energy: 0,
+      rage: 0,
+      boons: [],
+      heroStatuses: [],
+      seen: [],
+      shards: 0,
+      facts: emptyFacts(),
+      log: [],
+    },
+    depthMarks: [],
+    depthBands: Array.from({ length: TUNING.depths }, () => 'none' as DepthBand),
+    cleared: 0,
   };
-}
 
-/** How much tougher encounter `index` is than the first one. Compounding, so the
- *  back half of the gauntlet is where runs actually end — which is what makes
- *  "how far did you get" a meaningful score rather than a formality. */
-export const difficultyAt = (index: number): number =>
-  Math.pow(1 + TUNING.rampPerEncounter, index);
+  let step = readLoadout(run);
 
-/** The single comparable number. Clearing encounters dominates; leftover HP is the
- *  tie-break, which rewards playing efficiently rather than just surviving. */
-export function scoreRun(cleared: number, hp: number): number {
-  const full = cleared >= GAUNTLET.length ? TUNING.scoreFullClearBonus : 0;
-  return cleared * TUNING.scorePerEncounter + hp * TUNING.scorePerHpLeft + full;
-}
+  for (let depth = 1; step.k === 'go' && (mode === 'endless' || depth <= TUNING.depths); depth++) {
+    const enc = beginDepth(run, depth);
+    step = fightDepth(run, enc, depth);
+    if (step.k !== 'go') break;
 
-/** The day's seed. Same string for everyone on the same UTC day, so the whole
- *  subreddit gets the same run. */
-export const seedForDay = (day: string): number => {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < day.length; i++) {
-    h ^= day.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
+    if (run.state.hero.hp <= 0) {
+      markBand(run, depth, 'dead');
+      step = halt('died');
+      break;
+    }
+
+    run.cleared++;
+    run.state.shards += TUNING.shardsPerDepth;
+    if (enc.template.bossOf) run.state.facts.bossesFelled++;
+    markBand(run, depth, bandFor(run.state.hero));
+    run.state.log.push(`cleared depth ${depth}`);
+
+    if (mode === 'daily' && depth >= TUNING.depths) { step = halt('won'); break; }
+
+    // A boon after every stratum boss — except one the run ends on. A boon handed out
+    // at the moment the run stops modifies nothing, so the Daily's depth-12 boss pays
+    // the floor bonus instead.
+    if (isBossDepth(depth)) step = boonStep(run, depth);
+    if (step.k === 'go' && mode === 'endless') step = forkStep(run, depth);
   }
-  return h >>> 0;
-};
 
-/** UTC day key, e.g. '2026-07-25'. */
-export const dayKey = (epochMs: number): string => new Date(epochMs).toISOString().slice(0, 10);
+  return settle(run, step);
+}
+
+/** Choice 0, and only choice 0. `bar` and `ult` index the DAY'S POOL, not the catalog,
+ *  which is what lets a stored run replay forever without storing the pool. */
+function readLoadout(run: Run): Step {
+  const { kit, state } = run;
+  const choice = nextChoice(run);
+  if (!choice) {
+    return halt('outOfChoices', {
+      phase: 'loadout',
+      pool: [...kit.pool],
+      ultimates: [...kit.ultimates],
+      barMin: kit.barMin,
+      barMax: kit.barMax,
+      hp: state.hero.hp,
+      maxHp: state.hero.maxHp,
+    });
+  }
+  if (choice.k !== 'load') return INVALID;
+  if (choice.bar.length < kit.barMin || choice.bar.length > kit.barMax) return INVALID;
+  if (new Set(choice.bar).size !== choice.bar.length) return INVALID;
+  for (const index of choice.bar) {
+    if (!Number.isInteger(index) || index < 0 || index >= kit.pool.length) return INVALID;
+  }
+  if (!Number.isInteger(choice.ult) || choice.ult < 0
+    || choice.ult >= kit.ultimates.length) return INVALID;
+
+  state.bar = choice.bar.map((i) => kit.pool[i]!);
+  state.ultimate = kit.ultimates[choice.ult]!;
+  state.cds = state.bar.map(() => 0);
+  state.log.push(`loadout: ${state.bar.join(', ')} + ${state.ultimate}`);
+  return GO;
+}
+
+/**
+ * Stand up one depth's encounter and reset what a depth resets.
+ *
+ * **A depth is a fresh puzzle: statuses, cooldowns and rage all reset, and HP is the
+ * only thing that carries.** That is what "attrition is the pressure" means, and it is
+ * what stops the degenerate line of farming rage off depth 1's harmless enemy to walk
+ * into depth 4 with an ultimate already loaded. The design is silent on this; it is
+ * recorded here because the sim has to decide.
+ */
+function beginDepth(run: Run, depth: number): Encounter {
+  const { state } = run;
+  run.depthMarks.push(run.index);
+  const enc = buildEncounter(run.seed, depth, run.kit.rampScale);
+  if (!state.seen.includes(enc.template.id)) state.seen.push(enc.template.id);
+  state.facts.deepestDepth = depth;
+  state.heroStatuses = [];
+  state.cds = state.bar.map(() => 0);
+  state.rage = 0;
+  state.log.push(
+    `— depth ${depth} (${stratumForDepth(depth)}): ${enc.template.name} (${enc.hp} hp)`,
+  );
+  return enc;
+}
+
+/** Turns until the enemy dies, the player dies, or the dark catches up. */
+function fightDepth(run: Run, enc: Encounter, depth: number): Step {
+  const { state, kit } = run;
+  // HP compounds; damage trails it. See `TUNING.damageRampShare`.
+  const damageRamp = damageRampAt(depth, kit.rampScale);
+  const stratum = stratumForDepth(depth);
+
+  for (let turn = 0; enc.hp > 0 && state.hero.hp > 0; turn++) {
+    if (turn >= TUNING.turnsPerDepth) {
+      // The dark catches up. See `TUNING.turnsPerDepth` — this is what stops a
+      // damage-less bar spinning forever, on the client and on the server.
+      state.hero.hp = 0;
+      state.log.push(`the dark catches up at depth ${depth}`);
+      break;
+    }
+
+    // Start of the player's turn, in this exact order. Block is a decision about THIS
+    // turn, never a stockpile — the mockup's own tutorial copy says so.
+    state.hero.block = 0;
+    state.energy = kit.maxEnergy;
+    for (let i = 0; i < state.cds.length; i++) state.cds[i] = Math.max(0, state.cds[i]! - 1);
+    const regen = statusMagnitude(state.heroStatuses, 'regen');
+    if (regen > 0) state.hero.hp = Math.min(state.hero.maxHp, state.hero.hp + regen);
+    tickStatuses(state.heroStatuses);
+    state.facts.turns++;
+
+    const cast = playerTurn(run, enc, depth, stratum, damageRamp, turn);
+    if (cast.k !== 'go') return cast;
+    if (state.hero.hp <= 0 || enc.hp <= 0) break;
+
+    enemyTurn(run, enc, damageRamp);
+    if (state.hero.hp <= 0 || enc.hp <= 0) break;
+  }
+  return GO;
+}
+
+/** The player casts freely until they end the turn, the enemy dies, or they do. */
+function playerTurn(
+  run: Run,
+  enc: Encounter,
+  depth: number,
+  stratum: Stratum,
+  damageRamp: number,
+  turn: number,
+): Step {
+  const { state, kit } = run;
+  for (;;) {
+    const choice = nextChoice(run);
+    if (!choice) {
+      return halt('outOfChoices', combatView(state, enc, depth, stratum, damageRamp, turn));
+    }
+    if (choice.k === 'end') return GO;
+
+    if (choice.k === 'ult') {
+      // Rage-gated, never cooldown-gated. Requires full rage, spends all of it. The
+      // cast itself then earns its +1 back like any other damaging cast — that is the
+      // rage rule applied literally, not an exception for ultimates.
+      if (state.rage < kit.maxRage) return INVALID;
+      const ult = equipped(run, state.ultimate);
+      state.rage = 0;
+      state.facts.ultimatesFired++;
+      castAbility(state, enc, ult);
+      state.log.push(`ultimate: ${ult.name}`);
+      if (state.hero.hp <= 0 || enc.hp <= 0) return GO;
+      continue;
+    }
+
+    if (choice.k !== 'cast') return INVALID;
+    const slot = choice.i;
+    if (!Number.isInteger(slot) || slot < 0 || slot >= state.bar.length) return INVALID;
+    if (state.cds[slot]! > 0) return INVALID;
+    const row = equipped(run, state.bar[slot]!);
+    if (row.cost > state.energy) return INVALID;
+
+    state.energy -= row.cost;
+    state.cds[slot] = row.cd;
+    castAbility(state, enc, row);
+    state.log.push(`cast ${row.name}`);
+    if (state.hero.hp <= 0 || enc.hp <= 0) return GO;
+  }
+}
+
+/** Bleed, then the telegraphed intent — or nothing at all, if it is stunned. */
+function enemyTurn(run: Run, enc: Encounter, damageRamp: number): void {
+  const { state } = run;
+
+  // Bleed resolves at the start of its turn, outside the intent — which is why it is
+  // shown as a standing marker rather than folded into NOW/NEXT/THEN.
+  const bleed = statusMagnitude(enc.statuses, 'bleed');
+  if (bleed > 0) {
+    enc.hp -= bleed;
+    state.facts.damageDealt += bleed;
+    state.log.push(`${enc.template.name} bleeds for ${bleed}`);
+    if (enc.hp <= 0) return;
+  }
+
+  if (consumeStun(enc.statuses)) {
+    // Stun DELAYS, it never DELETES: the cycle position does not move, so the thing it
+    // was about to do is still the thing it will do next. If stun advanced the cycle it
+    // would be "press this to erase the scariest telegraph", every hard fight would
+    // have the same answer, and the threat track would become a lie.
+    state.log.push(`${enc.template.name} is stunned`);
+  } else {
+    const cycle = activeIntents(enc);
+    const intent = cycle[enc.cycle % cycle.length]!;
+    if (intent.kind === 'attack') resolveAttack(run, enc, intent, damageRamp);
+    else if (intent.kind === 'block') {
+      enc.block += intent.value;
+      state.log.push(`${enc.template.name} blocks ${intent.value}`);
+    } else {
+      enc.buff += intent.value;
+      state.log.push(`${enc.template.name} empowers (+${intent.value})`);
+    }
+    enc.cycle++;
+  }
+
+  tickStatuses(enc.statuses);
+}
+
+/** One telegraphed attack landing on the hero, through block, ethereal and thorns. */
+function resolveAttack(run: Run, enc: Encounter, intent: Intent, damageRamp: number): void {
+  const { state, kit } = run;
+  const total = resolveIntent(
+    intent, damageRamp, enc.buff, statusMagnitude(enc.statuses, 'weaken'),
+  );
+  // Weaken applies to the NEXT attack only, and is spent whether or not the attack
+  // got through.
+  enc.statuses = enc.statuses.filter((s) => s.id !== 'weaken');
+
+  const through = incomingToHp(enc, total, state.hero.block);
+  const etherealPct = traitMagnitude(enc.template, 'ethereal');
+  const usable = Math.floor(state.hero.block * (1 - etherealPct / 100));
+  state.hero.block = Math.max(0, state.hero.block - Math.min(usable, total));
+  state.hero.hp -= through;
+  state.facts.damageTaken += through;
+
+  if (through > 0) {
+    // +1 rage when an attack lands on HP. Fully blocked means no rage — TAKING THE HIT
+    // IS HOW YOU CHARGE, which is the tension the ultimate is built on. Once per
+    // attack, not per hit, exactly like a cast.
+    state.rage = Math.min(kit.maxRage, state.rage + 1);
+    const thorns = statusMagnitude(state.heroStatuses, 'thorns');
+    if (thorns > 0) {
+      enc.hp -= thorns;
+      state.facts.damageDealt += thorns;
+    }
+  } else {
+    state.facts.perfectBlocks++;
+  }
+  state.log.push(`${enc.template.name} attacks for ${total} (${through} through)`);
+}
+
+/** Three offers, or decline for shards. Boons target an ARCHETYPE, never an id. */
+function boonStep(run: Run, depth: number): Step {
+  const { state } = run;
+  const offers = boonOffers(run.seed, depth);
+  const choice = nextChoice(run);
+  if (!choice) {
+    return halt('outOfChoices', {
+      phase: 'boon',
+      depth,
+      offers: offers.map((b) => b.id),
+      hp: state.hero.hp,
+      maxHp: state.hero.maxHp,
+      bar: [...state.bar],
+      boons: [...state.boons],
+    });
+  }
+  if (choice.k === 'boon') {
+    const picked = offers[choice.i];
+    if (!picked) return INVALID;
+    state.boons.push(picked.id);
+    state.facts.boonsTaken++;
+    state.log.push(`boon: ${picked.name}`);
+    return GO;
+  }
+  if (choice.k === 'skip') {
+    state.shards += TUNING.shardsPerDeclinedBoon;
+    state.facts.boonsDeclined++;
+    state.log.push('boon declined');
+    return GO;
+  }
+  return INVALID;
+}
+
+/** Surface and bank, or descend and risk it. Endless only. */
+function forkStep(run: Run, depth: number): Step {
+  const { state, kit } = run;
+  for (;;) {
+    const choice = nextChoice(run);
+    if (!choice) {
+      return halt('outOfChoices', {
+        phase: 'fork', depth,
+        hp: state.hero.hp, maxHp: state.hero.maxHp, shards: state.shards,
+      });
+    }
+    // The consumable seam. Legal only BETWEEN depths — mid-fight healing breaks the
+    // telegraph maths the whole threat track rests on. Nothing generates a consumable
+    // until Stage 6, so `kit.consumables` is empty and every `use` is refused today;
+    // the VARIANT exists because a choice variant cannot be retrofitted into a
+    // verified list without breaking every stored run.
+    if (choice.k === 'use') {
+      if (!Number.isInteger(choice.i) || choice.i < 0
+        || choice.i >= kit.consumables.length) return INVALID;
+      state.facts.consumablesUsed++;
+      continue;
+    }
+    if (choice.k === 'surface') return halt('surfaced');
+    if (choice.k === 'descend') return GO;
+    return INVALID;
+  }
+}
+
+function markBand(run: Run, depth: number, band: DepthBand): void {
+  if (depth <= run.depthBands.length) run.depthBands[depth - 1] = band;
+}
+
+/** The ONE place a run is scored. An invalid run reports the choice that broke it and
+ *  is credited with nothing — never a partial score. */
+function settle(run: Run, step: Step): RunResult {
+  const { state, depthMarks, depthBands } = run;
+  if (step.k === 'invalid') {
+    return finish(state, 'invalid', 0, depthMarks, depthBands, { badChoiceIndex: run.index - 1 });
+  }
+  if (step.k === 'halt') {
+    return finish(state, step.outcome, run.cleared, depthMarks, depthBands,
+      step.view === undefined ? {} : { view: step.view });
+  }
+  return finish(state, 'won', run.cleared, depthMarks, depthBands);
+}
+// ---- the public surface ---------------------------------------------------------
+//
+// `sim.ts` stays the ONE import site for everything outside `src/shared/`: the client,
+// the server, the tests and the probe all import from here, and none of them changed
+// when this file was split.
+//
+// The modules behind it are internal structure, not a wider API. `hitEnemy`,
+// `armourAgainst`, `buildEncounter` and `drawDistinct` are deliberately NOT re-exported
+// and are now unreachable from outside the layer — which is a tighter surface than the
+// single file had, where everything was one import away.
+
+export { TUNING, MAX_RUN_CHOICES } from './tuning';
+export { dayKey, depthRng, issuedKitForDay, issuedPoolForDay, seedForDay } from './daily';
+export { damageRampAt, difficultyAt, enemyForDepth } from './encounter';
+export { effectiveAbility, resolveIntent } from './combat';
+export { scoreRun } from './report';
+export type {
+  BoonView, CombatView, DailyModifier, DepthBand, ForkView, IssuedKit, LoadoutView,
+  RunChoice, RunFacts, RunOutcome, RunResult, RunView, StatusRow,
+} from './simTypes';

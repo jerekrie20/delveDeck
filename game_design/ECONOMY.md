@@ -102,17 +102,44 @@ balance, so they are where the long tail goes.
 
 ### 3 · Consumables — the small sink
 
-Single-use, bought at the camp, carried into **the Endless only**.
+Single-use, bought at the camp, carried into **the Endless only**. **Three kinds, and
+three is the cap.**
 
-- Two or three kinds, no more. Something like: restore HP between depths · light one
-  extra threat slot for one depth · reroll a boon offer.
-- **Cannot enter the Daily.** Not as a choice, not as an item, not at all. The
-  `RunChoice` union has no `use` variant on the Daily path.
-- They are a **fork lubricant** — the thing that makes "one more depth" survivable
-  once, which is exactly where a consumable should sit.
+| | Restores | Used |
+|---|---|---|
+| **Draught** | HP | Between depths, in-run |
+| **Ember** | Energy — one extra for the next depth | Between depths, in-run |
+| **Ledger mark** | XP — a multiplier on what the run awards | Bought and burned at the camp; never in-run |
 
-**Deliberately not healing potions in combat.** Mid-fight healing breaks the
-telegraph maths that the whole threat track rests on. Between depths only.
+The first two are the **fork lubricant**: the thing that makes one more depth
+survivable *once*, which is exactly where a consumable should sit. The third is not a
+combat item at all, and that difference is structural rather than flavour:
+
+> **Draught and Ember are decisions inside the run. The Ledger mark is not.**
+
+That single split decides where each one lives in the code, and it is why the seam
+matters at Stage 1:
+
+- **Draught and Ember are `RunChoice` variants** — a consumable/encounter variant in
+  the verified list, exactly the seam `GAME_DESIGN.md` § The seams demands. Using one
+  is a replayable decision with a cost, and the server re-runs it like any other.
+- **The Ledger mark never enters the choice list.** It multiplies XP *at award time*,
+  server-side, from account state. Putting a pure meta-boost into the verified list
+  would widen the run format for something that cannot change what happened.
+
+**Deliberately not healing potions in combat.** Mid-fight healing breaks the telegraph
+maths the whole threat track rests on. **Between depths only** — which is also why
+Ember grants energy for the *next* depth rather than the current turn.
+
+**Cannot enter the Daily.** Not as a choice, not as an item, not at all. `simulateRun`
+takes two arguments; there is no account state to read a bag from, and the Daily path
+never emits a `use`.
+
+**A fourth kind is an unlock decision, not a content addition.** Three covers the two
+resources a run actually spends plus the meta-boost, and the fourth candidates all
+failed for the same reason: *light one extra threat slot* sells back foresight the
+lantern already owns, and *reroll a boon offer* rerolls a seeded offer, which makes
+two players' "same shaft" stop being the same shaft.
 
 ### 4 · Salvage — the faucet that feeds sink 1
 
@@ -134,6 +161,7 @@ delivers the whole "I can improve this" loop with one screen and no new content 
 | **Loot boxes** | No. |
 | **A second currency** | No. Nothing here needs a conversion gate. |
 | **Trading between players** | No. It turns a per-subreddit hero into a market, and markets need moderation this project cannot staff. |
+| **Gifting** | **No** — and it is the same call, not a softer one. A gift edge between accounts is a transfer graph, i.e. a market with better manners. [IDENTITY.md](IDENTITY.md) refuses it for cosmetics on the same grounds. **Nothing in this game moves between accounts.** |
 | **Daily-purchasable anything** | **Never.** See the rule at the top. |
 | **Timers, stamina, energy-to-play** | Never. The Daily is already one attempt; limiting Endless play is a monetisation pattern with no monetisation behind it. |
 
@@ -160,5 +188,5 @@ delivers the whole "I can improve this" loop with one screen and no new content 
 |---|---|---|
 | `RunResult.shards` | **1** | An output of the sim; retrofitting it means a run-format change |
 | `shards` on the hero | 5 | The first and only field of the first hero schema version |
-| A consumable slot in `RunChoice` | **1** | Using one is a decision inside a verified list. Retrofitting a choice variant breaks stored runs. |
+| A consumable slot in `RunChoice` | **1** | Using one is a decision inside a verified list. Retrofitting a choice variant breaks stored runs. It carries **Draught and Ember only** — the XP mark is an award-time multiplier and must never widen the run format. |
 | Salvage as a pure function | 6 | Server-side, deterministic, testable — value must never come from the client |

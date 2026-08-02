@@ -20,7 +20,7 @@ else is after the ship.
 | # | Screen | Stage | What it pins |
 |---|---|---|---|
 | 01 | **The Reddit post** — entry point | 4 | Play is one tap from the feed. Post shows today's stats + yesterday's grid shape, so it recruits before anyone opens it. `~4 MIN · ONE ATTEMPT`. |
-| 02 | **The camp** — hub | 2 (Daily door) / 6 / 8 | Three doors, one wall. Daily = gear-off and scored; Endless = gear-on and personal; Community = cooperative. The only warm screen in the game. |
+| 02 | **The camp** — hub | 2 (Daily door) / 6 / 8 | Three doors, one wall. Daily = gear-off and scored; Endless = gear-on and personal; Community = cooperative. The only warm screen in the game. **The landing screen**: the feed tap opens here, not in combat — see `GAME_DESIGN.md` § The first session. |
 | 03 | **Hero & abilities** — *interactive* | 2 | Where the deckbuilding went: **3–5 of 9, plus one of 3 ultimates**, locked for the delve. Tap to swap. **The 9 are drawn from a 24-ability catalog by the day's seed**, so this screen is a new puzzle daily — see [ABILITIES.md](ABILITIES.md). |
 | 04 | **Gear & stash** | 6 | **Eleven slots** now, not four — the mockup draws a subset. **Four *displayed* stats** (MAX HP · ATTACK · BLOCK · FORESIGHT) over many affix effects. Code-drawn rarity plates, six tiers — *zero new art assets*. Compare deltas inline. `STRIKE DMG`→**ATTACK** and `GUARD BLOCK`→**BLOCK**, because the day's basic attack often isn't Strike. Stash **grows**; salvage/reroll/ascend live here ([GEAR.md](GEAR.md)). |
 | 05 | **Lantern & shrine** | 7 | **The lantern is now a found gear slot**, not a purchase — the mockup's tier-buy is gone. The shrine keeps two jobs: **ascending your lantern** (which is how shards still buy foresight) and cosmetics, which recolour your flame so you see it in every frame of every fight and **never affect numbers** ([GEAR.md](GEAR.md)). |
@@ -53,10 +53,9 @@ them gets built as an unplanned fifth camp tile.
 | **Salvage / reroll / ascend** | Inside screen 04's stash, not a new screen | 6 |
 | **The haul** | A strip on the combat screen — you must be able to see what you stand to lose *while deciding at the fork* | 6 |
 | **Resume-run prompt** | On the camp, when an Endless run is in progress | 6 |
-| **Delver naming** | Once, at first Endless entry | 6 |
-| **🏕️ Your camp** | The hub screen (02) becomes personal — site, fire, objects, ledger | 7 |
-| **🏆 The trophy wall** | Inside the camp. **Only items you surfaced with.** | 7 |
-| **Visiting a camp** | One tap from any board row, read-only — works *within* a sub with no cross-install problem | 7 |
+| **🏕️ Your camp** | The hub screen (02) becomes personal — site, fire, objects, **a ledger showing both delves** | 7 |
+| **🏆 The trophy wall** | Inside the camp. **Only items you surfaced with**, and only while you still hold them — salvage takes one off the wall. Eleven on display, matching the gear slots. | 7 |
+| **Visiting a camp** | One tap from any board row, read-only — **including from another subreddit**, via a published snapshot in `redis.global`. Shows a unique-visit count, never a visitor list. | 7 |
 | **The store** | A tile on the shrine (05), never a wall in front of the game | 10 |
 | **The seven Endless beats** | Not a screen — coach cards fired by events, over days ([GAME_DESIGN.md](GAME_DESIGN.md)) | 6 |
 

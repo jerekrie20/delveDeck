@@ -268,8 +268,14 @@ boon writing into the registry poisons every later verification on that instance
 
 ### Cadence
 
-**A boon after every stratum boss** — depths 4, 8 and 12 in the Daily, and every
-fourth depth in Endless. Three boon decisions per daily run.
+**A boon after every stratum boss** — every fourth depth — **except one the run ends
+on.** In the Daily that means depths 4 and 8: **two boon decisions per daily run.**
+
+A boon handed out at the moment the run stops modifies nothing, so depth 12 pays the
+floor bonus instead, which is what [MODES.md](MODES.md) means by *"the floor's boon is
+moot"*. In the Endless the run continues past every boss, so every fourth depth pays.
+*(This file previously said three; that was a miscount of the same rule, corrected
+2026-08-01 when the sim was written against it.)*
 
 The mockup shows one at depth 6 (*"depth 5 cleared · shaman down"*), which is a
 different cadence. Boss-gated is chosen over depth-5-gated because it ties the

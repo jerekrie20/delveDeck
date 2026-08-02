@@ -89,6 +89,11 @@ board read `[]`). Both looked correct in review. Extend
   unprompted. Validate with `npm run type-check`, `npm run lint`, `npm run test`.
 - Devvit web only — never `@devvit/public-api` or "blocks" code.
 - Named exports, no default exports, no type casts, descriptive full-word names.
+- **Files under 400 lines, functions under 80** (comments and blanks don't count) —
+  `npm run lint` fails otherwise. Split by *what it is about*, never into a
+  `helpers.ts`. **`src/shared/` uses modules and plain objects, never classes**,
+  because that state is replayed, verified and persisted as JSON; `client/` and
+  `server/` may use classes. Full reasoning in `CODING_BIBLE.md` §1.9.
 - Never mutate the `ABILITIES` registry. Boons and gear mods fold over a **copy**
   via `effectiveAbility()`; the server process is long-lived and verifies many runs,
   so one write poisons every later verification on that instance.

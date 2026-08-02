@@ -68,10 +68,41 @@ the rarity ring, the tier tint, the glow, the affix list, the name. So:
 A Legendary Gravebite Axe and a Common Axe are the same 40th sprite with a different
 code-drawn frame around it. Ship a thousand items on forty sprites.
 
-**The failure mode to watch:** the first time someone wants a unique to look different
-from its base. Uniques are hand-authored, so a handful of bespoke sprites for the most
-famous ones is a *deliberate, counted* exception — not a precedent that every rare
-needs its own.
+### The exception: named items get their own sprite
+
+> ### One bespoke sprite per NAMED item. Never per roll.
+
+**Uniques and set pieces are hand-authored, so they may each have their own sprite.**
+Voidfang does not have to look like every other axe, and a Cindersworn coat does not
+have to look like every other coat. Named gear is *the* reason to keep delving
+([GEAR.md](GEAR.md)); an item that is famous and looks generic is a worse reward than
+one that is merely rare.
+
+This stays legal under Rule 1 for the same reason the base sprites do — each one is an
+independent static square that aligns with nothing — and it stays bounded because the
+exception is tied to a list that is already capped:
+
+| | Sprites |
+|---|---|
+| Base types (procedural loot rides these) | ≈40 |
+| **+ one per authored unique** | GEAR.md's unique list |
+| **+ one per authored set piece** | GEAR.md's set list × its pieces |
+| Every procedurally generated item, forever | **0 more** |
+
+That roughly doubles the gear art budget, and it buys the only art in the game a
+player will screenshot on purpose. It is worth it **only while the rule holds**.
+
+**What the rule refuses**, and this is the failure mode:
+
+- **A rarity is not a name.** `Legendary Gravebite Axe` is a procedural roll — it is
+  the axe sprite with a code-drawn frame. `epic` and `legendary` never earn a sprite;
+  only *authored* items do.
+- **The sprite ships with the row, never ahead of it.** Named items are backlog
+  content added forever after; each one's sprite is part of that row's cost. A batch
+  of sprites generated before the items exist is the asset-manifest failure mode
+  wearing a different hat.
+- **The count is GEAR.md's to change, not this file's.** Growing the named-item list
+  grows the art budget one-for-one, which is exactly the visibility this needs.
 
 Generation follows the recipe and the checklist below like everything else, and
 `tests/art.test.ts` enforces squareness on these exactly as it does on portraits.
@@ -98,6 +129,7 @@ proven, never before (Rule 2 of `AGENTS.md`, and the ordering that hurt last tim
 | Enemy portraits @128 | **8** | +22 | One per roster row; see BESTIARY.md |
 | Hero portrait | 0 | +1 | Generate @64, display centred @32 (see below) |
 | **Gear base sprites** | 0 | **≈40** | One per base *type*, never per item. Unbounded loot on a fixed sprite count. |
+| **Named-item sprites** | 0 | one per authored unique / set piece | The counted exception. Ships **with** the item's row, never in a batch ahead of it. |
 | **Lantern objects** | 0 | grows | The sellable cosmetic slot — see [IDENTITY.md](IDENTITY.md) |
 | **Camp objects** | 0 | grows | Trophy-wall and base decoration. **The site, fire and light stay CSS.** |
 | Card illustrations @128×176 | 14 | **−14** | **DELETE.** See below. |

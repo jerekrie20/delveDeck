@@ -379,6 +379,38 @@ slot machine and never come back.
 Screen 07 is explicit: **five beats, on depth 1 of the actual daily.** The board dims
 and exactly one tap is legal.
 
+### The first session — decided
+
+```
+feed  →  🏕️ CAMP  →  tutorial (5 beats, depth 1)  →  🏕️ CAMP  →  descend
+```
+
+**The camp is the landing screen, not combat**, on the first session and every session
+after it. The tap in the feed opens the app *at the camp*, with the Daily door lit and
+obvious; it does not drop a stranger straight into a fight.
+
+That costs one tap before the first enemy, and it buys the two things the design most
+needs a new player to know:
+
+- **There is a game here beyond four minutes.** A player who only ever sees a combat
+  screen never learns the Endless exists, never learns the camp is theirs, and reads
+  the whole product as a daily puzzle. The camp is where the three doors are, and
+  where everything this game sells eventually lives.
+- **The camp is seen twice before it is ever used.** Returning to it after the
+  tutorial — rather than descending straight out of the last beat — is what makes the
+  second visit read as *a place I came back to* instead of a menu I passed through.
+  The room is the thing being taught, and it is taught the way the beats are: by
+  being where you already are.
+
+**The one attempt is not spent by the tutorial.** The five beats run on depth 1 of the
+actual daily through a **physically separate choice list**, so the real descent after
+the second camp visit starts clean — the same separation that stops a practice run
+contaminating a leaderboard entry.
+
+**Do not add a fourth step.** No account prompt, no name, no cosmetic picker, no
+difficulty question. The delver is `u/you` ([IDENTITY.md](IDENTITY.md)), which is
+precisely why this funnel can be four screens long: there is nothing to set up.
+
 | Beat | Teaches |
 |---|---|
 | 1 · READ | NOW / NEXT / THEN — what the enemy will do |
@@ -570,14 +602,38 @@ rather than in what you happened to draw mid-fight. Headroom now comes from:
 
 ## Accounts — decided, because it is unfixable later
 
-**Devvit Redis is scoped per app installation, i.e. per subreddit.** Hero, shards,
-gear, level and streak are therefore **per-subreddit**. Your delver in r/foo is a
-different delver from your delver in r/bar.
+**Devvit Redis defaults to per app installation, i.e. per subreddit.** Hero, shards,
+gear, level and streak are **per-subreddit**. Your delver in r/foo is a different
+delver from your delver in r/bar.
 
-**Decision: accept it, and say so in the UI.** "Your delver in this sub" is
-defensible and arguably good — it gives each subreddit its own community. The
-alternative needs a cross-install migration Devvit does not make cheap, and choosing
-it after the first key is written is not a choice at all.
+**Decision: keep it per-sub, and say so in the UI.** "Your delver in this sub" is
+defensible and arguably good — it gives each subreddit its own community, and it is
+what makes a per-sub leaderboard mean something.
+
+**But it is a choice, not a limit — corrected.** An earlier draft of this section said
+per-installation was the only scope Devvit offers. That was wrong. **`redis.global`
+exists** (`RedisKeyScope.GLOBAL`; `@devvit/redis` describes it as state *across
+subreddit installations*, reachable from the `import { redis } from
+'@devvit/web/server'` already in `runStore.ts`). The per-sub hero survives the
+correction on its own merits; three things that were written off as impossible do not,
+and they are now merely unbuilt:
+
+| Uses the global scope | Where |
+|---|---|
+| **Cosmetic entitlements**, keyed by the buyer's `t2` | [IDENTITY.md](IDENTITY.md) — a purchase follows the account, never the sub |
+| **The published camp snapshot**, so a camp is visitable from any sub | [IDENTITY.md](IDENTITY.md) |
+| **Sub-vs-sub totals** | [MODES.md](MODES.md) — no longer blocked |
+
+**Nothing else goes in the global scope**, and three rules govern the things that do:
+every global key carries a season id and a subreddit segment from its first write;
+global state is additive and derived, never a per-run ledger; and it is written by
+every installation at once, so it is for totals and snapshots and never for anything
+on the submit path a per-sub key could hold. `@devvit/test`'s Redis mock scopes global
+keys too, so **rule 4 applies unchanged: no global call ships without a test against
+it.**
+
+**None of this touches the Daily.** Global or installation, the sim still takes a seed
+and a choice list.
 
 **Version from the first write.** Migration is one-way: a schema version constant and
 a migration step table from day one, never dropping unknown fields, never

@@ -10,20 +10,23 @@ import { expect } from 'vitest';
 import { test } from '../test';
 import { redisRunStore } from './runStore';
 import { getBoard, submitRun } from './run';
-import { seedForDay, simulateRun, type RunChoice } from '../../shared/sim';
+import { MAX_RUN_CHOICES, seedForDay, simulateRun, type RunChoice } from '../../shared/sim';
 
 const inAnHour = (): Date => new Date(Date.now() + 60 * 60 * 1000);
 
-/** A complete (losing) run for `day`: never play a card, never take a draft.
- *  Built by asking the sim what phase it is in rather than hard-coding a length,
- *  so it stays a *finished* run when the gauntlet is retuned. */
+/** A complete (losing) run for `day`: take the first legal bar, then never cast.
+ *  Built by asking the sim what phase it is in rather than hard-coding a length, so
+ *  it stays a *finished* run when the shaft is retuned. */
 function finishedRun(day: string): RunChoice[] {
   const seed = seedForDay(day);
   const choices: RunChoice[] = [];
-  for (let i = 0; i < 500; i++) {
+  for (let i = 0; i < MAX_RUN_CHOICES; i++) {
     const result = simulateRun(seed, choices);
     if (result.outcome !== 'outOfChoices') break;
-    choices.push(result.view?.phase === 'draft' ? { k: 'skip' } : { k: 'end' });
+    const phase = result.view?.phase;
+    if (phase === 'loadout') choices.push({ k: 'load', bar: [0, 1, 2], ult: 0 });
+    else if (phase === 'boon') choices.push({ k: 'skip' });
+    else choices.push({ k: 'end' });
   }
   return choices;
 }

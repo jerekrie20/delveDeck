@@ -15,85 +15,67 @@ the folder is right and the code is a bug.** Only I unlock it, and a change land
 folder first, then in code and TODO.md.
 
 
-## TASK 1 — I have answers to `game_design/QUESTIONS.md`
+## TASK — Stage 2: the UI, ported to the v5 shell
 
-I'll paste them at the start. For each one:
-
-1. Fold the answer into **the doc that owns it** (the file says which), written as a
-   decision with its reasoning — not as a Q&A entry.
-2. Update `TODO.md` if it changes the build order.
-3. **Delete the answered row from QUESTIONS.md.** When the file is empty, delete it.
-
-Two are marked ⛔ and involve other people's money or data — **Q1 (do Devvit purchase
-entitlements survive across subreddits?)** and **Q2 (is there state shared across app
-installations?)**. If I haven't answered those, leave them blocked and don't design
-around a guess.
-
-Do not start Task 2 until the answers are folded in.
-
-
-## TASK 2 — Stage 1: the sim migration, headless
-
-The real work, fully specced in `TODO.md` § Stage 1. Zero UI in this stage.
+Stage 1 is done and green. The sim is the new model; the client renders it in the OLD
+CSS. Stage 2 is the visual port, fully specced in `TODO.md` § Stage 2.
 
 **In this order:**
 
-1. **Rebuild `scratchpad/probe.ts` BEFORE the rewrite lands.** The instrument has to
-   exist to measure the change, not to explain it afterwards.
-2. `cards.ts` → `abilities.ts` + `boons.ts`. 24 abilities + 6 ultimates, tagged with
-   archetype / school / element / class. `ABILITIES.md` owns the shape; **you author the
-   numbers here and tune them against the probe.**
-3. `issuedPoolForDay(seed)` — 9 abilities + 3 ultimates, per the composition template.
-   The Daily draws **shared rows only** (no class-locked rows), so it stays account-blind.
-4. `enemies.ts` → 20 stratum templates + 4 wanderers + 6 bosses, with `kind`, `stratum`,
-   `threat`, `traits`, `bossOf`, and **boss phases** (a second intent cycle at an HP
-   threshold, shown on the track before it fires).
-5. The new `RunChoice` union, the turn loop, rage, per-depth RNG, two entry points.
-6. Rewrite `tests/policies.ts` and `tests/sim.test.ts`.
+1. Port the mockup CSS as the new `game.css` — strata tokens, plinth, depth spine,
+   stage, threat track, ability grid, buttons, meters.
+2. Hand → ability bar: 3 columns plus a full-width ultimate row. The ultimate is
+   **off-bar** — a 5-ability loadout is really six actions.
+3. Threat track: NOW / NEXT / THEN, lethal hatching, **unlit = locked with the reason
+   printed, never invisible**.
+4. Loadout (03), boon (08), descent (09), camp hub (02, **Daily door only**).
+5. Rename the 5–8 stratum `camp` → `hold` everywhere including `.d-camp` → `.d-hold`.
+6. Delete the card/hand CSS and `public/cards/` (14 files), then delete `CARD_ART` and
+   the two `art.test.ts` checks that read it. **The splash breaks with them** — it is a
+   fan of three card illustrations, and it renders inline in the feed, so whatever
+   replaces it stays featherweight.
+7. **Restore the palette drift-guard**: `art.test.ts` currently only proves
+   `ARCHETYPE_ACCENT` is complete and distinct. Cross-check it against
+   `--archetype-accent` in `game.css` once those tokens exist.
+8. Generate the hero portrait (@64, displayed centred @32 in a code-drawn plate).
 
-**`tests/art.test.ts` breaks in this stage**, not Stage 2 — it imports `CARDS` from
-`cards.ts`.
+**The camp is the landing screen.** The funnel is `feed → camp → tutorial → camp →
+descend` (`GAME_DESIGN.md` § The first session) — the feed tap opens the app at the
+camp, not in combat.
 
-### The four seams — cheap now, rewrites later
-
-`GAME_DESIGN.md` § The seams Stage 1 must leave. Do not skip these:
-
-- `RunResult.shards` · `RunResult.seen: string[]` · `RunResult.facts` (`RunFacts`)
-- **A consumable/encounter variant in `RunChoice`** — unused until Stage 6, but a choice
-  variant **cannot be retrofitted into a verified replay list** without breaking every
-  stored run. This is the one that gets missed.
-- `issuedKitForDay(seed, modifier)` with the modifier always `'none'`
-
-### The gate — measured, not asserted
-
-Run the probe across a seed sweep:
-
-- Greedy must fall short of a full clear **with real margin**
-- **Best loadout beats worst by ≥1 depth on most seeds** — sweep composition *and bar
-  size*, or the loadout screen is decoration
-- "Greedy" needs a loadout to mean anything: floor = **greedy on a median loadout**,
-  ceiling = **1-ply search on the best**. Report both plus the spread.
-- **Every seed must be playable** — assert the composition template holds across a large
-  sweep. One unplayable day is a lost day for a whole subreddit, with no reroll.
-- **Pick the depth curve now.** Compounding ~8% forever puts depth 200 near five
-  million× base HP. It must flatten toward linear, with difficulty past that coming from
-  traits and lantern strain. Changing an exponent after players hold depth records
-  invalidates every record.
-
-If greedy full-clears: **widen cooldowns and cut numbers before adding systems.**
+**GATE — visual.** `npm run preview` at **359×632**: `min-height` not `height: 100%`,
+`#app > * { flex: 0 0 auto }`, **End turn above the fold.**
 
 
 ## STATE
 
-- Branch **`design/lock-the-specification`**, 5 commits ahead of `main`, **not pushed**.
-- **73 checks green** — 65 tsx (`tests/all.ts`) + 8 vitest (`--project server`).
+- Branch **`design/lock-the-specification`**, 6 commits ahead of `main`, **not pushed**.
+  Stage 1 and the answers pass are uncommitted in the working tree.
+- **85 checks green** — 77 tsx (`tests/all.ts`) + 8 vitest (`--project server`).
   `npm run test` runs both; don't "simplify" it to one, that has silently skipped a
   whole suite before.
+- `npx tsx scratchpad/probe.ts` (~2 min) is the balance instrument. **Run it after any
+  ability, enemy or tuning change.** Current readings: floor 6.6/12, ceiling 11.6/12,
+  headroom 5.0 depths, composition template and both tutorial invariants clean across
+  3,000 seeds.
 - The server layer (tRPC, per-sub leaderboard, one-run-per-day guard, server-side replay
-  verification, daily scheduler post) is **built and carries forward unchanged.**
-- `public/` has 8 enemy portraits + 3 backdrops. The **14 card illustrations are deleted
-  at Stage 2** — don't reuse them in the ability tile; that means re-cropping, which
-  means a pipeline.
+  verification, daily scheduler post) carries forward. `StoredRun` is now **version 1**,
+  which rejects every run written before Stage 1 — harmless under the 30-day TTL.
+- `public/` has 8 enemy portraits (repointed at the new roster ids) + 3 backdrops. **22
+  of the 30 roster rows have no portrait**; the renderer degrades to no image, which is
+  deliberate — ART.md ships names and numbers first.
+
+### Open questions for me, from Stage 1
+
+- **`game_design/QUESTIONS.md` has one row left — Q15**, leaderboard moderation. It has
+  been rewritten with four concrete options and a recommendation; it is not blocking.
+- **Rage and cooldowns reset at every depth.** The design was silent and the sim had to
+  decide; the reasoning is in `sim.ts` at the depth loop. Tell me if you want rage to
+  carry, because "take hits on depth 1 to walk into the depth-4 boss with an ultimate
+  loaded" is a real and arguably good strategy that this closes off.
+- **Gate 1's threshold is now "rare, not impossible"** (≤1% of loadout-days full-clear)
+  rather than zero. `TODO.md` § Stage 1 explains why zero is unreachable without also
+  putting the floor beyond the ceiling.
 
 
 ## RULES THAT SHAPE THIS PROJECT
@@ -107,9 +89,12 @@ If greedy full-clears: **widen cooldowns and cut numbers before adding systems.*
    signatures all fold over a *copy* via `effectiveAbility()`. The server process is
    long-lived; one write poisons every later verification.
 5. **No new Redis call without a test against `@devvit/test`'s mock.** The wrapper does
-   not behave like raw Redis and it has bitten this repo twice.
+   not behave like raw Redis and it has bitten this repo twice. **This now includes
+   `redis.global`**, which exists and which entitlements, camp snapshots and sub-vs-sub
+   totals are specced against.
 6. **No art that animates or aligns.** Static squares only, enforced by
-   `tests/art.test.ts`. Gear sprites are legal — **one per base TYPE, never per item.**
+   `tests/art.test.ts`. Gear sprites are legal — one per base TYPE, never per item,
+   with authored uniques and set pieces as the counted exception.
 7. Verify any layout change at **359×632**, not just desktop.
 8. Prefer fixing balance in `TUNING` + the probe over adding systems.
 

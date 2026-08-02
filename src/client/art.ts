@@ -22,7 +22,7 @@
 // `tests/art.test.ts` enforces it; `tools/crop-frame.ts` exists to cut a frame out
 // of an inherited strip offline if one is ever needed again.
 
-import type { Rarity } from '../shared/cards';
+import type { Archetype } from '../shared/abilities';
 
 /** Card id → 128x176 full-bleed illustration. */
 export const CARD_ART: Record<string, string> = {
@@ -45,13 +45,13 @@ export const CARD_ART: Record<string, string> = {
 /** Enemy id → static portrait (128px or 136px square). */
 export const ENEMY_ART: Record<string, string> = {
   ratling: '/enemies/ratling.png',
-  scrapper: '/enemies/scrapper.png',
-  brute: '/enemies/brute.png',
-  shaman: '/enemies/shaman.png',
-  hound: '/enemies/hound.png',
-  sentinel: '/enemies/sentinel.png',
-  wraith: '/enemies/wraith.png',
-  chieftain: '/enemies/chieftain.png',
+  caveHound: '/enemies/hound.png',
+  goblinScrapper: '/enemies/scrapper.png',
+  goblinBrute: '/enemies/brute.png',
+  goblinShaman: '/enemies/shaman.png',
+  boneSentinel: '/enemies/sentinel.png',
+  gloomWraith: '/enemies/wraith.png',
+  goblinChieftain: '/enemies/chieftain.png',
 };
 
 /** Backdrop behind the combat panel, chosen by which enemy you're facing so the
@@ -66,26 +66,35 @@ export const BACKDROP_ART: Record<string, string> = {
  *  camp, undead in the crypt. */
 const BACKDROP_FOR_ENEMY: Record<string, string> = {
   ratling: 'warrens',
-  hound: 'warrens',
-  scrapper: 'camp',
-  brute: 'camp',
-  shaman: 'camp',
-  chieftain: 'camp',
-  sentinel: 'crypt',
-  wraith: 'crypt',
+  caveHound: 'warrens',
+  goblinScrapper: 'camp',
+  goblinBrute: 'camp',
+  goblinShaman: 'camp',
+  goblinChieftain: 'camp',
+  boneSentinel: 'crypt',
+  gloomWraith: 'crypt',
 };
 
-/** Rarity → the accent colour its code-drawn frame is stroked in. Frames are
- *  drawn in CSS, never generated — an image per rarity would be four more files
- *  that can drift out of sync with the palette.
+/** Archetype → the accent colour its code-drawn tile is stroked in. Tiles are drawn
+ *  in CSS, never generated — an image per tile would be seven more files that can
+ *  drift out of sync with the palette.
  *
- *  These MIRROR the `--rarity-accent` values in `game.css`, which is where they
+ *  **The mockup keys this on RARITY, and abilities do not have one.** ABILITIES.md
+ *  tags every row with archetype / school / element / class and no rarity at all, so
+ *  the tile's accent keys on ARCHETYPE instead — which is also the axis the daily
+ *  draw, boon targeting and class weighting already use. Recorded here rather than
+ *  changed silently; Stage 2 owns the visual port.
+ *
+ *  These MIRROR the `--archetype-accent` values in `game.css`, which is where they
  *  are actually applied. `tests/art.test.ts` fails if the two drift apart. */
-export const RARITY_ACCENT: Record<Rarity, string> = {
-  starter: '#5a6070',
-  common: '#e6e8ee',
-  uncommon: '#5b9bd5',
-  rare: '#d4a843',
+export const ARCHETYPE_ACCENT: Record<Archetype, string> = {
+  strike: '#e6e8ee',
+  guard: '#5a6070',
+  burst: '#d4a843',
+  wall: '#5b9bd5',
+  counter: '#9b7fd4',
+  tempo: '#6fc28a',
+  control: '#c96a6a',
 };
 
 export function cardArt(cardId: string): string | undefined {

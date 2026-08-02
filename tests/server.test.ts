@@ -14,7 +14,7 @@ import {
   isSubmittableDay, LATE_SUBMIT_GRACE_MINUTES,
 } from '../src/server/core/run';
 import type { BoardScore, RunStore } from '../src/server/core/runStore';
-import { seedForDay, simulateRun, scoreRun, type RunChoice } from '../src/shared/sim';
+import { seedForDay, simulateRun, scoreRun, TUNING, type RunChoice } from '../src/shared/sim';
 
 describe('server (M2)');
 
@@ -100,8 +100,9 @@ await check('a submitted score is RECOMPUTED, never taken from the client', asyn
 
 await check('an illegal choice list is rejected and stores nothing', async () => {
   const store = fakeRunStore();
-  // 'draft' is never the first decision of a run — the sim refuses it.
-  const result = await submitRun(store, DAY, SUB, 'mallory', [{ k: 'draft', i: 99 }], NOW);
+  // A cast is never the first decision of a run — choice 0 is the loadout, so the
+  // sim refuses this outright.
+  const result = await submitRun(store, DAY, SUB, 'mallory', [{ k: 'cast', i: 99 }], NOW);
   assert.equal(result.ok, false);
   assert.equal(await hasSubmitted(store, DAY, SUB, 'mallory'), false);
   assert.equal(store.keys.size, 0, 'a rejected run must leave no trace');
@@ -232,7 +233,7 @@ await check('a stored run REPLAYS to the score it was awarded (the social hook)'
   assert.equal(scoreRun(replayed.cleared, replayed.hp), stored.score);
   assert.equal(replayed.cleared, stored.cleared);
   assert.equal(replayed.hp, stored.hp);
-  assert.deepEqual(replayed.deck, stored.deck);
+  assert.deepEqual(replayed.bar, stored.bar);
 });
 
 await check('fetching a run that was never submitted returns null', async () => {
@@ -289,5 +290,10 @@ await check('a straddling run scores against the day it was PLAYED', async () =>
 /** A run that ends the turn until the player dies — a legal, complete, terrible
  *  submission. Used as the low-score baseline for board ordering. */
 function deathLine(): RunChoice[] {
-  return Array.from({ length: 400 }, () => ({ k: 'end' }) as RunChoice);
+  // A loadout is choice 0 of every run, so a line that starts with `end` is not a bad
+  // run — it is an illegal one, and submit refuses it before it can reach the board.
+  return [
+    { k: 'load', bar: [0, 1, 2], ult: 0 },
+    ...Array.from({ length: TUNING.turnsPerDepth + 5 }, () => ({ k: 'end' }) as RunChoice),
+  ];
 }

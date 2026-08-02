@@ -47,6 +47,29 @@ counterpart is `game_design/`.
 8. **Versioned persistence.** Any stored shape change = a version bump + an explicit
    migration + a migration test. Migration is one-way; never drop unknown fields,
    never downgrade, never throw.
+9. **Cohesion over size.** A file has **one subject**; a function has **one job**.
+   When either outgrows what fits in your head, split it by *what it is about* — never
+   into a `helpers.ts` or a `utils.ts`, which are piles with a filename.
+   **Enforced at 400 lines per file and 80 per function** (§4), skipping comments and
+   blanks. Those numbers are a **tripwire, not a target**: a 390-line file doing three
+   jobs is still wrong, and a data registry that is long because it has a lot of rows
+   is right. A rule nothing checks is a rule that erodes — see `ART.md`'s invented,
+   unenforced, later-withdrawn image cap for what that costs.
+   - **Group by bundling parameters, not by hiding state.** `hitEnemy(state, enc,
+     ability, raw)` is the smell; a `Run` bundle passed to a step is the fix.
+   - **`src/shared/` uses modules and plain objects — never classes.** This is not a
+     style preference. That state is replayed by the server to verify a score and is
+     persisted as JSON for Endless run resume, so it has to survive a round-trip
+     unchanged; a class instance needs a hydration layer, and that is a second place
+     the shape can drift on the one path where drift means a wrong leaderboard. It is
+     also the layer where `simulateRun.length === 2` is load-bearing — a config object
+     is a field you can add invisibly, and a signature is not.
+   - **`src/client/` and `src/server/` may use classes**, where state is genuinely
+     mutable, long-lived, and never verified or serialised.
+   - Principle 6 still binds and constrains this: content is **rows**, and a new
+     mechanic is **one field**. `class FireballAbility extends SpellAbility` is the
+     effect-interpreter failure mode with better syntax, and it is what the
+     predecessor died of.
 
 ## 2. Project structure
 
@@ -59,9 +82,18 @@ delvedeck/
 ├── TODO.md               # build order, in STAGES
 ├── devvit.json           # Devvit config: entrypoints, menu/scheduler/trigger mappings
 ├── src/
-│   ├── shared/           # PURE. No I/O, no DOM, no Math.random.
-│   │   ├── sim.ts        #   simulateRun(seed, choices) + TUNING — the whole game
-│   │   ├── cards.ts      #   → abilities.ts + boons.ts at Stage 1
+│   ├── shared/           # PURE. No I/O, no DOM, no Math.random, no classes (§1.9).
+│   │   ├── sim.ts        #   THE ENTRY POINT: simulateRun/simulateEndless + the loop.
+│   │   │                 #   Everything outside src/shared/ imports from here; the
+│   │   │                 #   modules below are internal structure, not a wider API.
+│   │   ├── tuning.ts     #   TUNING + MAX_RUN_CHOICES — every number, one place
+│   │   ├── simTypes.ts   #   choices, kit, views, facts, result. Types only.
+│   │   ├── daily.ts      #   everything the seed derives: pool, kit, sub-streams
+│   │   ├── encounter.ts  #   who stands at a depth, and which cycle they run
+│   │   ├── combat.ts     #   how a cast lands: damage, block, statuses, traits
+│   │   ├── report.ts     #   the live view, the bands, the score, `finish`
+│   │   ├── abilities.ts  #   24 ability rows + 6 ultimates
+│   │   ├── boons.ts      #   boon rows, targeting an ARCHETYPE never an id
 │   │   ├── enemies.ts    #   monster rows + intent cycles
 │   │   ├── rng.ts        #   seeded mulberry32
 │   │   └── transformer.ts
@@ -99,6 +131,10 @@ in-memory fake. Redis access lives in `core/*`, never in routes.
   code can't ("block clears at the START of your turn"), never narrate the obvious.
 - **Named exports only. No default exports. No type casts** (`as` is a smell; a
   validated parse boundary is the deliberate exception).
+- **Files stay under 400 lines and functions under 80** — comments and blanks don't
+  count, so explaining yourself is free. `npm run lint` enforces both. The reasoning,
+  and the rule about where classes may live, are in §1.9. If a file is at the limit,
+  the answer is a second module with a name, not a terser file.
 - Interfaces for object shapes, type aliases for unions and functions.
 - Formatting is Prettier's problem (`npm run prettier`); don't hand-align.
 - Errors: routes catch, log with the route name, return `{ error }` + status.

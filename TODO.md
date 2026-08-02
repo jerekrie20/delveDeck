@@ -23,13 +23,16 @@ forward; its combat model does not.
 | | | Carries forward? |
 |---|---|---|
 | **M0** — the sim | `simulateRun(seed, choices)`, pure + deterministic | **Rewritten** at Stage 1. The *contract* survives; the deck does not. |
-| **M1** — the client | Full DOM game, no client-side game state | Shell survives; CSS and hand UI replaced at Stage 2. |
+| **M1** — the client | Full DOM game, no client-side game state | **Ported at Stage 1** to the new model in the old CSS (901 → ~560 lines). Stage 2 puts the v5 shell on it. |
 | **M2** — the daily | tRPC, Redis, per-sub leaderboard, server-side replay verification, one-run-per-day guard, daily scheduler post | **Yes, wholesale.** This is the asset. |
 | **M3** — the art | 25 bespoke images | 8 portraits kept, 3 backdrops parked, **14 card illustrations deleted** at Stage 2. |
-| **M3.5** — tutorial | 15 steps, templated copy, separate choice list | **Shrunk to 5 beats** at Stage 3. Both invariants survive. |
+| **M3.5** — tutorial | 15 steps, templated copy, separate choice list | **Deleted at Stage 1** with the deck it was written against. Rebuilt as 5 beats at Stage 3; **both invariants already survive**, as a 2,000-seed sweep in `sim.test.ts`. |
 
-68 checks green. `tests/`: `sim.test.ts` (16), `server.test.ts` (15), `art.test.ts`
-(13), `tutorial.test.ts` (16), plus the server vitest project.
+**85 checks green** after Stage 1. `tests/`: `sim.test.ts` (45), `server.test.ts`
+(20), `art.test.ts` (12), plus 8 in the server vitest project. `tutorial.test.ts` was
+deleted with the deck it tested; Stage 3 rebuilds it. **`npm run test` runs both
+halves — a tsx pass and a vitest pass — and collapsing it to one has already silently
+skipped an entire suite once.**
 
 **Open items inherited:**
 
@@ -50,8 +53,11 @@ forward; its combat model does not.
 - [x] `game_design/` written from `daily-delve-v5.html`
 - [x] `LORE.md` transcribed from infinite-delve and re-banded to the v5 strata
 - [x] ART_BIBLE §1 (the grim-glow recipe + gotchas) folded into `game_design/ART.md`
-- [x] **Account scope settled** — hero state is **per-subreddit**, because Devvit
-      Redis is scoped per app installation. Unfixable after the first key is written.
+- [x] **Account scope settled** — hero state is **per-subreddit**, the Devvit Redis
+      default scope. Unfixable after the first key is written.
+      *(Corrected 2026-08-01: `redis.global` exists, so per-sub is a deliberate choice
+      rather than the only option. Entitlements, camp snapshots and sub-vs-sub totals
+      use the global scope; nothing else does. See `GAME_DESIGN.md` § Accounts.)*
 - [x] Three mockup self-contradictions resolved and recorded
 - [x] Audit: 25 open questions + 20 contradictions → `game_design/OPEN_QUESTIONS.md`
 
@@ -70,123 +76,155 @@ ability bar with no daily variety, which put the project's top risk in the red.
 - [ ] Commit infinite-delve's 16 modified + 11 untracked files to a
       `wip/paper-doll` branch, push, set that repo read-only
 
-## Stage 1 — sim migration, headless
+## Stage 1 — sim migration, headless ✅
 
-Zero UI in this stage. The deck becomes a seeded ability pool plus a chosen bar —
-a **simplification** of the sim (no draw pile, no shuffle, no hand) with one new
-piece (the daily draw).
+Zero UI in this stage. The deck became a seeded ability pool plus a chosen bar — a
+**simplification** of the sim (no draw pile, no shuffle, no hand) with one new piece
+(the daily draw).
 
-- [ ] **Rebuild `scratchpad/probe.ts` BEFORE the rewrite lands.** The instrument has
-      to exist to measure the change, not to explain it afterwards.
-- [ ] `src/shared/cards.ts` → `abilities.ts` + `boons.ts` — **24 abilities + 6
-      ultimates**, each tagged with one of the 7 archetypes. Numbers authored here
-      and tuned against the probe; `ABILITIES.md` owns the shape, not the values.
-      Same plain-numeric-fields philosophy — **keep the "no lying tooltips" test.**
-- [ ] **`issuedPoolForDay(seed)`** — 9 abilities + 3 ultimates per the composition
-      template (1 `strike` + 1 `guard` + 7 with ≥1 each of burst/wall/hybrid). Reuse
-      the weighted distinct-draw loop already in `sim.ts` (`offerCards`).
-  - [ ] **Test: the template holds on every seed in a large sweep.** One unplayable
-        day is a lost day for an entire subreddit, with no way to reroll it.
-  - [ ] **Test: the two tutorial invariants hold on every seed** — two casts of the
+- [x] **Rebuilt `scratchpad/probe.ts` BEFORE the rewrite landed.** The instrument
+      existed to measure the change rather than explain it afterwards — and it earned
+      its keep twice on day one (see the gate below).
+- [x] `src/shared/cards.ts` → `abilities.ts` + `boons.ts` — **24 abilities + 6
+      ultimates**, each tagged archetype / school / element. Numbers authored here and
+      tuned against the probe. **The "no lying tooltips" test survives**, widened to
+      cover hit counts, status riders and `ignoresBlock`.
+- [x] **`issuedPoolForDay(seed)`** — 9 abilities + 3 ultimates per the composition
+      template (1 `strike` + 1 `guard` + 7 with ≥1 each of burst/wall/counter), drawn
+      from **shared rows only**, so the Daily stays account-blind.
+  - [x] **Test: the template holds on every seed** — 2,000 in the suite, 3,000 in the
+        probe. Zero failures.
+  - [x] **Test: the two tutorial invariants hold on every seed** — two casts of the
         day's `strike` leave depth 1 alive but low; the day's `guard` fully absorbs
-        depth 1's opening attack.
-- [ ] `src/shared/enemies.ts` → the roster: **20 stratum templates + 4 wanderers + 6
-      bosses**, each with `kind`, `stratum`, `threat` and (for bosses) `bossOf`.
-      Author turn-based intent cycles by hand from the five `kind` shapes; bosses get
-      4 beats, regulars 3.
-  - [ ] Seeded per-depth pick from the stratum pool + wanderers; bosses fixed at
-        depths 4, 8, 12; threat rank orders the picks within a stratum.
-  - [ ] **Boss phases** — a second `intents` array plus an HP threshold. The threat
-        track shows the new cycle **before** you end your turn, so a phase change is
-        never a surprise. One field, and it turns a boss into a fight with a hinge.
-  - [ ] **Choose the depth curve now, not after Endless ships.** Compounding ~8%
-        forever puts depth 100 near 2,200× base HP and depth 200 near five million×.
-        It must flatten toward linear with depth, with difficulty past that coming
-        from traits and lantern strain — and numbers abbreviating on display.
-        **Changing an exponent after players hold depth records invalidates them all.**
-- [ ] New `RunChoice` union: `load` / `cast` / `ult` / `end` / `boon` / `skip` /
-      `descend` / `surface`. `draft` and `play` deleted.
-  - [ ] `load` validation: **index 0 only**, `bar.length` 3–5, distinct in-range
-        indices, `ult` one of the three offered. `bar`/`ult` index the **day's pool**,
-        not the catalog, so a stored run replays without storing the pool.
-  - [ ] `StoredRun` gains a version field — note it has **none today**, so the first
-        version rejects every stored run (harmless under the 30-day TTL). `deck:
-        string[]` → the bar, which also surfaces in `SubmitResult.deck`.
-  - [ ] `runChoiceSchema` in `src/server/trpc.ts` updated to match, and
-        **`submitInput`'s `.min(1).max(500)` re-derived** from the new choice model —
-        500 was sized for card plays.
-  - [ ] Boons target an **archetype**, never an ability id — Strike may not have been
-        issued. Cadence: after every stratum boss.
-- [ ] `SimState`: `cds[]` **parallel to the bar by SLOT INDEX**, not keyed by
-      ability id. `boons: string[]` resolved through `effectiveAbility()`, **never
-      folded in.**
-- [ ] Turn order at the **start** of the player's turn: `block = 0`,
+        depth 1's opening attack. Zero failures across 2,000.
+- [x] `src/shared/enemies.ts` → the roster: **20 stratum templates + 4 wanderers + 6
+      bosses**, each with `kind`, `stratum`, `threat`, `traits`, `tags` and (for
+      bosses) `bossOf`. Intent cycles authored by hand from the five `kind` shapes;
+      bosses get 4 beats, regulars 3.
+  - [x] Seeded per-depth pick from the stratum pool + wanderers; bosses fixed at 4, 8,
+        12; threat bands order the picks so depth 1 is always gentle without being
+        pinned to one enemy.
+  - [x] **Boss phases** — a second `intents` array plus an HP threshold, read by the
+        same function the threat track reads, so the new cycle shows up *before* you
+        end your turn.
+  - [x] **The depth curve is chosen.** Compounding to a knee at depth 20, then linear
+        at the same slope — no cliff. Depth 200 lands near 71× base HP instead of five
+        million×, and it is monotonic the whole way. A test pins the shape.
+  - [x] **HP and damage ramp at DIFFERENT rates** (`TUNING.damageRampShare`). The
+        probe found this: the hero's max HP never grows inside a run, so applying the
+        HP ramp to damage put the floor boss's biggest beat at 70 against a 50 HP
+        hero — not hard, arithmetically unreachable.
+- [x] New `RunChoice` union: `load` / `cast` / `ult` / `end` / `boon` / `skip` /
+      `use` / `descend` / `surface`. `draft` and `play` deleted.
+  - [x] `load` validation: index 0 only, `bar.length` 3–5, distinct in-range indices,
+        `ult` one of the three offered. `bar`/`ult` index the **day's pool**.
+  - [x] `StoredRun` gained `version` — it had none, so version 1 rejects every run
+        written before it (harmless under the 30-day TTL, and the only safe
+        behaviour: a wrong replay is worse than a missing one). `deck` → `bar`, which
+        also renamed `SubmitResult.deck`.
+  - [x] `runChoiceSchema` updated, and **`submitInput`'s cap re-derived** —
+        `MAX_RUN_CHOICES` now falls out of depths × turn cap × energy budget instead
+        of the retired 500.
+  - [x] Boons target an **archetype**, never an ability id. Cadence: after every
+        stratum boss **except one the run ends on** — so two per daily run, at 4 and 8.
+- [x] `SimState`: `cds[]` **parallel to the bar by SLOT INDEX**. `boons: string[]`
+      resolved through `effectiveAbility()`, never folded in.
+- [x] Turn order at the **start** of the player's turn: `block = 0`,
       `energy = maxEnergy`, `cds[i] = max(0, cds[i] - 1)`
-- [ ] Rage: +1 per damaging cast (**once per cast, not per hit**), +1 when an enemy
-      attack lands on HP, plus an ability's own `rage`. Ult requires
-      `rage >= maxRage`, spends all.
-- [ ] `effectiveAbility(state, slot)` folds `kit.mods` then `state.boons` over a
-      **copy**. **Never mutate the `ABILITIES` registry** — the server process is
-      long-lived and one boon writing into it poisons every later verification.
-- [ ] Per-depth RNG sub-streams:
-      `depthRng = d => createRng(seed ^ Math.imul(d + 1, 0x9e3779b1))`
-- [ ] **Two entry points over one private core:**
-      `simulateRun(seed, choices)` and `simulateEndless(seed, choices, kit)`, both
-      delegating to `runDepths(kit, choices)`; `issuedKitForDay(seed)` builds the
-      Daily's kit from the seed alone
-  - [ ] **Test: `simulateRun.length === 2`.** Crude and deliberate — it is what
-        stops an optional `kit?` letting gear into the verified Daily.
-- [ ] `CombatView` gains `threat: Intent[]` (**always length 3**, post-ramp /
-      buff / weak so the telegraph cannot lie), `lethal`, `bar`, `cds`,
-      `rage`/`maxRage`/`ultReady`, `depth`, `stratum`
-- [ ] `RunResult` gains `depthMarks: number[]` (choice index per depth → the
-      scrubber) and `depthBands` (→ the share grid)
-- [ ] **THE FOUR SEAMS.** Cheap now, rewrites later. See `GAME_DESIGN.md` § The seams
-      Stage 1 must leave.
-  - [ ] `RunResult.shards` — already computed; emit it
-  - [ ] `RunResult.seen: string[]` — enemy ids met. Feeds the Codex at Stage 8;
-        without it the Codex means re-simulating every historical run, i.e. never
-  - [ ] `RunResult.facts` (`RunFacts`) — flat counters (damage taken, turns, perfect
-        blocks, ultimates fired, abilities used, boons taken, deepest depth…). Feeds
-        deeds at Stage 9. ~20 lines.
-  - [ ] **A consumable/encounter variant in `RunChoice`** — unused until Stage 6, but
-        a choice variant **cannot be retrofitted into a verified list** without
-        breaking every stored run. This is the one that gets missed.
-  - [ ] `issuedKitForDay(seed, modifier)` — modifier always `'none'` at launch, so a
-        future weekly Daily variant ships without a run-format change
-- [ ] Status effects: the six from `ABILITIES.md`, as `{ id, magnitude, turns }` rows.
-      **Stun must not advance the intent cycle** — it delays, it never deletes, or the
-      threat track becomes a lie.
-- [ ] **Schools and elements** (`CLASSES.md`): a `school` and optional `element` tag
-      on every ability row. **A school never multiplies a number** — it decides which
-      enemy trait bites. Elements carry one of the six existing status riders; no new
-      mechanic.
-- [ ] Enemy traits: the five from `BESTIARY.md`, one numeric field each. `armoured`
-      counters physical, `warded` counters elemental riders, `hybrid` takes half of
-      each — that is the whole resistance system, and there is no matrix. A trait
-      never changes the intent cycle, only how damage resolves.
-- [ ] `issuedPoolForDay` weights take **archetype AND school**, so a class or spec is
-      a weight set plus one signature field — not a separate ability list
-- [ ] **Do not reproduce two mockup bugs:** its lethality check ignores block
-      (compare against `max(0, incoming - block)`), and its `inc()` is 1-based
-      (**keep `turn` 0-based**)
-- [ ] Rewrite `tests/policies.ts` and `tests/sim.test.ts`
-- [ ] **`tests/art.test.ts` breaks in THIS stage, not Stage 2** — it imports `CARDS`
-      from `src/shared/cards.ts`. Repoint it at the ability registry; its three
-      card-illustration checks (`:39`, `:57`, `:79`) die at Stage 2 with the art.
+- [x] Rage: +1 per damaging cast (**once per cast, not per hit**), +1 when an enemy
+      attack lands on HP, plus an ability's own `rage`. Ult requires full rage, spends
+      all of it.
+- [x] `effectiveAbility(base, mods, boons)` folds over a **copy**. A test snapshots
+      the registry across every boon × every ability and every run in the suite.
+- [x] Per-depth RNG sub-streams: `depthRng(seed, d)`
+- [x] **Two entry points over one private core:** `simulateRun(seed, choices)` and
+      `simulateEndless(seed, choices, kit)`, both delegating to `runDepths`;
+      `issuedKitForDay(seed, modifier)` builds the Daily's kit from the seed alone
+  - [x] **Test: `simulateRun.length === 2`.**
+- [x] `CombatView` gained `threat: Intent[]` (**always length 3**, post-ramp / buff /
+      weaken), `foresight`, `lethal`, `bar`, `cds`, `rage`/`maxRage`/`ultReady`,
+      `depth`, `stratum`, and both status lists
+- [x] `RunResult` gained `depthMarks` (choice index per depth → the scrubber) and
+      `depthBands` (→ the share grid)
+- [x] **THE FOUR SEAMS.**
+  - [x] `RunResult.shards`
+  - [x] `RunResult.seen: string[]` — enemy ids met, in order
+  - [x] `RunResult.facts` (`RunFacts`) — turns, damage dealt/taken, perfect blocks,
+        ultimates fired, casts by archetype, boons taken/declined, statuses applied,
+        consumables used, bosses felled, deepest depth
+  - [x] **A `use` variant in `RunChoice`** — legal only between depths, refused in the
+        Daily (the kit carries no consumables), and present from Stage 1 because a
+        choice variant cannot be retrofitted into a verified list
+  - [x] `issuedKitForDay(seed, modifier)` — `'none'` at launch, applied through a
+        modifier table so a weekly twist is a data edit
+- [x] Status effects: the six from `ABILITIES.md` as `{ id, magnitude, turns }` rows.
+      **Stun does not advance the intent cycle** — tested against the threat track.
+- [x] **Schools and elements**: a `school` on every row and an optional `element`. A
+      school never multiplies a number — it selects which trait bites. A test enforces
+      that every element carries a rider and no physical row does.
+- [x] Enemy traits: the five from `BESTIARY.md`. `armoured` counters physical (half
+      for hybrid, none for spell), `warded` holds riders off until it is broken,
+      `ethereal` eats block, `enraged` punishes multi-hit, `frenzied` splits the beat.
+      No matrix. In the Daily: at most one, and only in the crypt — tested.
+- [x] `issuedPoolForDay` draws by archetype from the shared pool, which is where the
+      class weighting hooks in at Stage 6
+- [x] **Neither mockup bug reproduced:** `lethal` compares against
+      `max(0, incoming - block)` (and against `ethereal`/`frenzied` too), and `turn`
+      stays 0-based
+- [x] Rewrote `tests/policies.ts` and `tests/sim.test.ts`
+- [x] `tests/art.test.ts` repointed at the ability registry and the new roster. Also
+      **deleted its invented image cap** — `ART.md` withdraws that number in writing,
+      and two art rows are designed to grow forever.
 
-**GATE — measured, not asserted.** Run `npx tsx scratchpad/probe.ts`:
+### Not in the original plan, and worth knowing
 
-- [ ] Greedy falls short of a full clear **with real margin**, across a seed sweep
-- [ ] **Best loadout beats worst by ≥1 depth on most seeds** — otherwise the loadout
-      screen is decoration. ~1,000 loadouts per seed is cheap to sweep exhaustively.
-- [ ] Sweep bar **composition and bar size** — is a 3-slot bar dominant? If so, clamp
-      the floor to 4.
-- [ ] **Define the floor and ceiling with a loadout**, since "greedy" is meaningless
-      without one: floor = greedy on a **median** loadout, ceiling = 1-ply search on
-      the **best**. Report both plus the spread.
-- [ ] If greedy full-clears: **widen cooldowns and cut numbers before adding
-      systems.**
+- [x] **`TUNING.turnsPerDepth`** — a legal 3-slot bar can carry no damage at all
+      (`guard` + two `wall`s), and a `grunt` cycle has no `buff` beat to grow out of
+      your block: that fight never ends, on the client OR on the server. A per-depth
+      turn cap fixes it, bounds what a submitted choice list can cost to verify, and
+      is what makes `MAX_RUN_CHOICES` derivable.
+- [x] **`src/client/main.ts` rewritten, `src/client/tutorial.ts` and
+      `tests/tutorial.test.ts` DELETED.** Both were written against the deck. The
+      client port is functional-in-old-CSS, not the v5 shell — Stage 2 owns that, and
+      doing it here meant writing it twice. **The tutorial's two invariants did not go
+      with it**: they are now properties of the tuning, swept across 2,000 seeds in
+      `sim.test.ts`, which is strictly stronger than the 15-step script that asserted
+      them against one pinned encounter. Stage 3 rebuilds the script as five beats.
+- [x] Ability tiles key their accent on **archetype**, not rarity — abilities have no
+      rarity. The cross-check against `game.css` returns at Stage 2 with the v5 tokens.
+
+**GATE — measured, not asserted.** `npx tsx scratchpad/probe.ts`, 1,008 loadouts ×
+8 daily seeds, plus a 3,000-seed template sweep:
+
+- [x] **Greedy falls short with real margin.** 0.37% of loadout-days full-clear
+      (ceiling 1%); the median loadout ends at 6.6/12, a margin of 5.4 depths.
+- [x] **Best loadout beats worst on 8/8 seeds.** Worst→best is 10.4 depths, but that
+      number flatters itself — the worst bars carry no damage and die to the turn cap.
+      **Median→best is 4.5 depths**, and that is the honest one.
+- [x] **Bar size swept.** A small bar is *not* dominant — greedy means are 5.7 / 6.7 /
+      7.1 for 3 / 4 / 5 slots — but every size reaches 12 at its best, so no size is
+      dominant at the top either. **The 3-slot floor stays; no clamp to 4 is needed.**
+- [x] **Floor and ceiling both defined with a loadout.** Floor = greedy on the median
+      loadout, **6.6/12**. Ceiling = 1-ply search over the top loadouts, **11.6/12**.
+      **Headroom: 5.0 depths** (the deck-era game had ~3).
+- [x] Greedy does not full-clear typically, so no cooldown-widening pass is owed.
+
+> **Two gate notes the owner should read, because both are judgement calls.**
+>
+> **1. Gate 1's first encoding was wrong and I changed it.** It demanded *zero* greedy
+> full clears anywhere in a 8,064-run sweep. Tuned until that held, the 1-ply search
+> could not reach the floor either (0/5 seeds) — trading "greedy is too strong" for
+> "the win state does not exist", with a dead 250-point bonus and a feed post
+> advertising something nobody can do. The two pull against each other because
+> **loadout choice is itself one of the five headroom sources**: a player who picked
+> one of the best four bars out of 1,008 has already done something skilful. So the
+> gate is now *rare, not impossible* — ≤1% of loadout-days, and a median margin of ≥3
+> depths. The raw count is printed every run and must not creep.
+>
+> **2. The ceiling is a weak searcher.** 1-ply with greedy rollouts never banks a
+> cooldown for a boss's hinge, so "the ceiling reached the floor on 3/5 seeds" is a
+> lower bound on what a human with three-turn foresight can do, not an upper one.
+> Watch it once there is real play data; do not chase it with tuning.
 
 ## Stage 2 — UI to the v5 shell
 
@@ -197,13 +235,29 @@ piece (the daily draw).
       reason, never invisible**
 - [ ] Loadout screen (03) — renders **the day's issued 9 + 3 ultimates**, not a fixed
       list; boon screen (08), descent screen (09), camp hub (02, **Daily door only**)
+  - [ ] **The camp is the landing screen.** The feed tap opens the app at the camp,
+        not in combat — `feed → camp → tutorial → camp → descend`
+        (`GAME_DESIGN.md` § The first session). One extra tap, and it is what stops a
+        new player reading the whole product as a four-minute puzzle.
 - [ ] Lantern hardcoded to full foresight
 - [ ] Rename the 5–8 stratum `camp` → `hold` everywhere, including `.d-camp` →
       `.d-hold`. It collides with the hub, and the collision lands in the share
       grid's middle row label.
 - [ ] **Delete** the card-frame/hand CSS (~43 card/hand selectors) and
-      `public/cards/` (14 files) — then rewrite the three `art.test.ts` checks that
-      depend on them
+      `public/cards/` (14 files) — then delete `CARD_ART` and the two `art.test.ts`
+      checks that read it (`card art is the expected 128x176 portrait`, and the
+      `CARD_ART` half of the path/strip sweeps)
+- [ ] **Remove `main.ts`'s size exemption from `eslint.config.js`.** It is 558 code
+      lines with an 88-line click handler, and it is exempt *only* because this stage
+      rewrites it (`CODING_BIBLE` §1.9). The rewrite lands under 400/80 and the
+      exemption block loses an entry. **Classes are allowed here** — the dozen
+      module-level `let`s holding board / replay / loadout state are exactly what §1.9
+      permits them for.
+- [ ] **Restore the accent cross-check.** `art.test.ts` currently only proves
+      `ARCHETYPE_ACCENT` is a complete, distinct hex map; the drift guard against
+      `game.css` comes back the moment the v5 tokens are written as
+      `--archetype-accent`. Two copies of a palette drift silently — that is what the
+      check was for.
 - [ ] **The splash breaks with them.** `splash.html` is a fan of three card
       illustrations. Decide its replacement: ability tiles, one enemy portrait over
       the CSS stage, or pure CSS. It renders inline in the feed — keep it
@@ -217,10 +271,22 @@ piece (the daily draw).
 
 ## Stage 3 — tutorial: 15 steps → 5 beats
 
-A **deletion**. `tutorial.ts` (414) and `tutorial.test.ts` (305) both shrink.
+A **rebuild on a clean slate**, not a shrink. Stage 1 deleted `tutorial.ts` (414) and
+`tutorial.test.ts` (305) outright, because both were written against a deck, a hand
+and a draft screen that no longer exist — porting them to the new model only to cut
+them to five beats meant writing them twice.
+
+**Nothing was lost that mattered.** The two invariants the old script rested on are
+now properties of the tuning, swept across 2,000 seeds in `sim.test.ts`, which is
+strictly stronger than asserting them against one pinned encounter. What Stage 3
+writes is the *script and the coaching*, on top of a guarantee that already holds.
 
 - [ ] Five beats on **depth 1 of the actual daily**: READ, STRIKE, BLOCK, END TURN,
       DESCEND. Board dims; exactly one tap is legal.
+- [ ] **The fifth beat returns to the camp, it does not descend.** The funnel is
+      `feed → camp → tutorial → camp → descend`, so the camp is seen twice before it
+      is ever used and reads as a place rather than a menu. The real run starts from
+      that second camp visit, on a fresh (still physically separate) choice list.
 - [ ] Keep both working properties:
   - [ ] copy templated from `TUNING` and the live view — **including ability names**,
         since the day's basic attack may be Slam rather than Strike. The test fails
@@ -229,6 +295,12 @@ A **deletion**. `tutorial.ts` (414) and `tutorial.test.ts` (305) both shrink.
 - [ ] The lesson is the **Stage 1 invariant**, not a pinned encounter: two casts of
       the day's basic attack + one basic block = the enemy low and zero damage taken,
       on every seed. Assert it against the sim, never against the copy.
+- [ ] **Split `tests/sim.test.ts` and remove its size exemption** from
+      `eslint.config.js`. 510 code lines of 45 independent checks — `sim.test.ts`
+      (mechanics, seams, anti-cheat) + `content.test.ts` (catalog, roster, curve,
+      composition template). Cheap and low-risk; it was simply out of scope for the
+      change that introduced the rule. Do it here because Stage 3 touches the tutorial
+      invariants, which live in the half that moves.
 
 ## Stage 4 — share grid, result, board, replay ▸ **SHIP**
 
@@ -268,8 +340,10 @@ costs a day's score today; it would cost an account later.
 
 The hero's **first schema version must already contain every top-level key** the
 design calls for (`PROGRESSION.md` § The hero object) even where the value is empty —
-`codex`, `deeds`, `talents`, `unlocked`, `records`. Adding a key later is a
-migration; shipping an empty one is free.
+`codex`, `deeds`, `talents`, `unlocked`, `records`, `camp`. Adding a key later is a
+migration; shipping an empty one is free. **`name` is not one of them** — the delver
+is `u/you`, and shipping a field to delete it later means migrating away from a string
+people already typed.
 
 - [ ] Port `rateLimit.ts` (45), `runDedupe.ts` (68), `heroStore.ts` (105),
       `heroSchema.ts`'s **pattern** (253 → far less), `tests/fakes/redis.ts` (180)
@@ -307,12 +381,14 @@ migration; shipping an empty one is free.
       signature field each — not three separate ability lists.
 - [ ] The hero stores a **spec id**, not an enum position, so evolution tiers stay a
       data addition
-- [ ] Consumables: two or three, bought at the camp, **Endless only**, between depths
-      only (mid-fight healing breaks the telegraph maths)
+- [ ] Consumables: **exactly three** (`ECONOMY.md`) — **Draught** (HP) and **Ember**
+      (+1 energy next depth) are `RunChoice` variants used between depths, Endless
+      only; **the Ledger mark** (XP) is an award-time multiplier and **never enters the
+      choice list**. Mid-fight healing breaks the telegraph maths.
 - [ ] What deepens with depth (`MODES.md`): scaling · **the lantern strains** ·
       traits arrive and stack · the cast shifts to the abyss + wanderers
 - [ ] **The Endless board** — weekly, resets with the community shaft; ranked by
-      depth; the row shows **delver name, class, level, bar size, ultimate** so it
+      depth; the row shows **`u/username`, class, level, bar size, ultimate** so it
       reads as a build-sharing feed rather than a second score ladder. Plus one
       permanent all-time "deepest ever" line. Needs run dedupe + per-user rate limits,
       since Endless attempts are unlimited.
@@ -324,8 +400,9 @@ migration; shipping an empty one is free.
         abandoning counts as a death
   - [ ] Resuming re-derives the kit **server-side** from the run's start state, not
         from current gear, or the choice list stops replaying
-- [ ] **Name your delver** — one string, set once on first Endless entry, shown on the
-      board. Filter it, allow rename, make it reportable.
+- [ ] **No delver name.** The delver is `u/you` (`IDENTITY.md`) — the hero has no
+      `name` field, there is no naming screen, no filter, no rename, no report flow.
+      The board already renders `u/{username}`.
 - [ ] **The seven Endless beats** (`GAME_DESIGN.md`) — event-fired coach cards spread
       over days, not a tutorial sequence. **THE LOSS is the one that decides whether
       players stay**: an itemised receipt of what burned *and what was kept*.
@@ -349,15 +426,22 @@ migration; shipping an empty one is free.
 - [ ] **🏕️ Your camp** — screen 02 becomes personal: site, fire, placed objects, ledger.
       **It must never affect a number**; the instant it grants anything it stops being
       decoration and becomes a power sink.
-- [ ] **🏆 The trophy wall** — `trophies[]` written **only on surfacing**. Gear lost in
-      the haul can never be displayed; the wall's entire meaning is that it records
-      extraction, not luck. Store the depth it dropped at — that's the flex.
-- [ ] **Visiting camps** — one tap from a board row, read-only, no comments. Works
-      *within* a subreddit with no cross-install problem, unlike sub-vs-sub. Cheapest
-      social feature in the design: it turns a list of numbers into a list of places.
+- [ ] **🏆 The trophy wall** — **no `trophies[]`.** A trophy *is* the item: two fields
+      (`surfacedAt`, `displayed`) written **only on surfacing**, and the wall is a view
+      over the stash. Gear lost in the haul can never be displayed, and **salvaging
+      takes it off the wall** — you cannot display what you no longer have. Storage is
+      the stash cap; **display is capped at eleven**, matching the gear slots.
+- [ ] **Visiting camps** — one tap from a board row, read-only, no comments,
+      **including across subreddits**. The camp renders down to a snapshot published
+      under `{season}:camp:{subreddit}:{t2}` in `redis.global`; the hero itself stays
+      per-sub and private. Show a **unique-visit count and no visitor list**.
 - [ ] **≈40 gear base sprites** (PixelLab) — **one per base TYPE, never per item.**
       Rarity ring, tint, glow and name stay code-drawn on top, so a thousand items ride
       on forty sprites. `tests/art.test.ts` enforces squareness on these too.
+  - [ ] **Named items are the counted exception**: one bespoke sprite per authored
+        unique / set piece, shipped **with** that item's row, never batched ahead of
+        it. A rarity is not a name — `epic`/`legendary` procedural rolls never qualify
+        (`ART.md` § The exception).
 
 ## Stage 10 — revenue (`IDENTITY.md`)
 
@@ -365,11 +449,13 @@ Reddit's Developer Program sells digital goods for **gold** at $0.01/gold, $10 m
 payout, with an official template (`reddit/devvit-template-payments`). **Developer
 Funds is the primary path** — it pays for engagement and asks nothing of the design.
 
-- [ ] ⚠️ **BLOCKED — answer before a single item goes on sale:** does Devvit track
-      entitlements **per-user-per-app (global)**, or must the app store them itself
-      (**per-sub**, like the hero)? A flame bought in r/foo that is missing in r/bar is
-      a refund request every time. **This one involves other people's money — do not
-      guess.**
+- [ ] **Entitlements are global — mirror them, don't query them.** The scope question
+      is answered (`IDENTITY.md`): a purchase follows the Reddit account. Delivery
+      writes an entitlement row into **`redis.global`, keyed by the buyer's `t2`**, and
+      the game reads the mirror. Ownership never touches the per-sub hero.
+  - [ ] **Confirm end-to-end before the first item goes on sale:** install in two test
+        subreddits, buy in one, read it in the other. A type signature is not a
+        receipt, and this is other people's money.
 - [ ] Cosmetic-only store, a tile on the shrine, **never a wall in front of the game**
 - [ ] **Gold never converts to shards, in either direction.** Shards buy ascends,
       ascends are power — a conversion is gold→power with one extra step.
@@ -395,9 +481,11 @@ Funds is the primary path** — it pays for engagement and asks nothing of the d
       Applies to the community contribution and the Endless, **never the Daily**.
 - [ ] Community bosses — pooled HP, unlocked by shaft milestones, **cosmetic and
       narrative rewards only**
-- [ ] ⚠️ **BLOCKED — verify first:** does Devvit provide state shared across app
-      installations? Sub-vs-sub is undesignable until this is answered, and the two
-      possible answers support entirely different features (`MODES.md`).
+- [ ] **Sub-vs-sub is unblocked** — `redis.global` provides state across app
+      installations (`MODES.md`). Ship the **asynchronous** ladder first: a scheduled
+      read of one season-scoped total per sub. A live race is a write-hot shared
+      counter contended by every install and it buys little the ladder doesn't.
+      Sits behind the community shaft being played, not behind a technical question.
 - [ ] Rewards are **cosmetics and shards, never power**
 - [ ] The Codex — enemy lines unlock on first meeting, from `RunResult.seen`.
       Its home is a second tab on screen 17, **not a fifth camp tile**.

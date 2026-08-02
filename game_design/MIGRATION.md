@@ -49,7 +49,7 @@ since 2026-07-24); moving there means inheriting that.
 | **First ship** | Daily only, no accounts. Stage 4 gate. |
 | **Progression** | Hero level, XP and class are kept — in the **meta layer**. The Daily stays issued-kit, so they never reach `simulateRun`. If class should ever affect the Daily it arrives as a *choice inside the verified list* (everyone offered all classes), never as account state. |
 | **Lantern** | The Daily always renders full NOW/NEXT/THEN. Tiers gate foresight in **Endless only**, where the fork already uses unlighting as a risk lever. Avoids selling back a mechanic that is currently free. |
-| **Accounts** | Hero state is **per-subreddit** (Devvit Redis is scoped per app installation). Stated, accepted, and versioned from the first write. |
+| **Accounts** | Hero state is **per-subreddit** — the Devvit Redis default scope, and a deliberate choice rather than a limit, since `redis.global` exists. Stated, accepted, and versioned from the first write. |
 
 ---
 
@@ -192,10 +192,13 @@ Today's only writes are a 30-day-TTL run blob and a per-day zset; a lost write c
 one day's score. A hero blob is forever and concurrently mutated, and corruption is
 a lost account. Three traps:
 
-- **Per-subreddit scope** — Devvit Redis is scoped per app installation. Hero,
+- **Per-subreddit scope** — Devvit Redis defaults to per app installation. Hero,
   shards, gear and streak are therefore per-sub. Defensible ("your delver in this
   sub"), but it had to be a stated decision *before* the first key. It is: see
   GAME_DESIGN.md § Accounts. Unfixable later without a cross-install migration.
+  A **global** scope does exist (`redis.global`) and three things deliberately use it
+  — entitlements, published camp snapshots, sub-vs-sub totals. The hero is not one of
+  them, and that is now a choice with a reason rather than a constraint.
 - **Devvit's Redis wrapper does not behave like raw Redis**, and this repo was
   bitten twice in one session — `set NX` returns `''` not `null` (the
   one-run-per-day guard was silently disarmed), and `zRange`'s `reverse` reverses
