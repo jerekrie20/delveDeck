@@ -38,34 +38,55 @@ const STRATUM_TITLE: Record<string, string> = {
   abyss: 'THE ABYSS',
 };
 
+function fallingWalls(): string {
+  let far = '';
+  let near = '';
+  for (let i = 0; i < 26; i++) far += `<i style="opacity:${0.3 + (i % 5) * 0.14}"></i>`;
+  for (let i = 0; i < 14; i++) near += `<i style="opacity:${0.5 + (i % 3) * 0.2}"></i>`;
+  return `<div class="strata">${far}</div><div class="strata near">${near}</div>`;
+}
+
 /**
- * Screen 09. 1.4 seconds: marks progress, names the stratum, and names what is
- * waiting.
+ * Screen 09, and the only place in a four-minute run that is allowed to be still.
+ *
+ * **It is a gate, not a timer.** The player taps to go down. Two reasons, and the
+ * second is the one that matters: a screen that dismisses itself is a screen nobody
+ * reads — by the time you have registered THE CRYPT you are already being attacked in
+ * it. And killing something should not instantly teleport you somewhere worse; the
+ * beat between is where a delve gets to feel like a descent rather than a queue.
  *
  * The mockup lands a shared-seed stat here as a threat rather than a cheer
  * (*"612 of 1,284 never got this far"*). That number needs the community stats Stage 4
  * builds, and inventing a plausible one would be worse than not showing it — so this
- * carries the honest half until then: the stratum, and the thing at the bottom of the
- * ladder.
+ * carries the honest half until then: what you cleared, the stratum, and the thing at
+ * the bottom of the ladder, by name.
  */
 export function descentScreen(seed: number, depth: number): string {
   const stratum = stratumForDepth(depth);
   const arriving = depth === 1 || depth === 5 || depth === 9;
   const waiting = enemyForDepth(seed, depth);
-  let rungs = '';
-  for (let i = 0; i < 26; i++) rungs += `<i style="opacity:${0.3 + (i % 5) * 0.14}"></i>`;
+  const boss = isBossDepth(depth);
+  const cleared = depth > 1
+    ? `<div class="cleared">DEPTH ${depth - 1} CLEARED</div>`
+    : '';
   const warning = arriving
     ? `<div class="warn">${escapeHtml(ARRIVAL[stratum] ?? '')}</div>`
-    : `<div class="warn"><b>${TUNING.depths - depth + 1}</b> depths left.</div>`;
-  const foot = isBossDepth(depth)
-    ? `${escapeHtml(waiting.name).toUpperCase()} HOLDS THIS FLOOR`
+    : '<div class="warn">The air is colder here. '
+      + `<b>${TUNING.depths - depth + 1}</b> between you and the floor.</div>`;
+  const foot = boss
+    ? `&#9760; ${escapeHtml(waiting.name).toUpperCase()} HOLDS THIS FLOOR`
     : `${escapeHtml(waiting.name).toUpperCase()} WAITS BELOW`;
-  const body = '<div class="desc" data-action="skip-descent">'
-    + `<div class="strata">${rungs}</div><div class="mid">`
-    + '<div class="lbl">DESCENDING</div>'
+  const label = depth === 1 ? `ENTER ${STRATUM_TITLE[stratum] ?? 'THE SHAFT'}` : 'GO DOWN';
+  const body = '<div class="desc">'
+    + fallingWalls()
+    + `<div class="mid">${cleared}<div class="lbl">DESCENDING</div>`
     + `<div class="num">${String(depth).padStart(2, '0')}</div>`
     + `<div class="nmz">${STRATUM_TITLE[stratum] ?? ''}</div>${warning}</div>`
-    + `<div class="foot">${foot}</div></div>`;
+    + `<div class="foot${boss ? ' boss' : ''}">${foot}</div>`
+    + `<div class="act"><button class="btn ${boss ? 'danger' : 'go'}" `
+    + `data-action="skip-descent">${label}`
+    + `<span class="sub">DEPTH ${depth} OF ${TUNING.depths}</span></button></div>`
+    + '</div>';
   return inShell({ shell: stratum, depth }, body);
 }
 

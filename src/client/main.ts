@@ -62,9 +62,9 @@ let pendingUltimate = 0;
 /** Boon working state, same rule — discarded the instant `boon`/`skip` commits. */
 let pendingBoon: number | 'skip' | null = null;
 
-/** The descent overlay (screen 09). Transient feel, never a phase of the run. */
+/** The descent overlay (screen 09). Presentation only — never a phase of the run, and
+ *  never a choice: the sim has already advanced the depth by the time this shows. */
 let descentDepth: number | null = null;
-let descentTimer: ReturnType<typeof setTimeout> | undefined;
 let deepestSeen = 0;
 
 let replayChoices: readonly RunChoice[] | null = null;
@@ -72,8 +72,6 @@ let replayUser = '';
 let replayPlaying = false;
 let replayTimer: ReturnType<typeof setTimeout> | undefined;
 
-const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-const DESCENT_MS = 1400;
 
 // ---- committing a choice ---------------------------------------------------------
 
@@ -87,24 +85,25 @@ function applyChoice(choice: RunChoice): void {
   render();
 }
 
-/** The descent plays when the shaft actually goes down — once per depth, driven off
- *  the sim's own view rather than off which button was pressed, so it cannot fire on a
- *  restore, a replay scrub or a re-render. */
+/**
+ * The descent shows when the shaft actually goes down — once per depth, driven off the
+ * sim's own view rather than off which button was pressed, so it cannot fire on a
+ * restore, a replay scrub or a re-render.
+ *
+ * **It waits for a tap.** It used to clear itself after 1.4s, which meant killing
+ * something dropped you straight into the next fight and the screen naming where you
+ * now were went by unread. The dark holds until the player says go. It stays up under
+ * `prefers-reduced-motion` too — that setting turns the falling walls off, not the
+ * beat itself.
+ */
 function showDescentIfDeeper(): void {
   const view = simulateRun(seed, choices).view;
   if (!view || view.phase !== 'combat' || view.depth <= deepestSeen) return;
   deepestSeen = view.depth;
-  if (reducedMotion) return;
   descentDepth = view.depth;
-  clearTimeout(descentTimer);
-  descentTimer = setTimeout(() => {
-    descentDepth = null;
-    render();
-  }, DESCENT_MS);
 }
 
 function endDescent(): void {
-  clearTimeout(descentTimer);
   descentDepth = null;
   render();
 }

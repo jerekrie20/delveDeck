@@ -28,16 +28,18 @@ forward; its combat model does not.
 | **M3** — the art | 25 bespoke images | 8 portraits kept, **1 hero portrait added**, 3 backdrops parked (the stage is a CSS gradient), **14 card illustrations deleted** at Stage 2. |
 | **M3.5** — tutorial | 15 steps, templated copy, separate choice list | **Deleted at Stage 1** with the deck it was written against. Rebuilt as 5 beats at Stage 3; **both invariants already survive**, as a 2,000-seed sweep in `sim.test.ts`. |
 
-**89 checks green** after Stage 2. `tests/`: `sim.test.ts` (45), `server.test.ts`
-(20), `art.test.ts` (16), plus 8 in the server vitest project. `tutorial.test.ts` was
+**91 checks green** after Stage 2. `tests/`: `sim.test.ts` (45), `server.test.ts`
+(20), `art.test.ts` (18), plus 8 in the server vitest project. `tutorial.test.ts` was
 deleted with the deck it tested; Stage 3 rebuilds it. **`npm run test` runs both
 halves — a tsx pass and a vitest pass — and collapsing it to one has already silently
 skipped an entire suite once.**
 
-`art.test.ts` grew by four at Stage 2 and lost one: the `CARD_ART` size check went with
-the files, and the hero portrait's 64px source, the palette drift-guard against
-`game.css`, the "no second copy of a tile colour" guard, and the ability/boon glyph
-checks arrived.
+`art.test.ts` grew by seven at Stage 2 and lost one. Gone: the `CARD_ART` size check,
+with the files. Arrived: the hero portrait's 64px source, the palette drift-guard
+against `game.css`, the "no second copy of a tile colour" guard, the ability and boon
+glyph checks, and the two type-scale guards — **no raw size in a size position, and no
+scale token under 9px** — which exist because the first visual pass shipped 6px type
+that nothing could read.
 
 **Open items inherited:**
 
@@ -268,18 +270,68 @@ Zero UI in this stage. The deck became a seeded ability pool plus a chosen bar �
 - [x] Keep the whole-view `innerHTML` render — the mockup already works that way
 - [x] Generate the hero portrait (@64, displayed centred @32 in the code-drawn plate)
 
-**GATE — visual. PASSED**, measured at **359×632** in `npm run preview`:
+### The second pass — what the first visual gate missed
+
+The gate as written checks one viewport for one thing, and it passed while three real
+problems shipped. All four came back from playing it, and all four are fixed:
+
+- [x] **The ability tile printed its rules text through its own name.** The mockup
+      positions the name at `bottom: 19px` and the text at `bottom: 5px`, which is
+      exact for its ten hand-picked one-line strings and wrong for a 24-row catalog —
+      *"Deal 15 damage. Weaken 4."* wraps to three lines in a 91px tile, grows upward
+      from its bottom anchor, and covers ICE NOVA. **The tile is a flex column now**;
+      only the glyph and the cost diamond stay positioned, because those really are
+      corner ornaments. The rules text clamps to two lines and **the name never
+      clips** — the name is how you find the ability you meant to press.
+- [x] **There was no type scale, and the floor was 6px.** The mockup sets type in raw
+      pixels because it was drawn against Silkscreen, which stays crisp that small; in
+      the fallback stack it is mush. **74 declarations now route through `--px-*` /
+      `--ui-*` tokens**, the floor is 9px, and two tests guard it: no raw size in a
+      size position, and no token under 9px.
+- [x] **It did not flex.** Phone-first is right; a 359px column on a 1400px monitor is
+      not. The type scale and a geometry set (`--app-w`, `--stage-h`, `--tile-h`,
+      `--plate`, `--hport`, `--btn-h`) get three width tiers plus **a short-viewport
+      tier** — measured, because at 320×568 End turn landed 35px below the fold and
+      "scroll down to take your turn" is not a turn-based game. The layout never
+      changes shape; it grows. A 12-depth shaft read top to bottom is still that.
+- [x] **The descent is a gate, not a timer.** It used to clear itself after 1.4s, so
+      killing something dropped you straight into the next fight and the screen naming
+      where you now were went by unread. It now waits for a tap, says **DEPTH N
+      CLEARED**, and names what is waiting — `☠ BROODMOTHER HOLDS THIS FLOOR` on a boss
+      depth. Two layers of shaft wall fall past at different rates, the dark breathes
+      in from the edges, and the depth number slams then looms. It stays up under
+      `prefers-reduced-motion` — that setting turns the falling walls off, not the beat.
+
+**GATE — visual. PASSED**, measured across five viewports in `npm run preview`:
+
+| viewport | End turn | fold | notes |
+|---|---|---|---|
+| **359×632** (the gate) | 612 / 632 | ✅ | fits in exactly one screen, no scroll |
+| 320×568 (SE) | 548 / 568 | ✅ | short-viewport tier |
+| 820×900 | 880 / 900 | ✅ | 520px column, 244px stage, art 1:1 at 128 |
+| 1920×1080 | 1060 / 1080 | ✅ | 600px column, 300px stage, centred |
+| 740×360 (landscape) | — | scrolls | grows rather than squashing, per the law |
 
 - [x] `min-height` everywhere, no `height: 100%`; `#app > * { flex: 0 0 auto }`
-- [x] **End turn bottom at 612px against a 632px viewport** — above the fold, with the
-      combat screen fitting in exactly one viewport and no scroll
-- [x] No horizontal overflow (`scrollWidth === innerWidth`)
-- [x] Enemy art 128→64 and hero art 64→32, both **integer halves** — the fractional
-      `image-rendering: pixelated` shimmer this repo hit once is closed
-- [x] Verified end to end: camp → loadout → descent → 12 depths → two boons → result,
-      with the lethal hatch, the buff `+N` annotation, the cooldown mask, a
-      portrait-less enemy degrading to the eyes plate, and the WARRENS/HOLD/CRYPT grid
+- [x] No horizontal overflow at any size (`scrollWidth === innerWidth`)
+- [x] Enemy art 128→64 (128→128 on desktop) and hero art 64→32 — **integer halves at
+      every breakpoint**, so the fractional `image-rendering: pixelated` shimmer this
+      repo hit once stays closed. `--plate-art` may only ever be 128, 64 or 32.
+- [x] No text overlaps any other text on any tile at any size, including the ultimate
+      row and the smallest column width
+- [x] Verified end to end: camp → loadout → 11 gated descents → 12 depths → two boons
+      → result, with the lethal hatch, the buff `+N` annotation, the cooldown mask, a
+      portrait-less enemy degrading to the eyes plate, and the WARRENS/HOLD/CRYPT grid.
+      **The depth never advanced without passing through the descent gate.**
 
+> **The gate itself was too narrow, and that is worth fixing before Stage 3.** It said
+> *"`npm run dev` at 359×632: `min-height`, `#app > * { flex: 0 0 auto }`, End turn
+> above the fold"* — three structural checks at one size. Everything above passed it
+> while the tile text was unreadable and printing over itself. **A visual gate that
+> only tests structure only catches structural bugs.** Stage 3's gate should also ask:
+> nothing overlaps, nothing is under 9px, the primary action is reachable at 320×568
+> and at 1920×1080, and the screen was actually *played*, not just measured.
+>
 > **Two things the gate caught that review would not have.**
 >
 > **1. `overflow-x: hidden` on `html, body` silently killed the loadout's sticky

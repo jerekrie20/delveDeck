@@ -69,6 +69,120 @@
   --plinth-1: #272d3a;
   --plinth-2: #1a1e27;
   --plinth-3: #141821;
+
+  /* ── the type scale ────────────────────────────────────────────────────────
+     The mockup sets type in raw pixels down to 6px, because it was drawn against
+     Silkscreen — a pixel face that stays crisp that small. In the fallback stack
+     those sizes are mush, so the scale below RAISES the floor to 9px and routes
+     every size through a token.
+
+     Routing them is the point: one token set per breakpoint is what makes the
+     whole shell flex to a desktop window instead of staying a 359px column on a
+     black field. Nothing in this file may set a font size in raw pixels. */
+  --px-1: 9px;     /* smallest legible label — was 6/7 */
+  --px-2: 10px;    /* eyebrows, tags, keys — was 8 */
+  --px-3: 11px;    /* row names, board names — was 10 */
+  --px-4: 12px;    /* section values — was 11 */
+  --px-5: 13px;    /* buttons, door titles — was 12 */
+  --px-6: 14px;    /* enemy name, camp name — was 13 */
+  --px-7: 15px;    /* threat value, stat value — was 14 */
+  --px-8: 16px;    /* screen headings — was 15 */
+  --px-9: 18px;    /* skip payout — was 17 */
+  --px-10: 19px;   /* the HP readout — was 18 */
+  --px-now: 26px;  /* the NOW threat number */
+  --px-cd: 26px;   /* the cooldown mask */
+  --px-score: 42px;
+  --px-depth: 64px;
+
+  /* the proportional face, for prose */
+  --ui-1: 11px;
+  --ui-2: 12px;
+  --ui-3: 13px;
+  --ui-4: 14px;
+
+  /* ── geometry ──────────────────────────────────────────────────────────────
+     Also tokens, and for the same reason: a 208px stage and a 100px enemy plate
+     are right for a 359x632 phone and mean on a 1400px monitor. */
+  --app-w: 440px;
+  --stage-h: 192px;
+  --tile-h: 76px;
+  --ult-h: 54px;
+  --plate: 96px;
+  /* Integer divisors of the 128px source ONLY — 128, 64 or 32. Anything else is
+     fractional scaling, and fractional scaling with `image-rendering: pixelated`
+     shimmers. That is why the PLATE is code-drawn and only the art inside it is fixed. */
+  --plate-art: 64px;
+  --hport: 44px;
+  --btn-h: 48px;
+}
+
+/* ── short viewports ─────────────────────────────────────────────────────────
+   An iPhone SE is 320x568 and a phone in landscape is shorter still. At the base
+   sizes End turn lands 35px below the fold there — measured, not assumed — and
+   "scroll down to take your turn" is not a turn-based game.
+
+   The stage gives up the most, because it is the one block whose height is pure
+   atmosphere: the enemy, its HP and the threat track all still fit, and the
+   threat track is the only part of it that is load-bearing. */
+@media (max-height: 640px) {
+  :root {
+    --stage-h: 166px;
+    --tile-h: 66px;
+    --ult-h: 46px;
+    --plate: 84px;
+    --hport: 40px;
+    --btn-h: 44px;
+  }
+}
+
+/* Taller viewports get the mockup's full-size stage back. Checked on HEIGHT, not
+   width, because the stage is what competes with the ability bar for the fold. */
+@media (min-height: 680px) {
+  :root {
+    --stage-h: 208px;
+    --plate: 100px;
+  }
+}
+
+/* ── desktop and fullscreen ──────────────────────────────────────────────────
+   The game is designed phone-first and stays a single column — a 12-depth shaft
+   read top to bottom does not become a different shape on a monitor. What it does
+   is GROW: wider column, bigger type, taller stage, larger portraits. Below is the
+   whole of the desktop story, and it is three token blocks rather than a second
+   layout. */
+
+@media (min-width: 560px) and (min-height: 640px) {
+  :root {
+    --app-w: 520px;
+    --px-1: 10px; --px-2: 11px; --px-3: 12px; --px-4: 13px; --px-5: 14px;
+    --px-6: 16px; --px-7: 17px; --px-8: 18px; --px-9: 20px; --px-10: 22px;
+    --px-now: 30px; --px-cd: 30px; --px-score: 50px; --px-depth: 78px;
+    --ui-1: 12px; --ui-2: 13px; --ui-3: 14px; --ui-4: 15px;
+    --stage-h: 244px;
+    --tile-h: 88px;
+    --ult-h: 62px;
+    --plate: 128px;
+    --plate-art: 128px;
+    --hport: 48px;
+    --btn-h: 54px;
+  }
+}
+
+@media (min-width: 900px) and (min-height: 800px) {
+  :root {
+    --app-w: 600px;
+    --px-1: 11px; --px-2: 12px; --px-3: 13px; --px-4: 14px; --px-5: 16px;
+    --px-6: 18px; --px-7: 19px; --px-8: 21px; --px-9: 23px; --px-10: 25px;
+    --px-now: 34px; --px-cd: 34px; --px-score: 58px; --px-depth: 92px;
+    --ui-1: 13px; --ui-2: 14px; --ui-3: 15px; --ui-4: 16px;
+    --stage-h: 300px;
+    --tile-h: 100px;
+    --ult-h: 70px;
+    --plate: 128px;
+    --plate-art: 128px;
+    --hport: 52px;
+    --btn-h: 60px;
+  }
 }
 
 /* ── archetype accents ───────────────────────────────────────────────────────
@@ -117,7 +231,7 @@ body {
   min-height: 100%;
   background: #040507;
   color: var(--ink);
-  font: 600 14px/1.45 var(--ui);
+  font: 600 var(--ui-4)/1.45 var(--ui);
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
 }
@@ -138,7 +252,7 @@ body {
 
 #app {
   width: 100%;
-  max-width: 440px;
+  max-width: var(--app-w);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -287,7 +401,7 @@ body {
 }
 
 .spine .cap {
-  font: 400 8px/1 var(--px);
+  font: 400 var(--px-2)/1 var(--px);
   color: var(--dim);
   text-align: center;
   margin-bottom: 3px;
@@ -339,7 +453,7 @@ body {
   z-index: 16;
   width: 26px;
   height: 26px;
-  font: 400 12px/24px var(--px);
+  font: 400 var(--px-5)/24px var(--px);
   text-align: center;
   color: var(--ink2);
   cursor: pointer;
@@ -350,7 +464,7 @@ body {
 /* ── shared atoms ───────────────────────────────────────────────────────────── */
 
 .eyebrow {
-  font: 400 8px/1.5 var(--px);
+  font: 400 var(--px-2)/1.5 var(--px);
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--dim);
@@ -385,7 +499,7 @@ body {
 }
 
 .hd .h {
-  font: 400 15px/1.3 var(--px);
+  font: 400 var(--px-8)/1.3 var(--px);
   margin-top: 6px;
   text-shadow: 0 2px 0 #000;
 }
@@ -394,7 +508,7 @@ body {
 
 .stage {
   position: relative;
-  height: 208px;
+  height: var(--stage-h);
   z-index: 5;
   overflow: hidden;
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 7%);
@@ -459,7 +573,7 @@ body {
 }
 
 .depthtag {
-  font: 400 9px/1 var(--px);
+  font: 400 var(--px-1)/1 var(--px);
   letter-spacing: 0.14em;
   color: var(--stratum);
   text-shadow: 0 0 12px var(--stratum);
@@ -478,9 +592,9 @@ body {
 
 .pw {
   position: relative;
-  width: 100px;
-  height: 100px;
-  flex: 0 0 100px;
+  width: var(--plate);
+  height: var(--plate);
+  flex: 0 0 var(--plate);
 }
 
 .pglow {
@@ -511,15 +625,15 @@ body {
     0 10px 22px rgb(0 0 0 / 70%);
   display: grid;
   place-items: center;
-  font: 400 8px/1.6 var(--px);
+  font: 400 var(--px-2)/1.6 var(--px);
   color: rgb(240 242 248 / 30%);
   text-align: center;
   animation: sway 5s ease-in-out infinite;
 }
 
 .port img {
-  width: 64px;
-  height: 64px;
+  width: var(--plate-art);
+  height: var(--plate-art);
   image-rendering: pixelated;
 }
 
@@ -568,7 +682,7 @@ body {
 }
 
 .fname {
-  font: 400 13px/1.2 var(--px);
+  font: 400 var(--px-6)/1.2 var(--px);
   text-shadow: 0 2px 0 #000, 0 0 18px var(--stratum);
 }
 
@@ -580,7 +694,7 @@ body {
 }
 
 .tag {
-  font: 400 7px/1 var(--px);
+  font: 400 var(--px-1)/1 var(--px);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink2);
@@ -622,13 +736,13 @@ body {
 }
 
 .fline .n {
-  font: 400 12px/1 var(--px);
+  font: 400 var(--px-5)/1 var(--px);
   color: var(--ink);
 }
 
 .fline .n small {
   color: var(--dim);
-  font-size: 8px;
+  font-size: var(--px-2);
 }
 
 /* ── threat track ───────────────────────────────────────────────────────────── */
@@ -653,7 +767,7 @@ body {
 }
 
 .ts .when {
-  font: 400 7px/1 var(--px);
+  font: 400 var(--px-1)/1 var(--px);
   letter-spacing: 0.18em;
   color: var(--dim);
 }
@@ -666,17 +780,17 @@ body {
 }
 
 .ts .gly {
-  font-size: 13px;
+  font-size: var(--ui-3);
   line-height: 1;
   filter: drop-shadow(0 0 7px currentcolor);
 }
 
 .ts .val {
-  font: 400 14px/1 var(--px);
+  font: 400 var(--px-7)/1 var(--px);
 }
 
 .ts .plus {
-  font: 400 8px/1 var(--px);
+  font: 400 var(--px-2)/1 var(--px);
   color: var(--nrg);
   padding: 2px 3px;
   box-shadow: inset 0 0 0 1px rgb(255 200 92 / 50%);
@@ -699,8 +813,8 @@ body {
   50% { transform: translateY(-3px); }
 }
 
-.ts.now .val { font-size: 26px; }
-.ts.now .gly { font-size: 19px; }
+.ts.now .val { font-size: var(--px-now); }
+.ts.now .gly { font-size: var(--px-9); }
 .ts.next { opacity: 0.95; }
 .ts.then { opacity: 0.8; }
 
@@ -731,13 +845,13 @@ body {
 .ts.unlit .when { color: #6f7788; }
 
 .ts.unlit .lk {
-  font: 400 13px/1 var(--px);
+  font: 400 var(--px-6)/1 var(--px);
   color: #8d95a7;
   margin-top: 4px;
 }
 
 .ts.unlit .why {
-  font: 400 6px/1.3 var(--px);
+  font: 400 var(--px-1)/1.3 var(--px);
   letter-spacing: 0.1em;
   color: #b08b4e;
   margin-top: 4px;
@@ -763,7 +877,7 @@ body {
   position: absolute;
   top: -10px;
   right: -2px;
-  font: 400 8px/1 var(--px);
+  font: 400 var(--px-2)/1 var(--px);
   letter-spacing: 0.1em;
   color: #fff;
   background: #8e2621;
@@ -807,9 +921,9 @@ body {
 
 .hport {
   position: relative;
-  width: 44px;
-  height: 44px;
-  flex: 0 0 44px;
+  width: var(--hport);
+  height: var(--hport);
+  flex: 0 0 var(--hport);
   image-rendering: pixelated;
   background: linear-gradient(150deg, #5b4f3a, #2a241d);
   box-shadow:
@@ -818,7 +932,7 @@ body {
     0 0 16px rgb(255 186 105 / 20%);
   display: grid;
   place-items: center;
-  font: 400 7px/1.4 var(--px);
+  font: 400 var(--px-1)/1.4 var(--px);
   color: rgb(255 230 195 / 62%);
   text-align: center;
 }
@@ -831,9 +945,9 @@ body {
 }
 
 .hport.big {
-  width: 54px;
-  height: 54px;
-  flex: 0 0 54px;
+  width: calc(var(--hport) + 10px);
+  height: calc(var(--hport) + 10px);
+  flex: 0 0 calc(var(--hport) + 10px);
 }
 
 .hbars {
@@ -899,12 +1013,12 @@ body {
 }
 
 .hread .n {
-  font: 400 18px/1 var(--px);
+  font: 400 var(--px-10)/1 var(--px);
   text-shadow: 0 2px 0 #000;
 }
 
 .hread .n small {
-  font-size: 8px;
+  font-size: var(--px-2);
   color: var(--dim);
 }
 
@@ -918,7 +1032,7 @@ body {
 }
 
 .hread .d {
-  font: 400 10px/1 var(--px);
+  font: 400 var(--px-3)/1 var(--px);
   margin-top: 5px;
   color: var(--atk);
 }
@@ -960,7 +1074,7 @@ body {
 }
 
 .lab {
-  font: 400 8px/1 var(--px);
+  font: 400 var(--px-2)/1 var(--px);
   letter-spacing: 0.14em;
   color: var(--dim);
 }
@@ -979,7 +1093,7 @@ body {
 }
 
 .rage .k {
-  font: 400 7px/1 var(--px);
+  font: 400 var(--px-1)/1 var(--px);
   letter-spacing: 0.12em;
   color: var(--dim);
   margin-top: 4px;
@@ -996,11 +1110,11 @@ body {
 
 .log {
   margin-top: 8px;
-  height: 18px;
+  min-height: calc(var(--ui-2) * 1.55);
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: var(--ui-2);
   color: var(--dim);
   white-space: nowrap;
   overflow: hidden;
@@ -1022,10 +1136,28 @@ body {
   margin-top: 9px;
 }
 
+/* **The tile is a FLEX COLUMN, not four absolutely-positioned boxes.**
+ *
+ * The mockup positions the name at `bottom: 19px` and the rules text at `bottom: 5px`,
+ * which is exact for its ten hand-picked one-line strings and wrong for the catalog:
+ * *"Deal 15 damage. Weaken 4."* wraps to three lines in a 91px tile, grows upward from
+ * its bottom anchor, and prints straight through the word ICE NOVA. Every row longer
+ * than about twenty characters did the same.
+ *
+ * So the two text rows are laid out instead of positioned, and only the glyph and the
+ * cost — which really are corner ornaments — stay absolute. The rules text gets the
+ * leftover height and clamps; the name is never what gets cut, because the name is how
+ * you find the ability you meant to press. */
 .ab {
   --accent: var(--archetype-accent, #e6e8ee);
   position: relative;
-  height: 64px;
+  height: var(--tile-h);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  gap: 2px;
+  padding: 6px 7px 7px;
   cursor: pointer;
   overflow: hidden;
   border: 0;
@@ -1058,11 +1190,15 @@ body {
   transform: translateY(2px);
 }
 
+/* The glyph row: the only part still positioned, because a glyph and a cost diamond
+   genuinely are corner ornaments. It reserves its own height so no text can run under
+   it — that was the other half of the overlap. */
 .ab .ico {
-  position: absolute;
-  top: 6px;
-  left: 8px;
-  font: 400 15px/1 var(--px);
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: flex-start;
+  font: 400 var(--px-8)/1 var(--px);
   color: #fff;
   text-shadow: 0 2px 0 #000, 0 0 12px var(--accent);
 }
@@ -1082,16 +1218,15 @@ body {
   display: block;
   transform: rotate(-45deg);
   color: #2c1c00;
-  font: 700 10px/16px var(--px);
+  font: 700 var(--px-3)/16px var(--px);
   text-align: center;
 }
 
+/* The name never wraps and never clips to nothing — it is how you find the ability you
+   meant to press. */
 .ab .nm {
-  position: absolute;
-  left: 7px;
-  right: 7px;
-  bottom: 19px;
-  font: 400 8px/1 var(--px);
+  flex: 0 0 auto;
+  font: 400 var(--px-2)/1.15 var(--px);
   color: #fff;
   text-shadow: 0 2px 0 #000;
   white-space: nowrap;
@@ -1099,22 +1234,25 @@ body {
   text-overflow: ellipsis;
 }
 
+/* The rules text takes what is left and clamps to two lines. Clamping is honest here:
+   the full text is on the loadout screen, where you chose it, at full width. */
 .ab .rx {
-  position: absolute;
-  left: 7px;
-  right: 7px;
-  bottom: 5px;
-  font: 600 9px/1.2 var(--ui);
+  flex: 0 0 auto;
+  font: 600 var(--ui-1)/1.2 var(--ui);
   color: var(--ink2);
-  max-height: 22px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
 }
 
+/* Sits in the glyph row's spare space rather than over the rules text. */
 .ab .cdtag {
   position: absolute;
-  bottom: 5px;
-  right: 6px;
-  font: 400 7px/1 var(--px);
+  top: 27px;
+  right: 7px;
+  font: 400 var(--px-1)/1 var(--px);
   color: var(--dim);
 }
 
@@ -1162,7 +1300,7 @@ body {
 }
 
 .ab .cdmask b {
-  font: 400 26px/1 var(--px);
+  font: 400 var(--px-now)/1 var(--px);
   color: #e2e7f0;
   text-shadow: 0 2px 0 #000, 0 0 14px rgb(108 220 236 / 50%);
 }
@@ -1177,14 +1315,35 @@ body {
   box-shadow: 0 0 8px var(--blk-glow);
 }
 
+/* The ultimate is OFF-BAR: a full-width sixth row outside the 3–5 slots, so a
+   five-ability loadout is really six actions. Laid out as a row rather than the
+   mockup's absolute offsets, for the same reason the tiles are. */
 .ab.ult {
   grid-column: span 3;
-  height: 50px;
+  height: var(--ult-h);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  align-content: center;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 2px;
+  padding: 8px 12px 10px;
 }
 
-.ab.ult .nm { bottom: 21px; left: 50px; font-size: 10px; }
-.ab.ult .rx { left: 50px; bottom: 7px; }
-.ab.ult .ico { top: 15px; left: 15px; font-size: 20px; }
+.ab.ult .ico {
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-size: var(--px-9);
+  flex: 0 0 auto;
+}
+
+.ab.ult .nm { font-size: var(--px-3); }
+
+.ab.ult .rx {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
 
 .ab.ult.charged {
   animation:
@@ -1243,12 +1402,12 @@ body {
 
 .btn {
   position: relative;
-  height: 48px;
+  height: var(--btn-h);
   flex: 1;
   cursor: pointer;
   border: 0;
   color: #fff;
-  font: 400 12px/1 var(--px);
+  font: 400 var(--px-5)/1 var(--px);
   letter-spacing: 0.06em;
   display: flex;
   flex-direction: column;
@@ -1272,7 +1431,7 @@ body {
 }
 
 .btn .sub {
-  font: 400 8px/1 var(--px);
+  font: 400 var(--px-2)/1 var(--px);
   letter-spacing: 0.14em;
   color: #e2e7f0;
   opacity: 0.9;
@@ -1311,8 +1470,8 @@ body {
 }
 
 .btn.small {
-  flex: 0 0 74px;
-  font-size: 10px;
+  flex: 0 0 clamp(74px, 21%, 110px);
+  font-size: var(--ui-1);
   background: linear-gradient(180deg, #3a4251, #20252f);
 }
 
@@ -1404,7 +1563,7 @@ body {
   inset: 0;
   display: grid;
   place-items: center;
-  font: 400 11px/1 var(--px);
+  font: 400 var(--px-4)/1 var(--px);
   color: #fff;
   text-shadow: 0 0 10px var(--accent);
 }
@@ -1415,19 +1574,19 @@ body {
 }
 
 .gk {
-  font: 400 7px/1 var(--px);
+  font: 400 var(--px-1)/1 var(--px);
   letter-spacing: 0.16em;
   color: var(--dim);
 }
 
 .gn {
-  font: 400 10px/1.2 var(--px);
+  font: 400 var(--px-3)/1.2 var(--px);
   margin-top: 6px;
   color: var(--accent);
 }
 
 .gs {
-  font-size: 10px;
+  font-size: var(--ui-1);
   color: var(--ink2);
   margin-top: 5px;
   line-height: 1.4;
@@ -1435,7 +1594,7 @@ body {
 
 .gtail {
   flex: 0 0 auto;
-  font: 400 9px/1 var(--px);
+  font: 400 var(--px-1)/1 var(--px);
   color: var(--faint);
 }
 
@@ -1456,19 +1615,19 @@ body {
 }
 
 .chname {
-  font: 400 14px/1 var(--px);
+  font: 400 var(--px-7)/1 var(--px);
   text-shadow: 0 2px 0 #000;
 }
 
 .chclass {
-  font: 400 8px/1 var(--px);
+  font: 400 var(--px-2)/1 var(--px);
   letter-spacing: 0.16em;
   color: #ffbc6a;
   margin-top: 6px;
 }
 
 .chnext {
-  font-size: 10px;
+  font-size: var(--ui-1);
   color: var(--ink2);
   margin-top: 7px;
 }
@@ -1506,12 +1665,12 @@ body {
 }
 
 .door .dt {
-  font: 400 12px/1 var(--px);
+  font: 400 var(--px-5)/1 var(--px);
   letter-spacing: 0.05em;
 }
 
 .door .dd {
-  font-size: 11px;
+  font-size: var(--ui-2);
   color: var(--ink2);
   margin-top: 7px;
   line-height: 1.45;
@@ -1523,7 +1682,7 @@ body {
   position: absolute;
   top: 11px;
   right: 12px;
-  font: 400 8px/1 var(--px);
+  font: 400 var(--px-2)/1 var(--px);
   letter-spacing: 0.1em;
   padding: 4px 6px;
   color: #0a0c10;
@@ -1574,7 +1733,7 @@ body {
   height: 28px;
   display: grid;
   place-items: center;
-  font: 400 8px/1 var(--px);
+  font: 400 var(--px-2)/1 var(--px);
   letter-spacing: 0.1em;
   background: #12151d;
   color: #7d8698;
@@ -1603,13 +1762,13 @@ body {
 }
 
 .st .k {
-  font: 400 7px/1 var(--px);
+  font: 400 var(--px-1)/1 var(--px);
   letter-spacing: 0.14em;
   color: var(--dim);
 }
 
 .st .v {
-  font: 400 14px/1 var(--px);
+  font: 400 var(--px-7)/1 var(--px);
   margin-top: 7px;
 }
 
@@ -1654,7 +1813,7 @@ body {
   flex: 0 0 38px;
   display: grid;
   place-items: center;
-  font: 400 13px/1 var(--px);
+  font: 400 var(--px-6)/1 var(--px);
   color: #fff;
   background: linear-gradient(150deg, color-mix(in srgb, var(--accent) 40%, #12151c), #12151c);
   text-shadow: 0 0 12px var(--accent);
@@ -1662,12 +1821,12 @@ body {
 }
 
 .boon .bn {
-  font: 400 10px/1 var(--px);
+  font: 400 var(--px-3)/1 var(--px);
   color: var(--accent);
 }
 
 .boon .bd {
-  font-size: 11px;
+  font-size: var(--ui-2);
   color: var(--ink2);
   margin-top: 7px;
   line-height: 1.4;
@@ -1691,21 +1850,21 @@ body {
 }
 
 .skipb .big {
-  font: 400 17px/1 var(--px);
+  font: 400 var(--px-9)/1 var(--px);
   color: var(--ok);
   text-shadow: 0 0 14px var(--ok-glow);
 }
 
 .skipb .t {
   flex: 1;
-  font-size: 11px;
+  font-size: var(--ui-2);
   color: var(--ink2);
   line-height: 1.45;
 }
 
 .skipb .t b {
   display: block;
-  font: 400 10px/1 var(--px);
+  font: 400 var(--px-3)/1 var(--px);
   color: #fff;
   margin-bottom: 6px;
   letter-spacing: 0.06em;
@@ -1713,22 +1872,39 @@ body {
 
 /* ═══ descent ══════════════════════════════════════════════════════════════════ */
 
+/* ═══ descent ══════════════════════════════════════════════════════════════════
+   The one authored set piece in the shipped game, and a set piece is a COMPOSITION,
+   never a SEQUENCE (ART.md) — type, gradients and tokens landing in one frame, no art
+   asset, nothing that has to line up with anything.
+
+   It is also a GATE, not a timer. A depth ending is the only moment in a four-minute
+   run that is allowed to be still, and a screen that dismisses itself after 1.4s is
+   one you never actually read — you are already looking at the next enemy. The dark
+   waits for you to say go. */
+
 .desc {
   position: absolute;
   inset: 0;
   z-index: 24;
   overflow: hidden;
-  cursor: pointer;
-  background: linear-gradient(180deg, #0e1119, #07080d);
+  background: radial-gradient(90% 60% at 50% 42%, #12151f, #07080d 72%, #030407);
 }
 
+/* Two layers of shaft wall falling past at different rates. The parallax is what
+   makes it read as travel rather than as a loading spinner. */
 .strata {
   position: absolute;
   left: 0;
   right: 0;
   top: -100%;
   height: 300%;
-  animation: fall 2.4s cubic-bezier(0.35, 0, 0.2, 1) infinite;
+  animation: fall 3.4s cubic-bezier(0.42, 0, 0.4, 1) infinite;
+}
+
+.strata.near {
+  animation-duration: 1.9s;
+  filter: blur(1px);
+  opacity: 0.75;
 }
 
 @keyframes fall {
@@ -1743,28 +1919,63 @@ body {
   box-shadow: 0 1px 0 rgb(255 255 255 / 8%);
 }
 
+.strata.near i {
+  height: 8px;
+  margin-bottom: 46px;
+  background: linear-gradient(90deg, transparent, rgb(0 0 0 / 85%), transparent);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 5%);
+}
+
+/* The dark closing in from the edges — the reason the number is the only bright
+   thing on the screen. */
+.desc::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  background: radial-gradient(62% 46% at 50% 42%, transparent 18%, rgb(2 3 5 / 92%) 100%);
+  animation: closein 5.2s ease-in-out infinite;
+}
+
+@keyframes closein {
+  50% { transform: scale(1.16); }
+}
+
 .desc .mid {
   position: absolute;
   inset: 0;
+  z-index: 4;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 0 20px;
+  padding: 0 22px;
+}
+
+.desc .cleared {
+  font: 400 var(--px-2)/1 var(--px);
+  letter-spacing: 0.24em;
+  color: var(--ok);
+  text-shadow: 0 0 16px var(--ok-glow);
+  margin-bottom: 18px;
 }
 
 .desc .lbl {
-  font: 400 9px/1 var(--px);
+  font: 400 var(--px-1)/1 var(--px);
   letter-spacing: 0.38em;
   color: var(--dim);
 }
 
+/* Slams in, then breathes — a number that lands and then will not sit still. */
 .desc .num {
-  font: 400 68px/1 var(--px);
+  font: 400 var(--px-depth)/1 var(--px);
   margin-top: 14px;
-  text-shadow: 0 5px 0 #000, 0 0 40px var(--stratum);
-  animation: slam 0.45s cubic-bezier(0.2, 1.7, 0.4, 1);
+  text-shadow: 0 5px 0 #000, 0 0 44px var(--stratum), 0 0 90px var(--stratum);
+  animation:
+    slam 0.5s cubic-bezier(0.2, 1.7, 0.4, 1),
+    loom 3.4s ease-in-out infinite 0.5s;
 }
 
 @keyframes slam {
@@ -1772,7 +1983,7 @@ body {
 }
 
 .desc .nmz {
-  font: 400 15px/1 var(--px);
+  font: 400 var(--px-8)/1 var(--px);
   letter-spacing: 0.2em;
   color: var(--stratum);
   margin-top: 16px;
@@ -1780,23 +1991,42 @@ body {
 }
 
 .desc .warn {
-  margin-top: 22px;
-  font-size: 11px;
+  margin-top: 20px;
+  max-width: 24em;
+  font-size: var(--ui-2);
   color: var(--ink2);
   line-height: 1.7;
+  font-style: italic;
 }
 
-.desc .warn b { color: var(--atk); }
+.desc .warn b { color: var(--atk); font-style: normal; }
 
+/* What is down there, named, in the colour of the thing that will hurt you. */
 .desc .foot {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 22px;
+  bottom: 84px;
+  z-index: 4;
   text-align: center;
-  font: 400 8px/1 var(--px);
+  font: 400 var(--px-2)/1.6 var(--px);
   letter-spacing: 0.18em;
-  color: var(--dim);
+  color: #c98d84;
+  text-shadow: 0 0 18px rgb(255 98 87 / 45%);
+}
+
+.desc .foot.boss {
+  color: #ff8b82;
+  text-shadow: 0 0 22px var(--atk-glow);
+}
+
+.desc .act {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 18px;
+  z-index: 5;
+  margin: 0;
 }
 
 /* ═══ result / share ═══════════════════════════════════════════════════════════ */
@@ -1811,7 +2041,7 @@ body {
 
 .stamp {
   display: inline-block;
-  font: 400 9px/1 var(--px);
+  font: 400 var(--px-1)/1 var(--px);
   letter-spacing: 0.18em;
   color: #ff8b82;
   padding: 6px 10px;
@@ -1827,13 +2057,13 @@ body {
 }
 
 .score {
-  font: 400 42px/1 var(--px);
+  font: 400 var(--px-score)/1 var(--px);
   margin-top: 13px;
   text-shadow: 0 4px 0 #000, 0 0 34px rgb(226 184 84 / 55%);
 }
 
 .rankline {
-  font-size: 11px;
+  font-size: var(--ui-2);
   color: var(--ink2);
   margin-top: 9px;
 }
@@ -1841,20 +2071,20 @@ body {
 .rankline b {
   color: #f0cd74;
   font-family: var(--px);
-  font-size: 12px;
+  font-size: var(--ui-3);
 }
 
 .bdr {
   display: flex;
   justify-content: space-between;
   padding: 8px 10px;
-  font-size: 11px;
+  font-size: var(--ui-2);
   color: var(--ink2);
   box-shadow: inset 0 -1px 0 rgb(0 0 0 / 60%);
 }
 
 .bdr .n {
-  font: 400 12px/1 var(--px);
+  font: 400 var(--px-5)/1 var(--px);
   color: var(--ink);
 }
 
@@ -1868,7 +2098,7 @@ body {
 
 .bdr.tot .n {
   color: #f0cd74;
-  font-size: 14px;
+  font-size: var(--px-7);
   text-shadow: 0 0 14px rgb(226 184 84 / 50%);
 }
 
@@ -1884,7 +2114,7 @@ body {
 .sh {
   display: flex;
   justify-content: space-between;
-  font: 400 8px/1 var(--px);
+  font: 400 var(--px-2)/1 var(--px);
   letter-spacing: 0.12em;
   color: var(--dim);
   text-transform: uppercase;
@@ -1906,7 +2136,7 @@ body {
 
 .srow .sl {
   flex: 0 0 52px;
-  font: 400 7px/1 var(--px);
+  font: 400 var(--px-1)/1 var(--px);
   color: var(--dim);
   letter-spacing: 0.12em;
 }
@@ -1946,7 +2176,7 @@ body {
 }
 
 .sfoot {
-  font-size: 11px;
+  font-size: var(--ui-2);
   color: var(--ink2);
   line-height: 1.65;
   text-align: center;
@@ -1955,7 +2185,7 @@ body {
 .sfoot b {
   color: #fff;
   font-family: var(--px);
-  font-size: 11px;
+  font-size: var(--ui-2);
 }
 
 /* ═══ leaderboard ══════════════════════════════════════════════════════════════ */
@@ -1984,7 +2214,7 @@ body {
   height: 30px;
   display: grid;
   place-items: center;
-  font-size: 11px;
+  font-size: var(--ui-2);
   padding-left: 2px;
   color: #fff;
   background: linear-gradient(180deg, #3c4454, #20252f);
@@ -2004,7 +2234,7 @@ body {
 .rk {
   flex: 0 0 22px;
   text-align: center;
-  font: 400 10px/1 var(--px);
+  font: 400 var(--px-3)/1 var(--px);
   color: var(--dim);
 }
 
@@ -2018,7 +2248,7 @@ body {
 }
 
 .nm2 {
-  font: 400 10px/1 var(--px);
+  font: 400 var(--px-3)/1 var(--px);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2048,19 +2278,19 @@ body {
 }
 
 .sc .v {
-  font: 400 13px/1 var(--px);
+  font: 400 var(--px-6)/1 var(--px);
   color: var(--ink);
 }
 
 .sc .d {
-  font: 400 8px/1 var(--px);
+  font: 400 var(--px-2)/1 var(--px);
   color: var(--dim);
   margin-top: 6px;
 }
 
 .notice {
   padding: 12px 10px;
-  font-size: 11px;
+  font-size: var(--ui-2);
   line-height: 1.5;
   color: var(--ink2);
   text-align: center;
@@ -2088,7 +2318,7 @@ body {
   height: 32px;
   display: grid;
   place-items: center;
-  font-size: 12px;
+  font-size: var(--ui-3);
   color: #fff;
   cursor: pointer;
   border: 0;
@@ -2104,7 +2334,7 @@ body {
 
 .trb.wide {
   flex: 1;
-  font: 400 9px/1 var(--px);
+  font: 400 var(--px-1)/1 var(--px);
   color: var(--ink2);
   letter-spacing: 0.08em;
   cursor: default;
@@ -2129,7 +2359,7 @@ body {
 .trmeta {
   display: flex;
   justify-content: space-between;
-  font: 400 7px/1 var(--px);
+  font: 400 var(--px-1)/1 var(--px);
   color: var(--dim);
   margin-top: 7px;
   letter-spacing: 0.12em;
@@ -2140,7 +2370,7 @@ body {
   top: 8px;
   left: 20px;
   z-index: 16;
-  font: 400 8px/1 var(--px);
+  font: 400 var(--px-2)/1 var(--px);
   letter-spacing: 0.14em;
   color: #0d1017;
   background: #a790ee;

@@ -217,6 +217,37 @@ await check('the archetype accent is the ONLY place a tile colour is written', (
   );
 });
 
+await check('NO RAW TYPE SIZES — every size goes through the scale', () => {
+  // The mockup sets type in raw pixels down to 6px, because it was drawn against
+  // Silkscreen, a pixel face that stays crisp that small. In the fallback stack those
+  // sizes are unreadable — which is exactly what shipped, and what the visual gate
+  // sent back.
+  //
+  // Two things went wrong and this check guards both: the floor (nothing under 9px)
+  // and the routing (a raw size cannot participate in the breakpoints, so a screen
+  // that sets one silently refuses to scale to a desktop window). The token block
+  // itself is where the numbers live, so the search starts after it.
+  const css = readFileSync(GAME_CSS, 'utf8');
+  const body = css.slice(css.indexOf('/* ── strata: shells raised'));
+  assert.ok(body.length > 0, 'the token block marker moved — fix this check with it');
+
+  const raw: string[] = [];
+  // The SIZE position only. `font: 400 var(--px-5)/24px` is a line-height pinned to a
+  // fixed box, which is legitimate and stays.
+  for (const match of body.matchAll(/font:\s*\d+\s+(\d+)px/g)) raw.push(`font: …${match[1]}px`);
+  for (const match of body.matchAll(/font-size:\s*(\d+)px/g)) raw.push(`font-size: ${match[1]}px`);
+  assert.deepEqual(raw, [], `raw type sizes outside the scale: ${raw.join(', ')}`);
+});
+
+await check('the type scale never drops below the 9px readability floor', () => {
+  const css = readFileSync(GAME_CSS, 'utf8');
+  const tooSmall: string[] = [];
+  for (const match of css.matchAll(/(--(?:px|ui)-\d+):\s*(\d+)px/g)) {
+    if (Number(match[2]) < 9) tooSmall.push(`${match[1]}: ${match[2]}px`);
+  }
+  assert.deepEqual(tooSmall, [], `below the readability floor: ${tooSmall.join(', ')}`);
+});
+
 // ---- glyphs --------------------------------------------------------------------
 
 await check('every ability has a distinct two-letter glyph', () => {
