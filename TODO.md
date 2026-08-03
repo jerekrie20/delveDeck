@@ -26,13 +26,12 @@ forward; its combat model does not.
 | **M1** — the client | Full DOM game, no client-side game state | **Rewritten twice, done.** Stage 1 ported it to the new model in the old CSS; Stage 2 put the v5 shell on it and split it into one module per place. |
 | **M2** — the daily | tRPC, Redis, per-sub leaderboard, server-side replay verification, one-run-per-day guard, daily scheduler post | **Yes, wholesale.** This is the asset. |
 | **M3** — the art | 25 bespoke images | 8 portraits kept, **1 hero portrait added**, 3 backdrops parked (the stage is a CSS gradient), **14 card illustrations deleted** at Stage 2. |
-| **M3.5** — tutorial | 15 steps, templated copy, separate choice list | **Deleted at Stage 1** with the deck it was written against. Rebuilt as 5 beats at Stage 3; **both invariants already survive**, as a 2,000-seed sweep in `sim.test.ts`. |
+| **M3.5** — tutorial | 15 steps, templated copy, separate choice list | **Deleted at Stage 1** with the deck it was written against. **Rebuilt as 5 beats at Stage 3**, on a guarantee that already held: both invariants are a 2,000-seed sweep in `content.test.ts`. |
 
-**91 checks green** after Stage 2. `tests/`: `sim.test.ts` (45), `server.test.ts`
-(20), `art.test.ts` (18), plus 8 in the server vitest project. `tutorial.test.ts` was
-deleted with the deck it tested; Stage 3 rebuilds it. **`npm run test` runs both
-halves — a tsx pass and a vitest pass — and collapsing it to one has already silently
-skipped an entire suite once.**
+**106 checks green** after Stage 3. `tests/`: `sim.test.ts` (30), `content.test.ts`
+(16), `server.test.ts` (20), `art.test.ts` (18), `tutorial.test.ts` (14), plus 8 in the
+server vitest project. **`npm run test` runs both halves — a tsx pass and a vitest pass
+— and collapsing it to one has already silently skipped an entire suite once.**
 
 `art.test.ts` grew by seven at Stage 2 and lost one. Gone: the `CARD_ART` size check,
 with the files. Arrived: the hero portrait's 64px source, the palette drift-guard
@@ -389,7 +388,7 @@ both tutorial invariants clean across 3,000 seeds.
 > two plates that fall back to their code-drawn gradient — the plate is already drawn
 > in CSS and the art only sits inside it.
 
-## Stage 3 — tutorial: 15 steps → 5 beats
+## Stage 3 — tutorial: 15 steps → 5 beats ✅
 
 A **rebuild on a clean slate**, not a shrink. Stage 1 deleted `tutorial.ts` (414) and
 `tutorial.test.ts` (305) outright, because both were written against a deck, a hand
@@ -397,30 +396,95 @@ and a draft screen that no longer exist — porting them to the new model only t
 them to five beats meant writing them twice.
 
 **Nothing was lost that mattered.** The two invariants the old script rested on are
-now properties of the tuning, swept across 2,000 seeds in `sim.test.ts`, which is
+now properties of the tuning, swept across 2,000 seeds in `content.test.ts`, which is
 strictly stronger than asserting them against one pinned encounter. What Stage 3
-writes is the *script and the coaching*, on top of a guarantee that already holds.
+wrote is the *script and the coaching*, on top of a guarantee that already held —
+`src/client/tutorial.ts` (172 code lines) and `tests/tutorial.test.ts` (265), against
+the old 414 + 305.
 
-- [ ] Five beats on **depth 1 of the actual daily**: READ, STRIKE, BLOCK, END TURN,
+- [x] Five beats on **depth 1 of the actual daily**: READ, STRIKE, BLOCK, END TURN,
       DESCEND. Board dims; exactly one tap is legal.
-- [ ] **The fifth beat returns to the camp, it does not descend.** The funnel is
+- [x] **The fifth beat returns to the camp, it does not descend.** The funnel is
       `feed → camp → tutorial → camp → descend`, so the camp is seen twice before it
       is ever used and reads as a place rather than a menu. The real run starts from
       that second camp visit, on a fresh (still physically separate) choice list.
-- [ ] Keep both working properties:
-  - [ ] copy templated from `TUNING` and the live view — **including ability names**,
+- [x] Keep both working properties:
+  - [x] copy templated from `TUNING` and the live view — **including ability names**,
         since the day's basic attack may be Slam rather than Strike. The test fails
         on an unfilled `{placeholder}`.
-  - [ ] the tutorial choice list stays **physically separate** from the submitted one
-- [ ] The lesson is the **Stage 1 invariant**, not a pinned encounter: two casts of
+  - [x] the tutorial choice list stays **physically separate** from the submitted one.
+        `applyChoice` is the single door every tap goes through and it routes into the
+        practice list whenever the tutorial is up, so the separation is structural
+        rather than remembered. **It also never touches `deepestSeen`** — that was the
+        easiest trace to leave, and leaving it would have eaten the real run's first
+        descent screen.
+- [x] The lesson is the **Stage 1 invariant**, not a pinned encounter: two casts of
       the day's basic attack + one basic block = the enemy low and zero damage taken,
-      on every seed. Assert it against the sim, never against the copy.
-- [ ] **Split `tests/sim.test.ts` and remove its size exemption** from
-      `eslint.config.js`. 510 code lines of 45 independent checks — `sim.test.ts`
-      (mechanics, seams, anti-cheat) + `content.test.ts` (catalog, roster, curve,
-      composition template). Cheap and low-risk; it was simply out of scope for the
-      change that introduced the rule. Do it here because Stage 3 touches the tutorial
-      invariants, which live in the half that moves.
+      on every seed. Asserted against the sim over 600 seeds, never against the copy.
+- [x] Offered **once** (localStorage) and reachable forever from **HOW TO PLAY**. A
+      storage read that throws — feed iframes partition it on some browsers — means
+      *do not open by itself*, never *open every time*.
+- [x] **Split `tests/sim.test.ts` and remove its size exemption** from
+      `eslint.config.js`. `sim.test.ts` (the rules: determinism, the turn loop, the
+      anti-cheat boundary, the seams) + `content.test.ts` (the rows they are played
+      over: catalog, roster, curve, composition template, the tutorial invariants).
+      **`eslint.config.js` now carries no exemptions at all.**
+
+### Two calls the design was silent on, and the sim forced
+
+Both are recorded in `src/client/tutorial.ts` at `coachFor`. Neither invents a
+mechanic; both are the script meeting a case the folder does not describe.
+
+- **A warden opens by guarding.** `lostDelver` can stand at depth 1 and its cycle is
+  `block / attack / attack`, so on ~10% of seeds nothing is coming on the first turn.
+  Asking for a block there teaches the exact wrong reflex — block is a decision about
+  the turn the hit lands on. **So READ has a second form on those days: its one legal
+  tap is END TURN**, which is the strongest possible demonstration that the track is
+  telling the truth, and it hands every later beat a turn that really does have a hit
+  on NOW. Measured: doing the wait *after* the strikes instead killed depth 1 before
+  the block lesson on 15 seeds in 3,000 and let 3 HP through; doing it first is clean
+  on every seed.
+- **A bleeding basic attack can finish depth 1 on the fourth beat's end turn.** Lash
+  applies `bleed 2`, two casts stack to 4, and 14 + 4 clears a low HP roll — 337 seeds
+  in 3,000. The run then stands on depth 2 when the fifth beat renders. That is a good
+  moment rather than a broken one, so **DESCEND has a second copy form that names it.**
+  Beats 1–4 are always on depth 1; a test pins that.
+
+**GATE — visual, and PLAYED. PASSED.** `npm run preview`, the five beats driven end to
+end at three viewports, measuring after the entrance animation settles rather than
+during it:
+
+| viewport | End turn | coach card | clear of the bar | smallest type |
+|---|---|---|---|---|
+| **320×568** (the tight one) | 548 / 568 | 93px, 3 lines | 19px | 9px |
+| 359×632 | 612 / 632 | 93px, 3 lines | 41px | 9px |
+| 1920×1080 | 1060 / 1080 | 83px, 3 lines | 46px | 11px |
+
+- [x] **Played end to end**, five beats, one legal tap each — and hit-tested: at every
+      beat `elementFromPoint` at the ring's own centre returns the ring, and at a
+      non-ringed tile returns the veil.
+- [x] Nothing overlaps: the card clears the threat track above it and the ability bar
+      below it at every size, and never covers the control it is naming.
+- [x] `prefers-reduced-motion`: with `animation: none` forced, the card is still fully
+      visible at its final position. **No keyframe anywhere in `game.css` touches
+      `opacity`** — checked over the whole stylesheet, not just the new rules.
+- [x] The practice run leaves no trace: mid-run, HOW TO PLAY → all five beats → camp,
+      and the real run came back at exactly the enemy HP and energy it was left at,
+      with the Daily door still `IN PROGRESS`.
+
+> **The mockup's `.hl` was broken, and it took playing it to see.** It declares
+> `position: relative`, which at equal specificity beats `.threat`'s `position:
+> absolute` — the ringed threat track flattened to a static block at the top of the
+> stage and overflowed it. The ring now sets only what it is for. There is a second,
+> deeper version of the same trap recorded in `game.css`: `.stage` and `.plinth` are
+> stacking contexts, so **one board-wide veil can never be beaten by a ring inside
+> either of them**. The dim is per region, and the region holding the ring is lifted.
+>
+> **The coach card's copy has a length budget and a test enforces it** (130 rendered
+> characters, `MAX_COPY_LENGTH`). Three lines fit between the plinth's top and the
+> ability bar at 320px; a fourth lands on the tiles. It has to be swept rather than
+> eyeballed because the values are filled from the day — the longest enemy name and
+> the widest number decide it, not the sentence as typed.
 
 ## Stage 4 — share grid, result, board, replay ▸ **SHIP**
 
