@@ -2378,6 +2378,129 @@ body {
   box-shadow: 0 0 16px rgb(167 144 238 / 60%);
 }
 
+/* ═══ the coach — screen 07 ════════════════════════════════════════════════════
+ *
+ * Three pieces and one rule between them: the VEIL dims the board, the RING names the
+ * one legal tap, and the CARD says why.
+ *
+ * **The mockup declares `.hl` and never uses it — and it would not have worked if it
+ * had.** `.stage` (z5) and `.plinth` (z12) are both stacking contexts, so a ring at
+ * z25 inside one of them is still trapped under a z22 veil that is a sibling of the
+ * REGION rather than of the ring. So the dim is per region: the region holding the
+ * ring is lifted above the board veil (`.lit`) and carries a veil of its own, and the
+ * ring only ever has to beat the one in its own context. `combat.ts` emits them,
+ * because it is the only thing that knows where a region begins.
+ *
+ * Everything here sits inside the `overlays z20-29` budget (GAME_DESIGN.md § Look and
+ * feel), and the veil deliberately does NOT set `pointer-events: none` — swallowing a
+ * mis-tap is half of "exactly one tap is legal"; the disabled attributes are the other
+ * half.
+ */
+
+.lockveil {
+  position: absolute;
+  inset: 0;
+  z-index: 22;
+  background: rgb(6 8 12 / 55%);
+}
+
+.stage.lit,
+.plinth.lit {
+  z-index: 23;
+}
+
+/* `.act` is a stacking context too (z14), one level further down, so a ringed button
+   inside it needs the whole row lifted as well. */
+.act.coached {
+  z-index: 25;
+}
+
+/* **It must not set `position`.** The mockup's `.hl` declares `position: relative`, and
+   because `.hl` is declared after `.threat` at equal specificity that wins — which
+   turns the absolutely-positioned threat track into a static block at the top of the
+   stage, overflowing it to the right. Caught at the visual gate, which is what it is
+   for. Every element that ever wears this ring (`.threat`, `.ab`, `.btn`) is already
+   positioned, so the ring only needs the two things it is actually for. */
+.hl {
+  z-index: 25 !important;
+  box-shadow: 0 0 0 2px var(--ok), 0 0 24px var(--ok-glow) !important;
+}
+
+/* Bright BY DESIGN: it has to beat every atmosphere layer, at every depth.
+ *
+ * It sits at the TOP OF THE PLINTH, always, measured off `--stage-h` — the geometry
+ * token that moves at every breakpoint. One position rather than one per beat, because
+ * it is the only band of the screen that is never ringed and never load-bearing: the
+ * threat track stays fully visible above it, the ability bar and the action row stay
+ * fully visible below it, and it lands on the hero rail, which the coach card is
+ * always talking about anyway. The mockup pins it at a raw `bottom: 206px`, which is
+ * exact for one 359px phone and wrong at every other size. */
+.coach {
+  position: absolute;
+  top: calc(var(--stage-h) + 20px);
+  left: 14px;
+  right: 14px;
+  z-index: 26;
+  padding: 11px 12px;
+  background: linear-gradient(180deg, #39435a, #1e2431);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 22%),
+    inset 0 0 0 1px #000,
+    0 10px 30px rgb(0 0 0 / 70%);
+  animation: coachin 0.3s cubic-bezier(0.2, 0.9, 0.2, 1) backwards;
+}
+
+/* transform ONLY, like every other entrance here. A backgrounded tab pins a
+   `backwards`-filled animation at frame one, and an `opacity: 0` first frame is a
+   coach card nobody can read on a screen where nothing else is tappable. */
+@keyframes coachin {
+  from { transform: translateY(7px); }
+}
+
+.coach .step {
+  font: 400 var(--px-2)/1 var(--px);
+  letter-spacing: 0.16em;
+  color: #a6bde0;
+}
+
+/* The one place in the game that asks the player to read a paragraph, so it rides the
+   PROPORTIONAL scale rather than the pixel face. */
+.coach .msg {
+  margin-top: 7px;
+  font-size: var(--ui-2);
+  line-height: 1.5;
+  color: #fff;
+}
+
+.coach .msg b {
+  color: #8fe6f4;
+}
+
+.coach::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  transform: rotate(45deg);
+}
+
+/* The arrow is the only thing a beat chooses: `up` at the threat track above the card,
+   `down` at the bar and the buttons below it. Each takes the colour of the gradient's
+   own edge at that end, or the notch reads as a separate object. */
+.coach.down::after {
+  bottom: -7px;
+  background: #232a38;
+  box-shadow: 1px 1px 0 0 #000;
+}
+
+.coach.up::after {
+  top: -7px;
+  background: #39435a;
+  box-shadow: -1px -1px 0 0 #000;
+}
+
 /* ═══ motion off ═══════════════════════════════════════════════════════════════ */
 
 @media (prefers-reduced-motion: reduce) {

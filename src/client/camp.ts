@@ -89,7 +89,10 @@ export function campScreen(info: CampInfo): string {
     + `<div class="chnext">${untilNextDelve(info.msToReset)}</div></div></div>`
     + `<div class="doors">${dailyDoor(info)}${lockedDoors()}</div>`
     + '<div class="grow"></div>'
-    + '<div class="act"><button class="btn small" disabled>HOW TO PLAY</button>'
+    // HOW TO PLAY is how the five beats stay reachable forever. They are offered once
+    // on a first session and then live here — a tutorial you can only ever see by
+    // clearing your browser storage is a tutorial nobody re-reads.
+    + '<div class="act"><button class="btn small" data-action="tutorial">HOW TO PLAY</button>'
     + `<button class="btn go" data-action="enter-daily">${doorLabel(info.daily)}`
     + `<span class="sub">~4 MIN &middot; ONE ATTEMPT</span></button></div>`;
   return inShell({ shell: 'surface', fire: true }, body);

@@ -35,6 +35,7 @@ import { combatScreen } from './combat';
 import { boonScreen, descentScreen } from './interlude';
 import { replayTransport, resultScreen, type ResultContext } from './result';
 import { loadBoard, loadInit, loadReplay, session, submitRun } from './session';
+import { tutorialLoadout, tutorialScreen } from './tutorial';
 
 const app = document.getElementById('app');
 if (!app) throw new Error('#app missing from HTML');
@@ -72,11 +73,22 @@ let replayUser = '';
 let replayPlaying = false;
 let replayTimer: ReturnType<typeof setTimeout> | undefined;
 
+/** The tutorial's practice run, and null when it is not up. **Physically separate from
+ *  `choices`** — the same separation `ownChoices` gives a replay, and for the same
+ *  reason: nothing practised here may ever reach a leaderboard entry. `applyChoice`
+ *  below is the single door every tap goes through, which is what makes that true by
+ *  construction rather than by discipline. */
+let tutorialChoices: RunChoice[] | null = null;
+/** The READ beat's tap. It is not a choice — the sim has no idea you looked at the
+ *  threat track — so it is the one piece of the script that is screen state. */
+let tutorialRead = false;
+
 
 // ---- committing a choice ---------------------------------------------------------
 
 function applyChoice(choice: RunChoice): void {
   if (replayChoices) return;
+  if (tutorialChoices) { applyTutorialChoice(choice); return; }
   const attempted = [...choices, choice];
   if (simulateRun(seed, attempted).outcome === 'invalid') return;
   choices = attempted;
@@ -105,6 +117,59 @@ function showDescentIfDeeper(): void {
 
 function endDescent(): void {
   descentDepth = null;
+  render();
+}
+
+// ---- the tutorial ----------------------------------------------------------------
+
+const TUTORIAL_SEEN_KEY = 'delvedeck.tutorial.seen';
+
+/** Storage is partitioned inside a feed iframe on some browsers, so this can throw.
+ *  A failed read means "do not open by itself" rather than "open every time": a
+ *  tutorial that reappears on every load is worse than one that never volunteers, and
+ *  HOW TO PLAY is on the camp forever either way. */
+function shouldOfferTutorial(): boolean {
+  try {
+    return window.localStorage.getItem(TUTORIAL_SEEN_KEY) === null;
+  } catch {
+    return false;
+  }
+}
+
+function markTutorialSeen(): void {
+  try {
+    window.localStorage.setItem(TUTORIAL_SEEN_KEY, '1');
+  } catch {
+    return; // offered again next session; not worth a broken boot
+  }
+}
+
+/** Five beats on depth 1 of the ACTUAL daily, on a list of their own. */
+function startTutorial(): void {
+  if (replayChoices) leaveReplay();
+  tutorialChoices = [tutorialLoadout(seed)];
+  tutorialRead = false;
+  descentDepth = null;
+  markTutorialSeen();
+  render();
+}
+
+/** Never `showDescentIfDeeper` and never `ownChoices`: a practice run must leave no
+ *  trace on the real one, and `deepestSeen` is the trace that would be easiest to
+ *  leave — set it here and the real descent into depth 1 would never be shown. */
+function applyTutorialChoice(choice: RunChoice): void {
+  const attempted = [...tutorialChoices!, choice];
+  if (simulateRun(seed, attempted).outcome === 'invalid') return;
+  tutorialChoices = attempted;
+  render();
+}
+
+/** The fifth beat returns to the CAMP; it does not descend. The real run then starts
+ *  from that second camp visit on a fresh, still-separate list. */
+function endTutorial(): void {
+  tutorialChoices = null;
+  tutorialRead = false;
+  screen = 'camp';
   render();
 }
 
@@ -223,6 +288,16 @@ function msToNextDelve(): number {
 }
 
 function render(): void {
+  if (tutorialChoices) {
+    const coached = tutorialScreen(simulateRun(seed, tutorialChoices), {
+      acknowledged: tutorialRead,
+      choices: tutorialChoices,
+    });
+    // A practice run that has somehow left depth 1's combat screen has nothing left to
+    // coach. Drop the tutorial rather than render half of one.
+    if (coached !== null) { app!.innerHTML = coached; return; }
+    tutorialChoices = null;
+  }
   app!.innerHTML = screenFor(simulateRun(seed, choices));
 }
 
@@ -243,6 +318,7 @@ function commitBoon(): void {
 
 function goToCamp(): void {
   if (replayChoices) leaveReplay();
+  tutorialChoices = null;
   screen = 'camp';
   endDescent();
 }
@@ -299,6 +375,11 @@ app.addEventListener('click', (event) => {
   switch (action) {
     case 'enter-daily': screen = 'run'; render(); break;
     case 'camp': goToCamp(); break;
+    case 'tutorial': startTutorial(); break;
+    // The READ beat. `coach` is the chrome's own vocabulary — `combat.ts` knows it has
+    // been handed a focus, never that a tutorial exists.
+    case 'coach': tutorialRead = true; render(); break;
+    case 'tutorial-done': endTutorial(); break;
     case 'submit':
       // `void`: submitRun reports failure through its resolved value, so there is
       // nothing left to catch here.
@@ -349,6 +430,15 @@ async function boot(): Promise<void> {
       deepestSeen = TUNING.depths;
     }
     await loadBoard();
+  }
+
+  // First session ever: the five beats run before the real descent, on depth 1 of the
+  // actual daily. Offered ONCE, not prompted for — a "would you like a tutorial?"
+  // dialog is the fourth step the funnel refuses to have (GAME_DESIGN.md § The first
+  // session). Never over a run that is already recorded.
+  if (!init?.alreadyPlayed && shouldOfferTutorial()) {
+    startTutorial();
+    return;
   }
   render();
 }

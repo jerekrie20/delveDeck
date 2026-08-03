@@ -26,7 +26,24 @@ import { TUNING, type CombatView, type IntentKind } from '../shared/sim';
 import { abilityClass, abilityGlyph, enemyArt, HERO_ART } from './art';
 import { escapeHtml, fillPercent, inShell, motes } from './shell';
 
-const WHEN = ['NOW', 'NEXT', 'THEN'] as const;
+export const WHEN = ['NOW', 'NEXT', 'THEN'] as const;
+
+/**
+ * The one control a coach leaves open, and the ring that names it.
+ *
+ * This file does not know what a tutorial beat is — it is handed a target, makes
+ * exactly that one thing tappable, and puts everything else under the veil. `footer`
+ * is the fifth beat, which is not a combat action at all.
+ */
+export type CombatFocus =
+  | { on: 'threat' }
+  | { on: 'slot'; slot: number }
+  | { on: 'end' }
+  | { on: 'footer' };
+
+/** The dim. One per REGION, not one per screen — see the `── the coach ──` block in
+ *  `game.css` for why a single overlay cannot work here. */
+const VEIL = '<div class="lockveil"></div>';
 
 /** Attack / block / buff, as the mockup draws them. Entities rather than literals so
  *  the file stays ASCII and the glyphs cannot be mangled by an editor. */
@@ -36,7 +53,8 @@ const GLYPH: Record<IntentKind, string> = {
   buff: '&#9650;',
 };
 
-function threatTrack(view: CombatView): string {
+function threatTrack(view: CombatView, focus?: CombatFocus): string {
+  const coached = focus?.on === 'threat';
   const slots = view.threat.map((intent, i) => {
     const position = WHEN[i]!.toLowerCase();
     if (i >= view.foresight) {
@@ -53,7 +71,10 @@ function threatTrack(view: CombatView): string {
       + `<span class="gly">${GLYPH[intent.kind]}</span>`
       + `<span class="val">${intent.value}</span>${plus}</div></div>`;
   });
-  return `<div class="threat">${slots.join('')}</div>`;
+  // The track is the only part of the STAGE anything ever asks a player to tap, and
+  // it only happens in the tutorial's first beat.
+  return `<div class="threat${coached ? ' hl' : ''}"`
+    + `${coached ? ' data-action="coach"' : ''}>${slots.join('')}</div>`;
 }
 
 /** The enemy plate. A portrait when the roster row has one, glowing eyes when it does
@@ -67,7 +88,8 @@ function enemyPlate(view: CombatView): string {
   return `<div class="pw"><div class="pglow"></div><div class="port">${inner}</div></div>`;
 }
 
-function stage(view: CombatView): string {
+function stage(view: CombatView, focus?: CombatFocus): string {
+  const lit = focus?.on === 'threat';
   const below = Math.max(0, TUNING.depths - view.depth);
   const tags = [
     ...view.enemyTags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`),
@@ -76,7 +98,8 @@ function stage(view: CombatView): string {
     ),
     ...(view.enemyBlock > 0 ? [`<span class="tag trait">block ${view.enemyBlock}</span>`] : []),
   ].join('');
-  return '<div class="stage"><div class="bd"></div><div class="above"></div>' + motes()
+  return `<div class="stage${lit ? ' lit' : ''}">`
+    + '<div class="bd"></div><div class="above"></div>' + motes()
     + `<div class="stagetop"><span class="depthtag">DEPTH ${view.depth} &middot; `
     + `${view.stratum.toUpperCase()}</span><span class="eyebrow">${below} BELOW</span></div>`
     + `<div class="foe">${enemyPlate(view)}<div class="fside">`
@@ -86,7 +109,8 @@ function stage(view: CombatView): string {
     + `${fillPercent(view.enemyHp, view.enemyMaxHp)}%"></div></div>`
     + '<div class="fline"><span class="eyebrow">HULL</span>'
     + `<span class="n">${view.enemyHp}<small> / ${view.enemyMaxHp}</small></span></div>`
-    + `</div></div></div>${threatTrack(view)}<div class="vig"></div></div>`;
+    + `</div></div></div>${threatTrack(view, focus)}<div class="vig"></div>`
+    + `${lit ? VEIL : ''}</div>`;
 }
 
 /** Block, HP, and what NOW will cost. The loss segment on the rail is the same number
@@ -125,8 +149,8 @@ function resourceRow(view: CombatView): string {
 
 /** Three columns of equipped abilities, then the ultimate as a full-width row beneath
  *  them. `live` is false in a replay, where the bar is a readout rather than a
- *  control. */
-export function abilityBar(view: CombatView, live: boolean): string {
+ *  control; `focus` is the tutorial, where exactly one tile stays open. */
+export function abilityBar(view: CombatView, live: boolean, focus?: CombatFocus): string {
   let tiles = '';
   view.bar.forEach((id, i) => {
     const row = ABILITIES[id]!;
@@ -135,12 +159,17 @@ export function abilityBar(view: CombatView, live: boolean): string {
     // what that player had available, so a tile they could have cast still reads as
     // castable — greying the whole bar would hide the decision being watched.
     const off = cooling || row.cost > view.energy;
+    const ringed = focus?.on === 'slot' && focus.slot === i;
+    // Under a coach, EXACTLY ONE tap is legal: the ring both opens this tile and
+    // closes every other one, so there is no second place the rule is written down.
+    const open = !off && (focus === undefined ? live : ringed);
     const mask = cooling
       ? `<div class="cdmask"><b>${view.cds[i]}</b><i style="width:`
         + `${row.cd > 0 ? 100 - (view.cds[i]! / row.cd) * 100 : 0}%"></i></div>`
       : '';
-    tiles += `<button class="ab ${abilityClass(id)}${off ? ' off' : ' ready'}" style="--i:${i}"`
-      + `${off || !live ? ' disabled' : ` data-action="cast" data-index="${i}"`}>`
+    tiles += `<button class="ab ${abilityClass(id)}${off ? ' off' : ' ready'}`
+      + `${ringed ? ' hl' : ''}" style="--i:${i}"`
+      + `${open ? ` data-action="cast" data-index="${i}"` : ' disabled'}>`
       + `<div class="ico">${abilityGlyph(id)}</div>`
       + `<div class="cost"><span>${row.cost}</span></div>`
       + `<div class="nm">${escapeHtml(row.name)}</div>`
@@ -150,9 +179,10 @@ export function abilityBar(view: CombatView, live: boolean): string {
   });
   const ultimate = ABILITIES[view.ultimate]!;
   const ready = view.ultReady;
+  const ultOpen = ready && live && focus === undefined;
   tiles += `<button class="ab ult ${abilityClass(view.ultimate)}`
     + `${ready ? ' ready charged' : ' off'}" style="--i:5"`
-    + `${ready && live ? ' data-action="ult"' : ' disabled'}><div class="sheen"></div>`
+    + `${ultOpen ? ' data-action="ult"' : ' disabled'}><div class="sheen"></div>`
     + `<div class="ico">${abilityGlyph(view.ultimate)}</div>`
     + `<div class="nm">${escapeHtml(ultimate.name)}</div>`
     + `<div class="rx">${escapeHtml(ultimate.text)}</div>`
@@ -165,10 +195,16 @@ export function abilityBar(view: CombatView, live: boolean): string {
  *  it means truncate-and-resimulate — trivial to build, but it moves the skill floor,
  *  and on a one-attempt-per-day game that is a design decision rather than a
  *  convenience. Do not drift into it (GAME_DESIGN.md § Open questions). */
-function actions(view: CombatView): string {
+function actions(view: CombatView, focus?: CombatFocus): string {
   const taking = view.incoming > 0;
-  return '<div class="act"><button class="btn small" disabled>UNDO</button>'
-    + `<button class="btn ${taking ? 'danger' : 'go'}" data-action="end">END TURN`
+  const ringed = focus?.on === 'end';
+  const open = focus === undefined || ringed;
+  // `.act` is a stacking context of its own, so a ringed button inside it needs the
+  // ROW lifted above the plinth's veil as well — see `game.css` § the coach.
+  return `<div class="act${ringed ? ' coached' : ''}">`
+    + '<button class="btn small" disabled>UNDO</button>'
+    + `<button class="btn ${taking ? 'danger' : 'go'}${ringed ? ' hl' : ''}"`
+    + `${open ? ' data-action="end"' : ' disabled'}>END TURN`
     + `<span class="sub">${taking ? `TAKE ${view.incoming}` : 'TAKE NOTHING'}</span>`
     + `${taking ? '<div class="hz"></div>' : ''}</button></div>`;
 }
@@ -176,10 +212,11 @@ function actions(view: CombatView): string {
 /**
  * Slots the screen hands out rather than owning.
  *
- * Both exist because two other things reuse this exact screen without being it: the
- * replay watches it (`live: false`, a WATCHING banner, the transport where the actions
- * go) and Stage 3's tutorial will coach on it. Neither should have to know how a
- * plinth is assembled, and this file should not have to know either of them exists.
+ * All three exist because two other things reuse this exact screen without being it:
+ * the replay watches it (`live: false`, a WATCHING banner, the transport where the
+ * actions go) and the tutorial coaches on it (`focus`, a coach card in the banner, its
+ * own button in the footer). Neither should have to know how a plinth is assembled,
+ * and this file should not have to know either of them exists.
  */
 export interface CombatChrome {
   /** False makes the bar a readout: the tiles still show what was castable, but
@@ -189,15 +226,26 @@ export interface CombatChrome {
   banner?: string;
   /** Replaces the action row at the foot of the plinth. */
   footer?: string;
+  /** Present only under a coach. It dims the board and opens exactly one control —
+   *  the veils below are this file's job because it is the only thing that knows
+   *  where a region begins. */
+  focus?: CombatFocus;
 }
 
 export function combatScreen(view: CombatView, log: string, chrome: CombatChrome): string {
   const low = view.hp / view.maxHp < 0.35;
-  const foot = chrome.footer ?? (chrome.live ? actions(view) : '');
-  const body = (chrome.banner ?? '')
-    + stage(view)
-    + `<div class="plinth">${heroBand(view)}${resourceRow(view)}`
+  const { focus } = chrome;
+  const foot = chrome.footer ?? (chrome.live ? actions(view, focus) : '');
+  // The stage dims itself when it holds the ring (see `stage`); otherwise it is the
+  // plinth's turn. The third veil is the board-wide one, which also covers the depth
+  // spine and the way out — under a coach there is no way out but the coach.
+  const litPlinth = focus !== undefined && focus.on !== 'threat';
+  const body = (focus === undefined ? '' : VEIL)
+    + (chrome.banner ?? '')
+    + stage(view, focus)
+    + `<div class="plinth${litPlinth ? ' lit' : ''}">${heroBand(view)}${resourceRow(view)}`
     + `<div class="log"><span>&#9662;</span><em>${escapeHtml(log)}</em></div>`
-    + `${abilityBar(view, chrome.live)}<div class="grow"></div>${foot}</div>`;
+    + `${abilityBar(view, chrome.live, focus)}<div class="grow"></div>${foot}`
+    + `${litPlinth ? VEIL : ''}</div>`;
   return inShell({ shell: view.stratum, depth: view.depth, panic: low }, body);
 }
