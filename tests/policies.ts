@@ -17,6 +17,17 @@ export function firstLoadout(size: number = TUNING.barMin): RunChoice {
   return { k: 'load', bar: Array.from({ length: size }, (_, i) => i), ult: 0 };
 }
 
+/** Advance a run to the first combat view, given a loadout. Shared by `sim.test.ts`
+ *  and `content.test.ts`, both of which need "what does depth 1 actually look like on
+ *  this seed" before they can assert anything about it. */
+export function firstCombat(seed: number, load: RunChoice = firstLoadout()): CombatView {
+  const view = simulateRun(seed, [load]).view;
+  if (!view || view.phase !== 'combat') {
+    throw new Error(`seed ${seed}: expected a combat view after the loadout`);
+  }
+  return view;
+}
+
 /** A bar built from the day's pool by archetype, so a test can ask for "the day's
  *  basic attack" without knowing which of the four was issued. */
 export function loadoutWithArchetypes(seed: number, wanted: readonly string[]): RunChoice {

@@ -111,25 +111,15 @@ export default defineConfig([
     extends: ['js/recommended'],
   },
 
-  // ---- size-rule exemptions, each with the stage that removes it ----------------
+  // ---- size-rule exemptions: THERE ARE NONE, AND THERE SHOULD NOT BE ------------
   //
-  // ONE file left. It is not exempt because it is fine; it is exempt because splitting
-  // it NOW would be work that gets thrown away, and it carries a line in TODO.md under
-  // the stage that clears it. **Do not add a second without one.**
+  // Both are gone. `src/client/main.ts` went at Stage 2, when the v5 port split the
+  // client into one module per place — `shell`, `camp`, `combat`, `interlude`,
+  // `result`, `session`, `tutorial`, `main`. `tests/sim.test.ts` went at Stage 3,
+  // split into `sim.test.ts` (the rules) + `content.test.ts` (the rows they are played
+  // over), which is a split by what makes each file fail rather than by line count.
   //
-  // `src/client/main.ts` was the other entry and it is GONE as of Stage 2: the v5 port
-  // split the client into one module per place — `shell`, `camp`, `combat`,
-  // `interlude`, `result`, `session` — and every one of them, `main.ts` included, is
-  // under 400/80 on its own merits.
-  {
-    files: [
-      // 45 independent checks. Cheap to split into sim.test.ts + content.test.ts, but
-      // it was out of scope for the change that introduced the rule. Stage 3 clears it.
-      'tests/sim.test.ts',
-    ],
-    rules: {
-      'max-lines': 'off',
-      'max-lines-per-function': 'off',
-    },
-  },
+  // **Do not add one back without a line in TODO.md naming the stage that removes it.**
+  // Both of the exemptions that existed were paid off exactly because they carried one;
+  // an exemption with no stage attached is just the rule being switched off.
 ]);
