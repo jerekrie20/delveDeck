@@ -18,5 +18,9 @@ await import('./share.test');
 // sweeps. Both halves are needed: the invariants say the lesson is possible on every
 // seed, and this says the coaching actually delivers it.
 await import('./tutorial.test');
+// `hero` owns the first thing in this game that OUTLIVES A DAY — the persisted shape,
+// the migration that reads it back, and the compare-and-set loop. It is separate from
+// `server.test` because it fails when the stored shape changes and nothing else does.
+await import('./hero.test');
 
 summary();

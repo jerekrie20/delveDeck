@@ -14,6 +14,7 @@
     "prettier": "prettier-package-json --write ./package.json && prettier --write .",
     "preview": "vite --config vite.preview.config.ts",
     "test": "tsx tests/all.ts && vitest run --project server",
+    "test:visual": "tsx tests/visual/run.ts",
     "type-check": "tsc --build"
   },
   "engines": {
@@ -47,6 +48,7 @@
     "eslint-plugin-react-hooks": "7.1.1",
     "eslint-plugin-react-refresh": "0.5.3",
     "globals": "^17.7.0",
+    "playwright": "^1.62.1",
     "prettier": "3.9.4",
     "prettier-package-json": "2.8.0",
     "prettier-plugin-tailwindcss": "0.8.0",

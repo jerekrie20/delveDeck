@@ -37,6 +37,12 @@ export interface ServerInit {
   subreddit: string;
   alreadyPlayed: boolean;
   stats: DayStats;
+  /** The delver's banked shards — the first thing in this game that outlives a day.
+   *  Rides along with `init` because the camp is the landing screen, so this number is
+   *  on the first thing anybody sees and a second round trip would render it blank and
+   *  then pop. 0 for a logged-out player and under `npm run preview`, where there is
+   *  no account to read. */
+  shards: number;
 }
 
 interface SessionState {

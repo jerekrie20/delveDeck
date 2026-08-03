@@ -8,9 +8,13 @@
 
 import { expect } from 'vitest';
 import { test } from '../test';
-import { redisRunStore } from './runStore';
+import { redisHeroClient, redisRateLimitClient, redisRunStore } from './runStore';
 import { getBoard, submitRun } from './run';
 import { readDayStats } from './stats';
+import { heroKey, readHero, updateHero } from './heroStore';
+import { bankRunShards, bankShards, readShardTotal } from './hero';
+import { consumeRateLimit } from './rateLimit';
+import { STORED_HERO_VERSION } from './heroSchema';
 import {
   depthReached, MAX_RUN_CHOICES, seedForDay, simulateRun, TUNING, type RunChoice,
 } from '../../shared/sim';
@@ -184,4 +188,109 @@ test('a second submission by the same user is refused and does not duplicate', a
   expect(first.ok).toBe(true);
   expect(second.ok).toBe(false);
   expect(await getBoard(redisRunStore, day, sub)).toHaveLength(1);
+});
+
+// ---- Stage 5: the account's Redis calls -----------------------------------------
+//
+// What these DO cover: that Devvit's wrapper is being spoken correctly — `watch`
+// returns a transaction whose `multi`/`set`/`exec`/`unwatch` are the four the CAS loop
+// calls, `get` hands back `string | undefined`, `incrBy` returns a number and not a
+// string, and a whole round trip through them lands the value.
+//
+// What they CANNOT cover, and it matters: **this mock never produces a WATCH
+// conflict.** `RedisMock.Watch` records the watched keys and `Exec` never reads them,
+// so every transaction commits. The conflict branch — the entire point of a CAS loop —
+// is exercised against the in-memory fake in `tests/hero.test.ts`. Neither layer is
+// optional; see `GAME_DESIGN.md` § The Devvit Redis rule.
+
+const NOW = 1_770_000_000_000;
+
+test('the hero round-trips through a real WATCH / MULTI / EXEC', async () => {
+  const user = 't2_roundtrip';
+
+  const { hero } = await updateHero(redisHeroClient, user, NOW, bankShards(120), 3);
+
+  expect(hero.shards).toBe(120);
+  expect(hero.v).toBe(STORED_HERO_VERSION);
+  // Read it back through the client, not through the returned object — the point is
+  // that the transaction actually committed to Redis.
+  expect(await readShardTotal(redisHeroClient, user, NOW)).toBe(120);
+});
+
+test('exec() resolves to an ARRAY of results — the conflict signal is its LENGTH', async () => {
+  // Pinned directly against the real wrapper, because this is the assumption the whole
+  // CAS loop rests on and the one that is wrong in every CAS example written for raw
+  // Redis. If a future Devvit version answers a committed exec differently, this is
+  // where it surfaces — not in a lost write six months later.
+  const tx = await redisHeroClient.watch('hero:t2_execshape');
+  await tx.multi();
+  await tx.set('hero:t2_execshape', 'value');
+  const result = await tx.exec();
+
+  expect(Array.isArray(result)).toBe(true);
+  expect((result as unknown[]).length).toBeGreaterThanOrEqual(1);
+});
+
+test('a hero survives a reload, and the total accumulates across writes', async () => {
+  const user = 't2_reload';
+
+  await bankRunShards(redisHeroClient, user, 40, NOW);
+  await bankRunShards(redisHeroClient, user, 75, NOW + 1000);
+
+  const reloaded = await readHero(redisHeroClient, user, NOW + 2000);
+  expect(reloaded?.shards).toBe(115);
+  // Every top-level key the design calls for is present in what was actually stored,
+  // not just in what the constructor returns.
+  expect(Object.keys(reloaded ?? {})).toEqual(
+    expect.arrayContaining(['records', 'unlocked', 'deeds', 'talents', 'codex', 'camp']),
+  );
+});
+
+test('readHero is a read — it never creates a key', async () => {
+  const user = 't2_neverplayed';
+
+  expect(await readHero(redisHeroClient, user, NOW)).toBeNull();
+  expect(await readShardTotal(redisHeroClient, user, NOW)).toBe(0);
+  // `redisRunStore.readRun` is a plain GET, which is all this needs.
+  expect(await redisRunStore.readRun(heroKey(user))).toBeNull();
+});
+
+test('END TO END — a submitted run banks its shards onto the hero', async () => {
+  // The gate's fourth line, against real Redis. `submitRun` reports the shards it
+  // recomputed; the route banks them on the far side of the one-per-day claim. The
+  // Daily itself is untouched: this reads `result.shards`, an OUTPUT of the sim.
+  const day = '2026-07-27';
+  const sub = 'shardsub';
+  const user = 't2_shardbanker';
+  const choices = finishedRun(day);
+
+  const submitted = await submitRun(redisRunStore, day, sub, 'alice', choices, Date.now());
+  expect(submitted.ok).toBe(true);
+  if (!submitted.ok) return;
+
+  const banked = await bankRunShards(redisHeroClient, user, submitted.shards, NOW);
+  expect(banked).toBe(submitted.shards);
+  expect(await readShardTotal(redisHeroClient, user, NOW)).toBe(submitted.shards);
+});
+
+test('incrBy returns a NUMBER, so the rate limiter can compare against a limit', async () => {
+  // The same class of trap as `hGetAll` handing back strings: a '1' + 1 = '11' here
+  // would mean the second request in a window already reads as over the limit.
+  const user = 't2_limited';
+
+  const first = await consumeRateLimit(redisRateLimitClient, 'submit', user, 2, 60, NOW);
+  const second = await consumeRateLimit(redisRateLimitClient, 'submit', user, 2, 60, NOW);
+  const third = await consumeRateLimit(redisRateLimitClient, 'submit', user, 2, 60, NOW);
+
+  expect([first, second, third]).toEqual([true, true, false]);
+});
+
+test('rate-limit windows rotate by time, so a limit is never permanent', async () => {
+  const user = 't2_rotating';
+  await consumeRateLimit(redisRateLimitClient, 'submit', user, 1, 60, NOW);
+
+  expect(await consumeRateLimit(redisRateLimitClient, 'submit', user, 1, 60, NOW)).toBe(false);
+  expect(
+    await consumeRateLimit(redisRateLimitClient, 'submit', user, 1, 60, NOW + 60_000),
+  ).toBe(true);
 });

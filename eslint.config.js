@@ -68,6 +68,17 @@ export default defineConfig([
     },
   },
   {
+    // The visual gate straddles the seam ON PURPOSE and is the only place in the repo
+    // that does. `gate.ts` runs in the browser (vite transpiles and serves it to the
+    // page); `run.ts` runs in Node but hands browser callbacks to Playwright, so both
+    // sets of globals are legitimately in scope in both files. This is NOT a size or
+    // rule exemption — every other rule, including 400/80, still applies.
+    files: ['tests/visual/**/*.ts'],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.browser },
+    },
+  },
+  {
     files: ['**/*.{js,mjs,cjs,ts,tsx}'],
     rules: {
       '@typescript-eslint/no-floating-promises': 'error',

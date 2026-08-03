@@ -25,9 +25,9 @@ else is after the ship.
 | 04 | **Gear & stash** | 6 | **Eleven slots** now, not four — the mockup draws a subset. **Four *displayed* stats** (MAX HP · ATTACK · BLOCK · FORESIGHT) over many affix effects. Code-drawn rarity plates, six tiers — *zero new art assets*. Compare deltas inline. `STRIKE DMG`→**ATTACK** and `GUARD BLOCK`→**BLOCK**, because the day's basic attack often isn't Strike. Stash **grows**; salvage/reroll/ascend live here ([GEAR.md](GEAR.md)). |
 | 05 | **Lantern & shrine** | 7 | **The lantern is now a found gear slot**, not a purchase — the mockup's tier-buy is gone. The shrine keeps two jobs: **ascending your lantern** (which is how shards still buy foresight) and cosmetics, which recolour your flame so you see it in every frame of every fight and **never affect numbers** ([GEAR.md](GEAR.md)). |
 | 06 | **Combat** — *playable* | 2 | The core screen. Stage + plinth + threat track + ability grid. THEN is **locked, not invisible** — it shows the reason. UNDO ships disabled. |
-| 07 | **Tutorial** — coached on the real run | 3 | **Five beats, not fifteen**, on depth 1 of the actual daily. Board dims; exactly one tap is legal. The coach card must beat every atmosphere layer. |
+| 07 | **Tutorial** — coached on the real run | 3 | **Five beats, not fifteen**, on depth 1 of the actual daily. Board dims; exactly one tap is legal. The coach card must beat every atmosphere layer. **Two beats have a second form** — see below; both are confirmed. |
 | 08 | **Boons** — replaces the draft | 2 | Boons *modify* abilities rather than adding cards, so nothing dilutes. Skipping pays shards. **Boons target an archetype, not an ability id** — "your basic attack", not "Strike", since Strike may not have been issued. Cadence is after every stratum boss (4/8/12), not the mockup's depth 5. |
-| 09 | **Descent** — between depths | 2 | 1.4 seconds. Marks progress, names the stratum, lands the shared-seed stat **as a threat, not a cheer** (*"612 of 1,284 never got this far"*). |
+| 09 | **Descent** — between depths | 2 | **Waits for a tap** (it was 1.4 seconds; a timer meant the screen naming where you now are went by unread). Marks progress, names the stratum, lands the shared-seed stat **as a threat, not a cheer** (*"612 of 1,284 never got this far"*) — **held back until ten delvers, see below**. |
 | 10 | **Result & share grid** | 4 | The grid **is** the shaft: three rows of four, read downward, labelled `WARRENS`/`HOLD`/`CRYPT`. Spoiler-free — no enemy, no ability, no order. Score breakdown lines up to 1037. |
 | 11 | **Leaderboard** | 4 | Play button leads every row. Depth trace + **loadout size** are the spoiler-free strategic signature. |
 | 12 | **Replay** — scrub the track | 4 | Scrubbing re-simulates to step N — pure sim, no persistent DOM. **Segments are depths, not seconds**, so "jump to 9" is one tap. Consumes `depthMarks`. |
@@ -35,9 +35,65 @@ else is after the ship.
 | 14 | **Endless** — death | 6 | The loss has to sting or the fork isn't a decision. **The whole haul is struck through — shards *and* every item found this run.** Equipped kit, depth record, XP and story are kept. **This overrides the mockup's "gear is always kept"** ([GEAR.md](GEAR.md)). |
 | 15 | **The community delve** | 8 | Every depth anyone reaches digs the shared shaft one metre. Resets Sunday. Cheapest new mode to build, most Reddit-native. |
 | 16 | **The Thing at Sixty** | **deferred** | A boss with pooled HP no individual can kill. 4,200 HP. Ship the shaft alone first. |
-| 17 | **Records** | 5+ | Streak is the retention hook and belongs to the **Daily only** — the Endless can't protect a streak. Calendar coloured by depth, so a bad week is a lighter band. Needs per-day history. |
+| 17 | **Records** | **6** | Streak is the retention hook and belongs to the **Daily only** — the Endless can't protect a streak. Calendar coloured by depth, so a bad week is a lighter band. Needs per-day history. **Deliberately NOT in Stage 5** — see below. |
 
 ---
+
+## Three screen-level calls taken at Stage 5
+
+Each one is a case the mockup does not draw and the design was silent on. They are
+recorded here rather than only in code, because all three are decisions about what a
+player *sees*, and the next person to touch these screens will otherwise re-litigate
+them from scratch.
+
+### 09 · the shared-seed line stays hidden until **ten** delvers
+
+The line is meant to land as a threat — *"612 of 1,284 never got this far."* Below ten
+runs it would read *"1 of 3 never got this far"*: true, meaningless, and it makes the
+subreddit look empty on precisely the day it most needs not to. **Below the floor the
+screen falls back to copy that claims no numbers at all** — the stratum and what waits
+— which is atmosphere rather than a confession.
+
+**Decided: keep the floor at ten.** A number that small is worse than no number. It is
+one constant (`MIN_DELVERS_FOR_STAT` in `src/client/interlude.ts`) if that is ever
+reconsidered.
+
+### 07 · beat 1 becomes END TURN when nothing is coming
+
+The tutorial runs on the real daily, so it meets whatever depth 1 rolled. About one day
+in ten that enemy **opens by guarding**, and on those days there is no incoming hit for
+the BLOCK lesson to be about. Teaching "block now" there would teach the wrong reflex —
+blocking is a decision about the turn the hit actually lands on.
+
+**Decided: on those days the first beat is END TURN instead.** It is the strongest
+available proof that the threat track tells the truth, and it hands every later beat a
+turn that really does have an attack on NOW. Measured: doing the wait *after* the two
+practice attacks killed depth 1 before the block lesson on 15 seeds in 3,000; doing it
+first is clean on every seed.
+
+### 07 · beat 5 may happen one floor down, and says so
+
+Two practice attacks are what make the tutorial work on **every** seed — the invariant
+is *"two casts leave depth 1 alive but low"*. On roughly one day in nine the day's basic
+attack bleeds, two of them stack, and the enemy dies at the end of beat 4, so beat 5
+renders standing on depth 2.
+
+**Decided: that is a good moment, not a broken one.** DESCEND has a second copy form
+that names it — you killed something, here is where you are now. Cutting to one practice
+attack would weaken the guarantee that carries the whole tutorial, which is a far worse
+trade than a second sentence.
+
+### Why Records (17) is **not** in Stage 5
+
+Stage 5's whole point is proving the persistence layer against real traffic with the
+smallest thing that can be lost — **one field, `shards`**. The streak is the single
+strongest reason to come back tomorrow, and it needs a saved record of *every day you
+have played*: more storage, more shapes that must survive future migrations, and more
+that can go wrong on the one write that is genuinely hard to take back.
+
+**Decided: shards at Stage 5, records at Stage 6** — with the hero's v1 schema already
+carrying an empty `records` key, so adding the calendar later is a fill rather than a
+migration.
 
 ## Screens the design now needs that the mockup does not draw
 
@@ -89,7 +145,7 @@ the *door* is closed.
 |---|---|
 | Relic slot (04) | Defer past Endless. "Relics drop below depth 18" — there is no depth 18 until Stage 6. |
 | The Thing at Sixty (16) | Defer. Ship the shaft alone. |
-| Records / calendar / streak (17) | Stage 5+. Needs per-day history, which needs accounts. |
+| Records / calendar / streak (17) | **Stage 6**, decided at Stage 5. Needs per-day history; Stage 5 ships the empty `records` key so it lands as a fill, not a migration. |
 | Stash "12 items" (04) | **Grows with level**, not a fixed cap. Eleven slots need room; salvage makes overflow income. |
 | Uniques and sets (04) | Backlog. The procedural model ships first; named items are rows added later, which is what the model is for. |
 | Elite enemy variants | Cut. A fourth axis of variance on top of pool, cast and jitter makes two players' "same shaft" harder to reason about. |

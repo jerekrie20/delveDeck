@@ -236,6 +236,21 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* RESERVE THE SCROLLBAR'S SPACE, ALWAYS.
+   The loadout is the one screen that is taller than the viewport by design — that is
+   what its sticky confirm bar is for — so a scrollbar appears when you open it and
+   goes away when you leave. Without a reserved gutter the whole centred column jumps
+   sideways by half the scrollbar's width every single time: measured at 1920×1080,
+   the shell's left edge moved 660 → 653 → 660 walking camp → loadout → camp, and the
+   loadout's own height changes again as rows move between the EQUIPPED and ISSUED
+   panes, so it flickers while you build a bar.
+   `stable` costs a permanent ~7px offset from true centre, which nobody can see
+   because there is nothing to compare it against. The jump was visible on every
+   screen change, which is the entire difference. */
+html {
+  scrollbar-gutter: stable;
+}
+
 /* The atmosphere layers are wider than the shell on purpose — the lantern is a 420px
    ellipse — so something has to contain them or a phone gets a horizontal scrollbar.
    That job belongs to `.app` and its `overflow-x: clip` below, NOT to `html, body`:
@@ -1247,7 +1262,9 @@ body {
   overflow: hidden;
 }
 
-/* Sits in the glyph row's spare space rather than over the rules text. */
+/* Pinned to the tile, NOT part of the flex flow — which is the whole reason the two
+   rules below exist. The tile is `justify-content: flex-end`, so its rows are anchored
+   to the bottom and grow UPWARD; this tag stays at 27px while they move past it. */
 .ab .cdtag {
   position: absolute;
   top: 27px;
@@ -1262,6 +1279,17 @@ body {
 .ab.hascd .nm {
   padding-right: 26px;
 }
+
+/* ⚠ KNOWN, MEASURED, AND DELIBERATELY NOT FIXED HERE — see TODO.md § Stage 6.
+   The tag also crosses the RULES row once that row is two lines: the block grows
+   upward into the tag's band and the first line runs under `CD 3` (17×4px of real
+   glyph overlap at 359px). The obvious fix — `padding-right: 26px` here, matching
+   `.nm` above — was tried and REVERTED, because it is a worse bug than the one it
+   fixes: it cuts Ice Nova's rules from "Deal 15 damage. Weaken 4." (25 of 25
+   characters shown) to "Deal 15 damage. W" (17 of 25), and Tumble's from 32 visible
+   characters to 16. Losing what an ability DOES, to protect a secondary metadata tag,
+   is the wrong trade. The real fix moves the tag into the flex flow so it rides up
+   with the content — a `combat.ts` markup change, not a CSS one. */
 
 .ab.ready {
   box-shadow:
@@ -1625,9 +1653,48 @@ body {
   box-shadow: inset 0 1px 0 rgb(255 205 150 / 30%), inset 0 0 0 1px #000;
 }
 
+/* The camp head's identity column. **Deliberately not `.grow`.** That class is a
+   spacer — `flex: 1 0 auto`, shrink 0 — which is right for the empty divs that push a
+   button row to the bottom and wrong here: this is the only thing standing between a
+   20-character username and the shard total, and it has to be the part that gives.
+   With `.grow` the head overflowed its own box by 45px at 320px, and the inline
+   `min-width: 0` it used to carry could not fix that on its own. */
+.chid {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .chname {
   font: 400 var(--px-7)/1 var(--px);
   text-shadow: 0 2px 0 #000;
+  /* A Reddit username can be 20 characters. With the shard block now taking the right
+     edge, a long one at 320px would push it off the head entirely — clip the name,
+     never the number. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The banked total — the first thing in this game that outlives a day. The mockup's
+   own camp-head block (screen 02), with its 7px key raised to the 9px floor and both
+   sizes routed through the scale so the head grows with the breakpoints like
+   everything else. The colour is derived from `--shard` rather than written twice. */
+.shards {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.shards .v {
+  font: 400 var(--px-7)/1 var(--px);
+  color: color-mix(in srgb, var(--shard) 76%, #fff);
+  text-shadow: 0 0 14px color-mix(in srgb, var(--shard) 55%, transparent);
+}
+
+.shards .k {
+  font: 400 var(--px-1)/1 var(--px);
+  letter-spacing: 0.14em;
+  color: var(--dim);
+  margin-top: 6px;
 }
 
 .chclass {

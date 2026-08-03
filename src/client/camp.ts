@@ -33,6 +33,11 @@ export interface CampInfo {
   score: number;
   /** Milliseconds until 00:00 UTC, when the next shaft opens. */
   msToReset: number;
+  /** Banked shards. **Nothing spends them yet, and that is the point** — Stage 5 ships
+   *  the currency before the economy so the persistence layer is proven against real
+   *  traffic first (`ECONOMY.md` § Balance posture). 0 under `npm run preview`, where
+   *  there is no account behind the screen. */
+  shards: number;
 }
 
 /** The reset hour is a copy problem and the design says so: 00:00 UTC is 8pm Eastern,
@@ -80,13 +85,23 @@ function lockedDoors(): string {
     + 'Not open yet.</div></div>';
 }
 
+/** Thousands separators, because 1340 and 13400 are the same shape at a glance and the
+ *  mockup's own camp head prints `1,340`. `Intl` is in every browser Devvit runs in,
+ *  and a fixed locale keeps the string the same for everybody — this is a game number,
+ *  not a formatted currency. */
+function shardCount(shards: number): string {
+  return new Intl.NumberFormat('en-US').format(Math.max(0, Math.floor(shards)));
+}
+
 export function campScreen(info: CampInfo): string {
   const who = info.username ? `u/${escapeHtml(info.username)}` : 'u/you';
   const body = '<div class="camphead">'
     + `<div class="hport big"><img src="${HERO_ART}" alt="" width="32" height="32"></div>`
-    + `<div class="grow" style="min-width:0"><div class="chname">${who}</div>`
+    + `<div class="chid"><div class="chname">${who}</div>`
     + `<div class="chclass">DELVER &middot; ${escapeHtml(info.day)}</div>`
-    + `<div class="chnext">${untilNextDelve(info.msToReset)}</div></div></div>`
+    + `<div class="chnext">${untilNextDelve(info.msToReset)}</div></div>`
+    + `<div class="shards"><div class="v">${shardCount(info.shards)}</div>`
+    + '<div class="k">SHARDS</div></div></div>'
     + `<div class="doors">${dailyDoor(info)}${lockedDoors()}</div>`
     + '<div class="grow"></div>'
     // HOW TO PLAY is how the five beats stay reachable forever. They are offered once

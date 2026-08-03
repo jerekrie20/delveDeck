@@ -154,6 +154,32 @@ turn."*
   hit is how you charge**, which is the tension the ultimate is built on.
 - **+ an ability's own `rage` field**, where one exists.
 
+### What crosses a depth boundary — decided
+
+The design was silent here and the sim could not be written without an answer, so it
+was picked at Stage 1 and is confirmed now.
+
+| Carries down | Resets at the start of every depth |
+|---|---|
+| HP · boons taken · shards · the equipped bar | **rage · every slot's cooldown · block** |
+
+**Rage and cooldowns reset. HP does not** — attrition is the pressure, and it is the
+only thing the run accumulates.
+
+The alternative was considered and **parked, not rejected**: carrying rage down opens
+a real tactic — take hits on purpose on the gentle early depths so the floor-4 boss is
+met with the ultimate already loaded. That is a genuinely interesting decision and
+reset closes it off. It is declined *here* for two reasons, neither of which is
+"reset is better":
+
+- It is a **balance change wearing a technical detail's clothes.** It makes the game
+  meaningfully easier and needs a full probe re-run and probably a retune behind it.
+- Banked rage would make the *first* depths the ones that decide the *last* ones,
+  which is a different game from the one the threat track teaches.
+
+**If it is ever taken up, it is its own pass** — `TUNING` row, probe sweep, retune —
+never a line changed inside another stage.
+
 ---
 
 ## The hero
@@ -255,9 +281,44 @@ They must produce visible variety — a grid that is twelve greens or twelve ora
 shares nothing. **Measured at Stage 4** over 1,200 floor-play runs: no run came out
 one colour, and every run that reached three depths showed at least two bands.
 
-Spoiler-free by construction: no enemy, no ability, no order. The footer is
-`Daily Delve · 2026-08-03 · depth 11/12 · 1037 · 37 HP · 5 abilities` — depth, score,
-HP and **bar size**. Bar size is the strategic signature and it costs one integer.
+Spoiler-free by construction: no enemy, no ability, no order.
+
+### The pasted artifact — APPROVED, and now effectively permanent
+
+**Signed off by the owner at Stage 5.** This is the exact string a real run produces,
+and it is reproduced here because once it is in a hundred thousand comments it cannot
+be quietly revised:
+
+```
+**Daily Delve** · 2026-08-03 · depth 5/12
+
+🟢🟢🔶🔻 WARRENS
+❌⬛⬛⬛ HOLD
+⬛⬛⬛⬛ CRYPT
+
+**400** · 0 HP · 3 abilities
+
+🟢 near full · 🔶 hurt · 🔻 hanging on · ❌ fell here · ⬛ never reached
+```
+
+Four blocks, and each one earns its place:
+
+| Block | Carries | Why it stays |
+|---|---|---|
+| head | the game, the day, the depth reached | the day is what makes two grids comparable |
+| grid | one square per depth, read left to right then down | **the grid is the shaft** |
+| foot | score · HP carried out · **bar size** | bar size is the strategic signature, and it costs one integer |
+| legend | what each shape means | **a shape nobody can name is not a second channel** |
+
+The legend is the block most likely to be argued away for being long. It stays: the
+whole point of the artifact is that it recruits a reader who has never played, and
+without it the grid is five undefined symbols. The floor names stay for the same
+reason — `WARRENS` / `HOLD` / `CRYPT` is the only thing telling a first-time reader
+that the rows are *depths* rather than three attempts.
+
+**A change here is an owner decision that lands in this file first**, exactly like
+any other locked shape — but the bar is higher than the rest of the folder, because
+this is the one artifact the game cannot take back.
 
 **In the pasted comment the squares LEAD and the stratum label TRAILS them.** Reddit
 renders a comment in a proportional face, so a leading `WARRENS` / `HOLD` / `CRYPT`
@@ -377,6 +438,38 @@ shards and community depth); the client sends `{runId, seed, choices}` and the s
 derives the kit itself.
 
 No `Math.random` in `src/shared/`, ever.
+
+### Taking a score off the board — decided: nobody, for now
+
+**A score cannot be faked.** The server replays the choice list and derives the number
+itself, so there is no value a client can send. That half is airtight and is not what
+this section is about.
+
+The gap is that a score can be **completely genuine and still unwanted**: a solver run
+overnight, a perfect line posted in the comments at 8pm and copied by forty people, or
+one over-strong ability making the whole top ten the same build.
+
+**Decision: do nothing, and add a moderator removal the first time it actually
+happens.** The board resets at 00:00 UTC every day, so a bad entry is gone within 24
+hours without anyone touching it — a daily reset is a stronger defence than most games
+have, and a removal button with nothing to remove is a feature built for an imagined
+problem. The keys are already shaped so that per-subreddit moderator removal is one
+menu endpoint, one `zRem` + one delete, and one test.
+
+Declined for now, with reasons on record so they are not re-argued:
+
+| | Option | Why not now |
+|---|---|---|
+| **B** | Subreddit moderators remove an entry from their own board | Right answer *when there is something to remove*. Cheap to add; nothing lost by waiting. |
+| **C** | Only the owner removes entries | Same cost as B, and it routes every report to one person who is asleep in most timezones |
+| **D** | The server detects and hides them | Real work, and it will be wrong about real players — a false positive here deletes somebody's genuine best day |
+
+**The bigger question underneath is still open** and it belongs to the owner: *is
+solving the day's shaft offline cheating, or is it the game?* The pitch is a puzzle
+everyone shares that can be reasoned out, and a comment thread arguing about the best
+line is a stated goal — so there is a real reading where a solver is the intended
+audience. It does not block anything: **option A is correct under either answer**,
+which is exactly why it was chosen while the question is open.
 
 ---
 
@@ -669,15 +762,35 @@ therefore also per-sub. Whether a missed day resets it to zero or decays it is
 
 ### The Devvit Redis rule
 
-Devvit's Redis wrapper does not behave like raw Redis, and this repo was bitten twice
-in one session:
+Devvit's Redis wrapper does not behave like raw Redis, and this repo has now been
+bitten three times:
 
 - `set NX` returns `''`, not `null` — the one-run-per-day guard was silently disarmed.
 - `zRange`'s `reverse` reverses the *result*, not the bounds — every board read `[]`.
+- **`exec()` returns an ARRAY on conflict, not null.** Devvit's `TxClient.exec()` maps
+  the transaction's command results into a plain array, so a conflicted transaction
+  comes back as `[]` — which `Array.isArray` happily reports as success. That is the
+  standard Redis CAS idiom (`EXEC → nil means retry`) failing silently in exactly the
+  direction that costs you the write. **The conflict signal is "fewer results than
+  commands queued", never "not an array."**
 
-Both looked correct in review. So: **no new Redis call ships without a test against
-`@devvit/test`'s mock**, extending `src/server/core/runStore.test.ts`. The ported
-fake covers CAS logic; the Devvit mock covers wrapper semantics. Both are needed.
+All three looked correct in review. So: **no new Redis call ships without a test
+against `@devvit/test`'s mock**, extending `src/server/core/runStore.test.ts`.
+
+> **⚠ And know what that mock does NOT cover.** `@devvit/test`'s `RedisMock` records
+> `watchedKeys` on `Watch` and **never reads them again** — `Exec` runs every queued
+> command unconditionally. So against the Devvit mock **a WATCH conflict never
+> happens**, and a CAS loop tested only there is a CAS loop whose conflict path has
+> never executed.
+>
+> That is why **both** test layers are mandatory and why they are not redundant:
+>
+> | | Covers | Cannot cover |
+> |---|---|---|
+> | `@devvit/test`'s mock (vitest) | wrapper semantics — return shapes, argument order, what a real round-trip does | conflict abort; it has none |
+> | the in-memory fake (`tests/fakes/redis.ts`, tsx) | the CAS logic — conflict, replay, lost-update | whether the wrapper is being spoken correctly |
+>
+> Neither one alone would have caught all three bugs above.
 
 ---
 
@@ -735,6 +848,11 @@ after launch.
   choice list, undo means truncate-and-resimulate — trivial to build, but it moves
   the skill floor, and on a one-attempt-per-day game that is a design decision rather
   than a convenience. Decide deliberately; don't drift into it.
+- **Is solving the day's shaft offline cheating, or is it the game?** Posed at Stage 5
+  and deliberately left open — it is a question about what this game *is*, not about
+  what to build. Everything downstream of it (§ Taking a score off the board) is
+  already decided in a way that holds under either answer, so it can stay open until
+  there is real play data to answer it with. **Do not resolve it in code.**
 - **Bar size floor.** Is 3 too strong once cooldowns are the only constraint? Stage
   1's sweep answers it, and clamping to 4–5 is the fallback.
 - **Do band thresholds produce a varied grid?** Stage 4 measures.

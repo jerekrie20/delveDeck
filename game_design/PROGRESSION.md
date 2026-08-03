@@ -227,6 +227,9 @@ Rules, all of which come from being bitten before:
 
 - **Versioned from the first write.** A version constant and a migration step table
   from day one. Never drop unknown fields, never downgrade, never throw.
+- **Every top-level key exists in v1, even where the value is empty.** Adding a key
+  later is a migration; shipping an empty one is free. See below for the shape v1
+  actually wrote.
 - **Per-subreddit.** Devvit Redis defaults to per app installation. Your delver in
   r/foo is a different delver from your delver in r/bar. A **global** scope does
   exist (`redis.global`) and the hero deliberately does not use it — see
@@ -238,7 +241,50 @@ Rules, all of which come from being bitten before:
 - **Store nothing derivable.** Not max HP, not the ability list, not the score. Those
   are functions of class + level + gear, and a stored copy is a copy that will drift.
 
----
+### What version 1 actually shipped (Stage 5)
+
+**One field carries meaning: `shards`.** Everything else is present and empty, on
+purpose — the persistence layer gets proven against real traffic before an economy
+rests on it. A lost write costs a day's score today; the same bug would cost an
+account later.
+
+| Key | v1 value | Filled at |
+|---|---|---|
+| `v` | `1` | — |
+| `shards` | the running total, banked on Daily submit | **now** |
+| `createdAt` · `updatedAt` | injected `nowMs`, never `Date.now()` | now |
+| `records` | `{}` | 6 — the calendar and streak ([SCREENS.md](SCREENS.md) § 17) |
+| `unlocked` · `deeds` | `[]` | 6 / 9 |
+| `talents` · `codex` · `camp` | `{}` | 7 / 8 / 7 |
+
+**`class`, `spec`, `level`, `xp`, `gear`, `stash` and `run` are deliberately absent
+from v1**, and that is not an oversight in the "every key from day one" rule — it is
+that rule applied honestly. A key is shipped empty when its *shape* is already decided
+and only its contents are pending. Those seven are Endless state whose shape is
+decided by Stage 6's kit derivation; writing a guessed empty `gear: {}` now would pin
+a shape before the thing that reads it exists, which is the failure the rule exists to
+prevent, one level up. They arrive in the v1→v2 step, which is what the step table is
+for.
+
+**There is still no `name`.** The delver is `u/you` — see above, and
+[IDENTITY.md](IDENTITY.md). Shipping a field only to delete it means migrating away
+from a string people have already typed, which is the one migration with no good
+answer.
+
+### The CAS contract, and the trap under it
+
+Every write is load → migrate → **mutate** → transactional save, retried on conflict.
+
+> **Mutators must be pure functions of the hero they receive.** A conflict *replays*
+> them against a freshly-read blob. A mutator that reads a clock, a counter, or
+> anything outside its argument produces a different result on the replay — and that
+> divergence is silent, rare, and only ever visible as a wrong number in somebody's
+> account.
+
+The conflict signal itself is a Devvit-specific trap and it is written up in
+[GAME_DESIGN.md](GAME_DESIGN.md) § The Devvit Redis rule: **`exec()` returns `[]` on
+conflict, not `null`**, so the standard `if (!result) retry` idiom fails open and
+loses the write. Test both layers — the Devvit mock cannot produce a conflict at all.
 
 ## Considered — leaning against, while the design is open
 

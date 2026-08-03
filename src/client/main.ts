@@ -287,6 +287,11 @@ function screenFor(result: RunResult): string {
       cleared: result.cleared,
       score: result.score,
       msToReset: msToNextDelve(),
+      // From the SERVER's hero, never from the run in hand. `result.shards` is what
+      // this run would pay if it were banked; the camp shows what has been. They differ
+      // for the whole length of a run, and showing the wrong one would mean a total
+      // that counts up mid-delve and then snaps back on submit.
+      shards: session.init?.shards ?? 0,
     });
   }
   if (descentDepth !== null) {

@@ -179,6 +179,12 @@ delivers the whole "I can improve this" loop with one screen and no new content 
   spend them on*, deliberately — to prove the persistence layer against real traffic
   before an economy is built on top of it. A lost write costs a day's score today; it
   would cost an account later.
+- **Daily shards bank on submit**, once, behind the same one-run-per-day claim that
+  guards the leaderboard — so a refused second submission awards nothing. They are
+  read off `RunResult.shards`, which the server recomputed from the choice list; there
+  is no parameter through which a client can name an amount. **This does not make the
+  hero an input to the Daily**: the sim still takes a seed and a choice list, shards
+  are still an output, and `simulateRun.length === 2` still holds.
 
 ---
 

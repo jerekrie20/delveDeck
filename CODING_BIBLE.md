@@ -148,6 +148,7 @@ upload|playtest|publish` unprompted.** Validate with:
 npm run type-check      # tsc --build, all six tsconfig projects
 npm run lint            # eslint src tests — floating-promises is an ERROR
 npm run test            # tsx tests/all.ts  &&  vitest run --project server
+npm run test:visual     # the VISUAL gate: plays a real daily, headless, 3 viewports
 npx tsx tests/sim.test.ts        # one suite, directly
 npx tsx scratchpad/probe.ts      # the balance instrument
 npm run preview                  # local vite dev server, NOT a build
@@ -157,6 +158,16 @@ npm run preview                  # local vite dev server, NOT a build
 `assert` and no framework; `src/server/**/*.test.ts` run under vitest because they
 need `@devvit/test`'s Redis mock. Don't "simplify" the script to one of them — that
 has already silently skipped an entire suite once.
+
+**`npm run test:visual` is separate on purpose and it is not optional before a stage
+ships.** It boots the preview server, drives headless Chromium through a full daily at
+320×568 / 359×632 / 1920×1080, and fails on text collisions, type under 9px, horizontal
+overflow, or content escaping its container. It is *not* folded into `npm run test`
+because that command must stay a fast, serverless, browser-free pass — but **every
+visual bug this project has shipped was found by playing it**, so a layout change that
+has only been type-checked has not been checked. Two rules govern it, both in
+`tests/visual/run.ts`: it measures **rendered text rectangles, not element boxes**, and
+`KNOWN_FINDINGS` needs a `TODO.md` line naming the stage that removes each entry.
 
 Two Windows traps that have both bitten this repo: a single-quoted glob is not
 stripped by cmd.exe (`eslint src tests`, not `eslint 'src/**'`), and a `tests/`

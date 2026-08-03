@@ -85,7 +85,7 @@ export interface BoardEntry {
 }
 
 export type SubmitResult =
-  | { ok: true; score: number; cleared: number; hp: number; bar: string[] }
+  | { ok: true; score: number; cleared: number; hp: number; bar: string[]; shards: number }
   | { ok: false; error: string };
 
 // ---- Redis key helpers --------------------------------------------------------
@@ -170,6 +170,11 @@ export async function submitRun(
     cleared: result.cleared,
     hp: result.hp,
     bar: result.bar,
+    // Reported, not banked. This file has **no import from `core/hero.ts`** and it must
+    // keep having none: the Daily is the mode no account state may reach, and the
+    // cheapest way to keep that true is for the Daily's own module to have no way to
+    // reach an account either. Whoever won the claim above banks it; see `trpc.ts`.
+    shards: result.shards,
   };
 }
 

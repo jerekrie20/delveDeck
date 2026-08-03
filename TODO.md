@@ -28,11 +28,17 @@ forward; its combat model does not.
 | **M3** — the art | 25 bespoke images | 8 portraits kept, **1 hero portrait added**, 3 backdrops parked (the stage is a CSS gradient), **14 card illustrations deleted** at Stage 2. |
 | **M3.5** — tutorial | 15 steps, templated copy, separate choice list | **Deleted at Stage 1** with the deck it was written against. **Rebuilt as 5 beats at Stage 3**, on a guarantee that already held: both invariants are a 2,000-seed sweep in `content.test.ts`. |
 
-**134 checks green** after Stage 4. `tests/`: `sim.test.ts` (30), `content.test.ts`
+**165 checks green** after Stage 5. `tests/`: `sim.test.ts` (30), `content.test.ts`
 (16), `server.test.ts` (30), `art.test.ts` (18), `tutorial.test.ts` (14),
-`share.test.ts` (13), plus 13 in the server vitest project. **`npm run test` runs both
-halves — a tsx pass and a vitest pass — and collapsing it to one has already silently
-skipped an entire suite once.**
+`share.test.ts` (13), `hero.test.ts` (24), plus 20 in the server vitest project.
+**`npm run test` runs both halves — a tsx pass and a vitest pass — and collapsing it to
+one has already silently skipped an entire suite once.**
+
+`hero.test.ts` arrived at Stage 5 and owns **the first thing that outlives a day**: the
+persisted shape, the migration that reads it back, and the compare-and-set loop. It is
+its own file because it fails when the stored shape or the write path changes and
+nothing else does — and because the CAS conflict path **cannot** be tested against
+`@devvit/test`'s mock, which records watched keys and never reads them.
 
 `share.test.ts` arrived at Stage 4 and owns **the artifact that leaves the game**: the
 band alphabet, the 3×4 layout, the thresholds, the variety sweep, and the pasted
@@ -604,7 +610,32 @@ which is the same failure as a gate that misses things.
 **If you want it:** drop the subset in `public/`, add one `@font-face`, and the `--px`
 stack already names it first. Nothing else changes.
 
-## Stage 5 — accounts
+---
+
+## Eight owner answers, taken at Stage 5
+
+`NEXT_SESSION.md` § Part 1 posed eight questions and stated that an unanswered one
+stands at its recommendation. All eight came back unanswered, so all eight
+recommendations are now decided. **Each is written into the doc that owns it** — this
+table is the index, not the record.
+
+| | Question | Answer | Landed in |
+|---|---|---|---|
+| Q1 | Show the shared-seed line on a brand-new sub? | **No — floor stays at ten delvers.** A number that small is worse than none. | `SCREENS.md` § 09 |
+| Q2 | Tutorial beat 1 becoming END TURN on guard-opening days | **Keep.** Teaching "block now" with nothing incoming teaches the wrong reflex. | `SCREENS.md` § 07 |
+| Q3 | Beat 5 sometimes landing one floor down | **Keep**, with the second copy form that names it. Two practice attacks are what make the tutorial work on every seed. | `SCREENS.md` § 07 |
+| Q4 | The pasted comment format | **Approved as shipped**, legend and floor names included. Reproduced verbatim in the folder, because it cannot be revised once it is in a hundred thousand comments. | `GAME_DESIGN.md` § The share grid |
+| Q5 | Should rage carry between floors? | **No — rage and cooldowns reset; HP does not.** The alternative is parked as its own balance pass, not bolted onto accounts. | `GAME_DESIGN.md` § What crosses a depth boundary |
+| Q6 | Who takes a score off the board? | **Nobody, for now.** The daily reset is the defence; moderator removal is one endpoint away when something actually needs removing. | `GAME_DESIGN.md` § Taking a score off the board |
+| Q7 | What ships in the accounts stage? | **Shards only. Records at Stage 6**, with the empty key shipped now so it is a fill, not a migration. | `SCREENS.md`, Stage 5/6 below |
+| Q8 | Keep the automated play-through test? | **Yes, with Playwright** — `npm run test:visual`, three viewports, headless. It found a real bug in Stage 5's own new code on its first run. | Stage 5 below |
+
+**One question was deliberately left open**, because it was posed as the owner's and
+carried no recommendation: *is solving the day's shaft offline cheating, or is it the
+game?* It is recorded in `GAME_DESIGN.md` § Open questions. Nothing waits on it —
+Q6's answer holds either way, which is why it was chosen.
+
+## Stage 5 — accounts ▸ **the first thing that outlives a day**
 
 Ship with **one meaningful field: shards.** Nothing spends them yet — prove the
 persistence layer against real traffic before building an economy on it. A lost write
@@ -617,17 +648,167 @@ migration; shipping an empty one is free. **`name` is not one of them** — the 
 is `u/you`, and shipping a field to delete it later means migrating away from a string
 people already typed.
 
-- [ ] Port `rateLimit.ts` (45), `runDedupe.ts` (68), `heroStore.ts` (105),
-      `heroSchema.ts`'s **pattern** (253 → far less), `tests/fakes/redis.ts` (180)
-- [ ] `heroStore`'s contract is load-bearing: **mutators must be pure**, because a
-      CAS conflict replays them
-- [ ] Schema versioning from the **first write**: version constant, `MIGRATIONS`
-      step table, never drop unknown fields, never downgrade, never throw, purity
-      via injected `nowMs`
-- [ ] **Every new Redis call gets a test against `@devvit/test`'s mock** in
+- [x] Port `heroStore.ts` (105 → 79), `heroSchema.ts`'s **pattern** (253 → 79),
+      `rateLimit.ts` (45 → 25), `tests/fakes/redis.ts` (180 → 62). Plus `core/hero.ts`
+      (24) — what a run does to a hero, which is the file that grows at Stages 6–9.
+- [x] `heroStore`'s contract is load-bearing: **mutators must be pure**, because a
+      CAS conflict replays them. `bankShards` is a factory returning a mutator that
+      reads only its argument, and a test pins that two heroes through the same
+      mutator carry nothing between them.
+- [x] Schema versioning from the **first write**: `STORED_HERO_VERSION`, a
+      `MIGRATIONS` step table, never drop unknown fields, never downgrade, never
+      throw, purity via injected `nowMs`. A test asserts the table has **no gaps**,
+      which is what makes the missing-step branch unreachable rather than untested.
+- [x] **Every new Redis call gets a test against `@devvit/test`'s mock** in
       `src/server/core/runStore.test.ts`. The ported fake covers CAS logic; the
-      Devvit mock covers wrapper semantics. Both needed.
-- [ ] Records / calendar / streak (17) — needs per-day history
+      Devvit mock covers wrapper semantics. Both needed — and the Devvit mock
+      **cannot** produce a WATCH conflict, so it can never cover the CAS path.
+- [x] Shards land on the hero on submit, behind the existing one-run-per-day claim.
+      A failure to bank does **not** fail the submit: the run is already stored and on
+      the board, and the score is what the player came for.
+- [x] The camp shows the total (the mockup's own `.shards` block, screen 02), read
+      from the server's hero rather than the run in hand — otherwise the total would
+      count up mid-delve and snap back on submit.
+- [x] ~~Records / calendar / streak (17)~~ — **moved to Stage 6.** Decided at Stage 5:
+      the streak is the strongest reason to return, and it needs per-day history —
+      more storage and more shapes to migrate, on the one write that is hardest to
+      take back. v1 ships an empty `records` key so it lands as a fill, not a
+      migration. (`SCREENS.md` § Why Records is not in Stage 5.)
+
+**`runDedupe.ts` is NOT ported here, and that is a decision.** It exists so an Endless
+run can be submitted twice — a network retry, a queued offline run — and awarded once,
+keyed on a client-stamped `runId`. The Daily has no `runId` and needs none: *day +
+user* IS the idempotency key, and `claimOnce` already enforces it atomically. Porting
+it now ships a second idempotency layer over a path that already has one, plus a
+concept (`runId`) nothing generates. **It belongs to Stage 6 with the mode that needs
+it**, and it is listed there.
+
+**`rateLimit.ts` IS ported, and it earns its place now rather than at Stage 6.**
+`submitRun` replays a whole twelve-depth simulation and only *then* asks the store
+whether this user already has a run today — so the one-per-day claim guards the
+leaderboard, not the CPU in front of it. Stage 5 is also the first stage where a
+request writes something permanent. The limiter runs **before** the replay.
+
+> **GATE — the first write is forever. PASSED**, with two pre-existing findings
+> recorded above and neither of them on a screen this stage touches.
+>
+> | check | result |
+> |---|---|
+> | A hero is created, banked and re-read across a reload | ✅ both layers — the in-memory fake and Devvit's own Redis mock |
+> | A migration test with a **fixture**, not a round-trip | ✅ a versionless `{ shards: 250 }` blob reads as v1 with every key back-filled, an unknown field survives, a `v: 99` blob is never downgraded |
+> | A CAS conflict replays the mutator and neither write is lost | ✅ 100 + 7 + 50 = **157**, and the exec count proves the loop actually retried rather than getting the right answer by luck |
+> | Shards land on the hero, the Daily untouched | ✅ `simulateRun.length === 2`, shards stay a sim OUTPUT, and a test asserts `core/run.ts` has **no import** from the account |
+>
+> **165 checks green** — 145 tsx + 20 vitest, up from 121 + 13.
+>
+> Played end to end at **320×568, 359×632 and 1920×1080**: camp → loadout → four
+> depths → a boon → result → back to the camp, measuring **rendered text rectangles**
+> after the entrance animations settle. The camp head was measured at its worst case —
+> a 20-character username beside a five-figure total — at every size.
+
+### What playing it caught, again
+
+**A scrollbar that popped in and out and shoved the whole layout sideways.** Reported
+by the owner from a desktop monitor, reproduced immediately, **pre-existing** — the
+loadout is the one screen taller than the viewport by design (that is what its sticky
+confirm bar is *for*), so a scrollbar appears when you open it and goes when you leave.
+Without a reserved gutter the centred column jumped: measured at 1920×1080, the shell's
+left edge went **660 → 653 → 660** walking camp → loadout → camp, and flickered again
+as rows moved between the EQUIPPED and ISSUED panes while a bar was being built
+(overflow 118px → 73px). Fixed with `scrollbar-gutter: stable` on `html` — the
+scrolling is intended, the jumping is not. Costs a permanent ~7px offset from true
+centre that nothing can be compared against; buys a column that never moves.
+
+> **The gate could not see it, and the reason is worth keeping.** Nothing collides — the
+> whole page just jumps — so no overlap check would ever have found it. And when the
+> check was added, **headless Chromium reported a scrollbar width of 0**: it uses
+> overlay scrollbars, `--disable-features=OverlayScrollbar` was tried and changes
+> nothing, so `shellLeft` is identical across screens there even while a real browser
+> is visibly jumping. The symptom is unmeasurable in the only browser CI has.
+>
+> So the gate asserts the **property** instead — *if anything scrolls, the gutter must
+> be reserved* — which is less satisfying than measuring the jump and is the only
+> version that can actually fail. Verified by setting `scrollbar-gutter: auto` and
+> re-running: three viewports, exit 1. The `shellLeft` check stays beside it, because
+> it still catches jitter that does not come from a scrollbar.
+>
+> **Vertical overflow is reported and never failed on.** The loadout is *meant* to
+> scroll. A gate that failed on it would be demanding the design change.
+
+**One real bug, in the new code, that reading it would not have found.** The camp
+head's identity column reused `.grow`, which is `flex: 1 0 auto` — **shrink 0**. It is
+the right rule for the empty spacer divs that push a button row to the bottom and the
+wrong one for a column that has to give way: with a long username the new shard block
+was pushed **45px outside the camp head** at 320px. The inline `min-width: 0` the
+markup already carried could not fix it alone. It is `.chid` now, `flex: 1 1 auto`,
+and the name ellipsises instead.
+
+### The visual gate is now a command — `npm run test:visual`
+
+**Q8 answered: yes, and with Playwright.** `tests/visual/` is two halves. `gate.ts`
+runs **inside the page** — vite transpiles and serves it, which is why the in-page half
+can be TypeScript and type-checked like everything else — and plays a full daily,
+measuring as it goes. `run.ts` runs in Node: it boots the preview server, opens
+headless Chromium, and plays at 320×568, 359×632 and 1920×1080.
+
+**It is deliberately NOT part of `npm run test`.** That command stays a pure
+assert-and-type-check pass needing no server and no browser; folding a browser into it
+would make the fast loop slow and make a network hiccup look like a broken build. This
+is the slow gate you run before calling a stage done.
+
+**`KNOWN_FINDINGS` in `run.ts` is the part to be careful with.** The two findings above
+are real, understood, and deferred — without an allowlist the gate would fail forever,
+and a gate that always fails teaches people to stop reading it. So each entry carries
+its reasoning and a `TODO.md` reference, **anything not on the list still fails**, and
+a known finding that stops reproducing is reported as stale so the list cannot outlive
+its bugs. Adding an entry needs a `TODO.md` line naming the stage that removes it —
+the same rule `eslint.config.js` carries for size exemptions.
+
+**The gate was verified by re-breaking the thing it found.** Putting `flex: 1 0 auto`
+back on `.chid` and re-running produced `✗ camp (worst case): the camp head overflows
+its own box by 45px`, exit 1. That check exists because the *first* version measured
+the camp head's overflow and never judged it — so re-introducing the exact bug it had
+just found came back green. **A number a gate collects but never judges is a number
+nobody reads**, and content escaping its container is never allowlistable.
+
+**And a note on the instrument itself.** Its first version reported six collisions, of
+which **one** was real. The three false-positive classes it had to learn are worth more
+than the bug it found, because each one would have made the gate noise:
+
+1. **Two client rects of one text node are not a collision** — a wrapped or
+   line-clamped string produces one rect per line.
+2. **Occlusion is not collision, and opacity is in `background-image` here.** The
+   first version tested `backgroundColor`, which is `rgba(0,0,0,0)` on every
+   gradient-backed element in this stylesheet, so an opaque sticky bar over a scrolled
+   list read as four collisions. Occlusion also requires the opaque layer to contain
+   **exactly one** of the two texts — a shared opaque ancestor hides neither.
+3. **A pair in different transform contexts is unmeasurable in a hidden tab.** With
+   the preview pane not compositing, `backwards`-filled entrances pin at frame one, so
+   `.desc .num` sits at its `slam` start of `scale(2.4)` and swallows the labels
+   around it. A pair under **one** transformed ancestor is still measurable, because a
+   uniform transform cannot create or destroy an overlap between two of its own
+   descendants — which is exactly why the ability-tile finding is trustworthy and the
+   descent's is not. (It also re-confirms rule 9 the hard way: `slam` animates
+   transform only, so a pinned depth number is still fully visible.)
+
+### The three modules the account added, and where the line sits
+
+| file | code lines | owns |
+|---|---|---|
+| `core/heroSchema.ts` | 79 | the persisted shape + the migration step table. **Pure** — no redis, no clock. |
+| `core/heroStore.ts` | 79 | the CAS loop. Takes a client structurally, so it never imports `@devvit/web/server`. |
+| `core/hero.ts` | 24 | what a run does to a hero. The one that grows at Stages 6–9. |
+| `core/rateLimit.ts` | 25 | ops policy — **not `TUNING`**, because nothing here changes a run. |
+
+**`core/runStore.ts` is now explicitly the one file that speaks Devvit Redis**, and the
+two new bindings (`redisHeroClient`, `redisRateLimitClient`) live there for that
+reason: every wrapper quirk this repo has been bitten by is documented in one place
+instead of being rediscovered per module.
+
+**`core/run.ts` imports none of them, and a test enforces it.** The Daily is the mode
+no account state may reach, and the cheapest way to keep that true is for the Daily's
+own module to have no way to reach an account at all. The banking happens in `trpc.ts`,
+on the far side of the claim `submitRun` had to win.
 
 ## Stage 6 — Endless + progression
 
@@ -664,6 +845,40 @@ people already typed.
       reads as a build-sharing feed rather than a second score ladder. Plus one
       permanent all-time "deepest ever" line. Needs run dedupe + per-user rate limits,
       since Endless attempts are unlimited.
+  - [ ] **Port `runDedupe.ts` (68) here**, deferred from Stage 5 with its reasoning:
+        it is keyed on a client-stamped `runId`, and the Daily's idempotency key is
+        already *day + user* under `claimOnce`. This is the stage that introduces a
+        mode with unlimited attempts, i.e. the first one where a `runId` exists.
+        The rate limiter itself landed at Stage 5.
+- [ ] **Records / calendar / streak (17)**, moved from Stage 5. Per-day history fills
+      the hero's already-shipped empty `records` key. Streak belongs to the Daily
+      only; whether a missed day resets or decays it is still undecided
+      (`GAME_DESIGN.md` § Accounts) and is a retention call, not a mechanical one.
+- [ ] **The cooldown tag crosses the rules text on a two-line tile.** Found by playing
+      Stage 5's gate at 359×632; **pre-existing, not a Stage 5 regression** — nothing
+      in that stage touches `.ab`. The tile is `justify-content: flex-end`, so its rows
+      grow **upward**, while `.cdtag` is absolutely positioned at a fixed `top: 27px`.
+      One-line rules sit below it and look right; two-line rules — most strings at
+      phone width — slide up and the first line runs under `CD 3`. **Measured: 17×4px
+      of real glyph overlap.**
+  - The obvious fix, `padding-right: 26px` on `.ab.hascd .rx` to match the `.nm` rule
+    beside it, was **tried and reverted**. It is a worse bug: Ice Nova drops from
+    *"Deal 15 damage. Weaken 4."* (25 of 25 characters visible) to *"Deal 15 damage.
+    W"* (17 of 25), and Tumble from 32 visible characters to 16. **Never trade what an
+    ability does for a secondary metadata tag.**
+  - The real fix is to move the tag **into the flex flow** — a sibling in the name
+    row, which already reserves 26px for it — so it rides up with the content instead
+    of being pinned past it. That is a `combat.ts` markup change and it belongs in a
+    pass that can re-play the whole ability bar, not bolted onto the accounts stage.
+- [ ] **A DISABLED sticky confirm button is 80% opaque, so the list bleeds through it.**
+      Also found by Stage 5's gate, also pre-existing, at all three viewports. `.btn.go`
+      disabled sits at `opacity: 0.8` — which is the deliberate *"disabled is not
+      invisible"* treatment — but it is a sticky overlay, so ~20% of whatever row is
+      scrolled behind it shows through its label. **The enabled state is clean**
+      (`opacity: 1`, fully occluding), and enabled is the state a player actually
+      confirms from, which is why this is a cosmetic softness rather than a legibility
+      bug. Fix by giving the *bar* the opacity and the *button* a solid fill, so
+      "disabled" stops meaning "translucent" on a layer that has to cover something.
 - [ ] **Server-side run resume.** An Endless run is 20–40 minutes on a phone in a feed
       iframe. Persist `{seed, choices}` **at every fork** — the choice list is already
       the save file — so a closed tab, a device switch or lost signal resumes at the

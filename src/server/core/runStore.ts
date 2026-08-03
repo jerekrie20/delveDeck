@@ -1,15 +1,20 @@
-// The storage seam for M2 run persistence.
+// The storage seam: **the one file in this project that speaks Devvit Redis.**
 //
 // `RunStore` is the only shape `core/run.ts` knows about, which keeps the submit
 // / board / replay logic free of `@devvit/web/server` and therefore testable with
 // an in-memory fake (`tests/server.test.ts`). `redisRunStore` is the one real
-// implementation; routes import that, tests import neither.
+// implementation; routes import that, tests import neither. `redisHeroClient` at the
+// foot of the file is the same seam for the hero blob, bound here for the same reason
+// and so that every Devvit-Redis quirk this repo has been bitten by is documented in
+// one place rather than rediscovered per module.
 //
 // The one thing you must not break: `writeRunIfAbsent` must stay ATOMIC. It is
 // the sole guard for "one run per user per day" — if it degrades to a
 // read-then-write, two concurrent submissions both win and the leaderboard lies.
 
 import { redis } from '@devvit/web/server';
+import type { HeroRedisLike } from './heroStore';
+import type { RateLimitRedisLike } from './rateLimit';
 
 /** A leaderboard member and the score it is ranked by. */
 export interface BoardScore {
@@ -121,5 +126,30 @@ export const redisRunStore: RunStore = {
       if (Number.isFinite(parsed)) counters[field] = parsed;
     }
     return counters;
+  },
+};
+
+// ---- the account seams (Stage 5) -------------------------------------------------
+
+/** The hero blob's client, for `core/heroStore.ts`'s compare-and-set loop.
+ *
+ *  Bound here rather than inside `heroStore` so that module stays free of
+ *  `@devvit/web/server` and its CAS logic can run against the in-memory fake. Devvit's
+ *  `redis` satisfies `HeroRedisLike` structurally: `get` already returns
+ *  `string | undefined`, and `watch` already returns a transaction whose `multi`,
+ *  `set`, `exec` and `unwatch` are the four the loop uses.
+ *
+ *  **`exec()` is the trap.** It resolves to an ARRAY of the queued commands' results,
+ *  so a conflicted transaction is `[]` and not `null` — `heroStore` counts results
+ *  rather than testing truthiness, and the reasoning is in its header. */
+export const redisHeroClient: HeroRedisLike = redis;
+
+/** The rate limiter's client. Two calls, both already the right shape. */
+export const redisRateLimitClient: RateLimitRedisLike = {
+  async incrBy(key, value) {
+    return await redis.incrBy(key, value);
+  },
+  async expire(key, seconds) {
+    await redis.expire(key, seconds);
   },
 };
