@@ -28,10 +28,17 @@ forward; its combat model does not.
 | **M3** — the art | 25 bespoke images | 8 portraits kept, **1 hero portrait added**, 3 backdrops parked (the stage is a CSS gradient), **14 card illustrations deleted** at Stage 2. |
 | **M3.5** — tutorial | 15 steps, templated copy, separate choice list | **Deleted at Stage 1** with the deck it was written against. **Rebuilt as 5 beats at Stage 3**, on a guarantee that already held: both invariants are a 2,000-seed sweep in `content.test.ts`. |
 
-**106 checks green** after Stage 3. `tests/`: `sim.test.ts` (30), `content.test.ts`
-(16), `server.test.ts` (20), `art.test.ts` (18), `tutorial.test.ts` (14), plus 8 in the
-server vitest project. **`npm run test` runs both halves — a tsx pass and a vitest pass
-— and collapsing it to one has already silently skipped an entire suite once.**
+**134 checks green** after Stage 4. `tests/`: `sim.test.ts` (30), `content.test.ts`
+(16), `server.test.ts` (30), `art.test.ts` (18), `tutorial.test.ts` (14),
+`share.test.ts` (13), plus 13 in the server vitest project. **`npm run test` runs both
+halves — a tsx pass and a vitest pass — and collapsing it to one has already silently
+skipped an entire suite once.**
+
+`share.test.ts` arrived at Stage 4 and owns **the artifact that leaves the game**: the
+band alphabet, the 3×4 layout, the thresholds, the variety sweep, and the pasted
+comment. It is its own file because it fails when the share format changes and nothing
+else does — and because that format is the one thing here that cannot be quietly
+revised once it is in a hundred thousand comments.
 
 `art.test.ts` grew by seven at Stage 2 and lost one. Gone: the `CARD_ART` size check,
 with the files. Arrived: the hero portrait's 64px source, the palette drift-guard
@@ -42,10 +49,11 @@ that nothing could read.
 
 **Open items inherited:**
 
-- [ ] `server/core/leaderboard.ts`'s `renderShareText` is written, unimported, and
-      **not the mockup's grid** — it emits a flat 12-square strip and knows nothing
-      about `depthBands`, the 3×4 layout, the five band states, stratum row labels or
-      bar size. Stage 4 **rewrites** it; "wire it up" was wrong.
+- [x] `server/core/leaderboard.ts`'s `renderShareText` — **rewritten and moved** at
+      Stage 4. It lives in `src/shared/share.ts` now, because the preview a player taps
+      POST on and the comment the server writes must be the same string, and a
+      server-only function can never be previewed. `leaderboard.ts` keeps the board's
+      text helpers.
 - [ ] Residual template cruft: `src/server/test.ts`, plus `react` / `react-dom` /
       `@types/react*` / jsdom, which nothing in `src/` imports. Note
       `@vitejs/plugin-react` is loaded by `vite.config.ts` and the two
@@ -253,9 +261,8 @@ Zero UI in this stage. The deck became a seeded ability pool plus a chosen bar �
       (`.d-hold`), the backdrop registry key and `public/backdrops/hold.png`
 - [x] **Delete** the card-frame/hand CSS and `CARD_ART`, and the `art.test.ts` check
       that read it
-  - [ ] **`public/cards/` (14 files) is still on disk** — `git rm` was refused by a
-        permission guard mid-session. Nothing imports them. One command clears it:
-        `git rm -r public/cards`
+  - [x] **`public/cards/` is gone.** Cleared before Stage 4; `public/` is 8 enemy
+        portraits, 1 hero portrait and 3 backdrops.
 - [x] **Removed `main.ts`'s size exemption from `eslint.config.js`.** The client is
       now one module per place — `shell` · `camp` · `combat` · `interlude` · `result`
       · `session` · `main` — and every one passes 400/80 on its own merits
@@ -486,43 +493,116 @@ during it:
 > eyeballed because the values are filled from the day — the longest enemy name and
 > the widest number decide it, not the sentence as typed.
 
-## Stage 4 — share grid, result, board, replay ▸ **SHIP**
+## Stage 4 — share grid, result, board, replay ▸ **SHIP** ✅
 
-- [ ] Result screen (10): score breakdown, the animated total, the stamp
-- [ ] Share grid: **3 rows of 4, read downward**, labelled WARRENS / HOLD / CRYPT,
+- [x] Result screen (10): score breakdown, the animated total, the stamp, and a rank
+      line that says nothing it cannot back up — your place when the board holds you,
+      the day's count when it does not, and the honest *"the first run of the day is
+      yours"* when nobody has descended
+- [x] Share grid: **3 rows of 4, read downward**, labelled WARRENS / HOLD / CRYPT,
       from `depthBands`. Spoiler-free — no enemy, no ability, no order.
-  - [ ] **Rewrite** `core/leaderboard.ts`'s `renderShareText` — it currently emits a
-        flat 12-square strip and knows nothing about `depthBands`, the 3×4 layout,
-        the five band states, stratum row labels or bar size. "Wire it up" was wrong.
-  - [ ] Pin the band thresholds with a test; confirm they produce visible variety —
-        a grid that is twelve greens or twelve oranges shares nothing
-  - [ ] **The grid must not encode meaning in colour alone.** Green/amber/orange/red
-        is four hues, two adjacent, carrying the whole message — and this is the most
-        pasted artifact in the game. Every band needs a second channel: distinct
-        lightness in-app, shape-distinct characters in the pasted text. Cheap now,
-        expensive once the format is in thousands of comments.
-- [ ] **Post-to-comment in one tap.** `SUBMIT_COMMENT` is already in `devvit.json` and
-      nothing uses it. Pre-formatted, spoiler-free, **always previewed, never
-      automatic, never without an explicit tap.**
-- [ ] Leaderboard (11): play button leads every row; depth trace + **loadout size**
-- [ ] Replay (12): scrubbing **re-simulates to step N** — pure sim, no persistent
-      DOM. Segments are **depths, not seconds**; consumes `depthMarks`.
-- [ ] Feed post (01): today's stats + yesterday's grid shape on the card. `splash.html`
-      already draws the card in pure CSS with a static strip; this makes it real.
-- [ ] The descent screen's shared-seed line — *"612 of 1,284 never got this far"* — is
-      the same data, and it is the one thing Stage 2 left off screen 09.
-- [ ] **Owner call: ship Silkscreen or not?** The v5 look leans on it and the `--px`
-      stack names it first, but nothing loads it — a blocking Google Fonts request
-      inside a feed iframe is a bad trade, so the shell currently renders in the
-      monospace fallback. A local woff2 subset is ~10KB and one `@font-face`. Decide
-      before the share grid's typography is in thousands of comments.
+  - [x] **Rewrote** `renderShareText` — and moved it to `src/shared/share.ts`. It
+        could not stay server-side: the preview a player approves and the comment the
+        server posts have to be the same string, and one implementation is the only
+        way that is true rather than intended.
+  - [x] Band thresholds pinned at their exact boundaries, **against `TUNING` rather
+        than against 0.7 / 0.4**, so retuning moves the test with the game
+  - [x] Variety measured over 1,200 floor-play runs: **0 monochrome grids**, 100% of
+        runs reaching three depths show ≥2 bands (asserted 90%), 87% show ≥3
+        (asserted 60%). Both floors carry deliberate margin.
+  - [x] **The second channel shipped.** One alphabet, two renderings: `🟢🔶🔻❌⬛`
+        pasted, `●◆▼✕` in-app, `f h c d n` in a board trace — circle, diamond,
+        triangle, cross. Plus a lightness ladder (59% → 42% → 19% → 7% relative
+        luminance) and a **key** naming each shape, in the app and at the foot of
+        every comment. Three tests guard it, including one that reads `game.css` and
+        fails if the ladder stops descending.
+- [x] **Post-to-comment in one tap — and it is deliberately two.** COMMENT opens a
+      preview of the exact string; `comment-post` is the only action on that path that
+      reaches Reddit. The server rebuilds the text from the **stored choice list**, so
+      there is no parameter through which a comment body could be supplied. One claim
+      per player per day, released if Reddit refuses so a blip is not a lockout.
+- [x] Leaderboard (11): play button leads every row; depth trace + **loadout size**,
+      both **derived** from the stored choices rather than stored — the same rule the
+      score has always followed (~0.15ms a run; 50 rows in 7ms, measured)
+- [x] Replay (12): scrubbing **re-simulates to step N**. Segments are depths;
+      unreached depths are drawn but not tappable.
+- [x] Feed post (01): `/api/feed` gives `splash.html` today's count, the average depth,
+      the floor count and **yesterday's** best grid shape. Plain JSON, not tRPC — the
+      splash renders inline in the feed and every failure keeps the static card.
+- [x] The descent screen's shared-seed line — *"612 of 1,284 never got this far"*.
+      Held back below ten delvers: *"1 of 3 never got this far"* is true and empty.
+      The stratum's lore line still wins on the depth you arrive in a band.
+- [x] **Owner call taken: Silkscreen does NOT ship.** See the note below.
 
-> **SHIP GATE.** Screens 1, 2 (Daily door only), 3, 6, 7, 8, 9, 10, 11, 12 — a
-> complete, comparable, replayable, shareable daily game with **zero account
+> **SHIP GATE — PASSED.** Screens 1, 2 (Daily door only), 3, 6, 7, 8, 9, 10, 11, 12 —
+> a complete, comparable, replayable, shareable daily game with **zero account
 > state.**
 >
-> End-to-end: submit a run → reload the post (the run restores from the server) →
-> open the board → scrub a replay → copy the share grid.
+> Played end to end at **320×568, 359×632 and 1920×1080**, measured after the entrance
+> animations settle: a full daily → submit → the board → the comment preview → post →
+> a board row → scrub to a depth → reload → the run restores. Plus `prefers-reduced-
+> motion`, where the score lands immediately and only the count-up stops.
+>
+> | check | result |
+> |---|---|
+> | nothing under 9px | ✅ all three viewports |
+> | no horizontal overflow | ✅ `scrollWidth === innerWidth` |
+> | nothing overlaps (rendered text rects, not element boxes) | ✅ |
+> | the pasted grid reads in monochrome | ✅ shape alphabet + key |
+> | the comment posts exactly once | ✅ |
+
+### What playing it caught that review would not have
+
+Four real bugs, all found by driving the screens rather than reading them:
+
+- **The replay scrubber could only ever jump backwards.** `depthMarks` came from the
+  slice being watched, not from the whole recording, so at step 1 exactly one segment
+  was live. Invisible before Stage 4 because every segment was tappable and the
+  handler quietly fell back to depth 1.
+- **The score counted up again on every re-render.** Opening the share preview sent
+  600 back to 365 while the breakdown underneath still read SCORE 600. `mount.ts`
+  remembers the last total it counted.
+- **The WATCHING badge printed straight over `DEPTH 7 · HOLD`.** The stage has no
+  spare strip — `.stagetop` is at 16px and `.foe` at 26px — so the badge takes the
+  slot and the depth tag steps aside. Nothing is lost: the spine names the depth down
+  the whole left edge and the transport names it again.
+- **A long ability name ran into its cooldown tag** at 320px (`Iron Will` × `CD 3`),
+  and a button label that wrapped printed its two lines on top of each other. The
+  tile reserves room only where there IS a tag; `.btn` line-height went 1 → 1.2.
+
+**A note on the overlap check itself.** The first version compared *element boxes* and
+reported three collisions that do not exist — a full-width block whose text is
+left-aligned and a badge floated to its right have intersecting boxes and no visual
+collision at all. It has to compare **rendered text rectangles**, clamped to the
+content box where `text-overflow: ellipsis` clips. A gate that cries wolf gets ignored,
+which is the same failure as a gate that misses things.
+
+> **⚠ The server half of the gate was played against a LOCAL tRPC fake, not a real
+> subreddit.** This environment has no Devvit runtime, so `reddit.submitComment`,
+> `context.postId` and the real Redis were never exercised in a browser. They are
+> covered by tests — `runStore.test.ts` runs against Devvit's own Redis mock, and
+> `server.test.ts` drives submit / board / tally / comment through an in-memory store
+> — but **the first real playtest should confirm one thing specifically: that a posted
+> comment appears under the player's own name.** That is the one path no test here can
+> reach.
+
+### Owner call: Silkscreen does not ship, and here is the reasoning
+
+**Decided: no.** Reversible in one `@font-face` whenever you disagree.
+
+- The type scale was **rebuilt around the fallback** at Stage 2 and re-measured at
+  Stage 3 and again here. `--px-1: 9px` upward is legible in `ui-monospace`; those
+  numbers were chosen because 6px Silkscreen was not.
+- The share grid's typography is now **emoji and a proportional key line**, and
+  neither is Silkscreen's job. The artifact that ends up in thousands of comments is
+  rendered by Reddit, in Reddit's font, and the app's face never touches it.
+- A ~10KB woff2 is a real asset in a repo whose first rule is *no art that animates or
+  aligns*, and the reason the mockup's face is missing is that a **blocking external
+  request inside a feed iframe** was the bad trade — a local subset removes that
+  objection but not the asset.
+
+**If you want it:** drop the subset in `public/`, add one `@font-face`, and the `--px`
+stack already names it first. Nothing else changes.
 
 ## Stage 5 — accounts
 

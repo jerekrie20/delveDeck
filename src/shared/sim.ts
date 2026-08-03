@@ -496,6 +496,14 @@ export { scoreRun } from './report';
 // resolves here rather than becoming a second copy in `client/`.
 export { isBossDepth, stratumForDepth } from './enemies';
 export type { Intent, IntentKind, Stratum } from './enemies';
+// The share grid: one alphabet and one layout, rendered twice — as squares in the app
+// and as characters in a comment. Shared because the preview a player taps POST on and
+// the comment the server writes must be the same string.
+export {
+  BAND_MARKS, BAND_ORDER, bandLegend, depthReached, renderShareText, shareRows,
+  shareTrace,
+} from './share';
+export type { BandMark, ShareRow } from './share';
 export type {
   BoonView, CombatView, DailyModifier, DepthBand, ForkView, IssuedKit, LoadoutView,
   RunChoice, RunFacts, RunOutcome, RunResult, RunView, StatusRow,

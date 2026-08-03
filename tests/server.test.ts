@@ -10,11 +10,16 @@
 import { assert, check, describe } from './helpers';
 import { greedyChoices } from './policies';
 import {
-  submitRun, getBoard, getRun, hasSubmitted,
+  getBestBands, submitRun, getBoard, getRun, hasSubmitted,
   isSubmittableDay, LATE_SUBMIT_GRACE_MINUTES,
 } from '../src/server/core/run';
 import type { BoardScore, RunStore } from '../src/server/core/runStore';
-import { seedForDay, simulateRun, scoreRun, TUNING, type RunChoice } from '../src/shared/sim';
+import { readDayStats } from '../src/server/core/stats';
+import { postRunComment } from '../src/server/core/comment';
+import {
+  depthReached, renderShareText, seedForDay, simulateRun, scoreRun, TUNING,
+  type RunChoice,
+} from '../src/shared/sim';
 
 describe('server (M2)');
 
@@ -27,6 +32,7 @@ const NOW = Date.UTC(2026, 6, 25, 12, 0, 0);
 function fakeRunStore(): RunStore & { keys: Map<string, string> } {
   const keys = new Map<string, string>();
   const boards = new Map<string, Map<string, number>>();
+  const counters = new Map<string, Map<string, number>>();
 
   function ranked(key: string): BoardScore[] {
     const board = boards.get(key);
@@ -50,6 +56,16 @@ function fakeRunStore(): RunStore & { keys: Map<string, string> } {
       return true;
     },
 
+    async claimOnce(key, value) {
+      if (keys.has(key)) return false;
+      keys.set(key, value);
+      return true;
+    },
+
+    async releaseClaim(key) {
+      keys.delete(key);
+    },
+
     async addBoardScore(key, member, score) {
       const board = boards.get(key) ?? new Map<string, number>();
       board.set(member, score);
@@ -68,6 +84,16 @@ function fakeRunStore(): RunStore & { keys: Map<string, string> } {
 
     async readTopBoardScores(key, limit) {
       return ranked(key).reverse().slice(0, limit);
+    },
+
+    async bumpCounters(key, bumps) {
+      const hash = counters.get(key) ?? new Map<string, number>();
+      for (const bump of bumps) hash.set(bump.field, (hash.get(bump.field) ?? 0) + bump.by);
+      counters.set(key, hash);
+    },
+
+    async readCounters(key) {
+      return Object.fromEntries(counters.get(key) ?? new Map<string, number>());
     },
   };
 }
@@ -285,6 +311,153 @@ await check('a straddling run scores against the day it was PLAYED', async () =>
   const stored = await getRun(store, DAY, SUB, 'alice');
   assert.ok(stored, 'and it lands on the day it was played');
   assert.equal(stored.score, result.score);
+});
+
+// ---- the row's strategic half (screen 11) --------------------------------------
+
+await check('a board row carries the depth trace and the bar size, both DERIVED', () => {
+  // Neither is stored. The choice list is the record and the server recomputes
+  // outcomes from it — the same rule the score has always followed, applied to the
+  // two fields screen 11 makes a strategic claim with.
+  const store = fakeRunStore();
+  const choices = greedyChoices(seedForDay(DAY), { k: 'load', bar: [0, 1, 2, 3, 4], ult: 0 });
+  return submitRun(store, DAY, SUB, 'alice', choices, NOW).then(async () => {
+    const truth = simulateRun(seedForDay(DAY), choices);
+    const board = await getBoard(store, DAY, SUB);
+    assert.equal(board.length, 1);
+    assert.deepEqual(board[0]!.bands, truth.depthBands, 'the row shows the run that was played');
+    assert.equal(board[0]!.barSize, 5, 'five abilities went down that shaft');
+    assert.equal(board[0]!.bands.length, TUNING.depths, 'a trace is one cell per depth');
+  });
+});
+
+await check('the feed card reads ONE run, not the whole board', async () => {
+  const store = fakeRunStore();
+  await submitRun(store, DAY, SUB, 'weak', deathLine(), NOW);
+  await submitRun(store, DAY, SUB, 'strong', honestRun(DAY), NOW);
+
+  const bands = await getBestBands(store, DAY, SUB);
+  const best = simulateRun(seedForDay(DAY), honestRun(DAY));
+  assert.deepEqual(bands, best.depthBands, "the card shows the day's deepest run");
+  assert.equal(await getBestBands(store, '2026-01-01', SUB), null, 'a day nobody played is null');
+});
+
+// ---- the day's tally (screens 01, 09 and 10) -----------------------------------
+
+await check('the day tally counts a submission ONCE, and only a successful one', async () => {
+  // `recordRun` has no idempotency of its own, so it must sit behind the
+  // one-run-per-day claim. Counting a refused second submission would inflate every
+  // community number in the game — including "612 of 1,284 never got this far",
+  // which is a sentence about people who are not there.
+  const store = fakeRunStore();
+  const choices = honestRun(DAY);
+  await submitRun(store, DAY, SUB, 'alice', choices, NOW);
+  await submitRun(store, DAY, SUB, 'alice', choices, NOW + 1000); // refused
+  await submitRun(store, DAY, SUB, 'mallory', [{ k: 'cast', i: 0 }], NOW); // illegal
+
+  const stats = await readDayStats(store, DAY, SUB);
+  assert.equal(stats.runs, 1, 'one delver descended');
+});
+
+await check("the tally's reach curve is monotonic and matches the runs behind it", async () => {
+  const store = fakeRunStore();
+  await submitRun(store, DAY, SUB, 'alice', honestRun(DAY), NOW);
+  await submitRun(store, DAY, SUB, 'bob', deathLine(), NOW);
+
+  const deep = depthReached(simulateRun(seedForDay(DAY), honestRun(DAY)));
+  const shallow = depthReached(simulateRun(seedForDay(DAY), deathLine()));
+  const stats = await readDayStats(store, DAY, SUB);
+
+  assert.equal(stats.runs, 2);
+  assert.equal(stats.reached[0], 2, 'everyone reached depth 1');
+  assert.equal(stats.reached[deep - 1], 1, 'one delver got that far');
+  for (let depth = 1; depth < TUNING.depths; depth++) {
+    assert.ok(
+      stats.reached[depth]! <= stats.reached[depth - 1]!,
+      'reaching depth N+1 means having reached depth N — the curve cannot rise',
+    );
+  }
+  assert.equal(stats.averageDepth, (deep + shallow) / 2, 'the average is the mean of the two');
+});
+
+await check('a day nobody has played reads as zeroes, never as a throw', async () => {
+  const stats = await readDayStats(fakeRunStore(), DAY, SUB);
+  assert.equal(stats.runs, 0);
+  assert.equal(stats.floor, 0);
+  assert.equal(stats.averageDepth, 0);
+  assert.deepEqual(stats.reached, Array.from({ length: TUNING.depths }, () => 0));
+});
+
+await check('tallies are scoped per subreddit and per day', async () => {
+  const store = fakeRunStore();
+  await submitRun(store, DAY, 'subA', 'alice', honestRun(DAY), NOW);
+  assert.equal((await readDayStats(store, DAY, 'subB')).runs, 0, 'another community');
+  assert.equal((await readDayStats(store, '2026-07-26', 'subA')).runs, 0, 'another day');
+});
+
+// ---- the one-tap comment -------------------------------------------------------
+
+await check('the comment is built from the STORED run, never from anything sent', async () => {
+  const store = fakeRunStore();
+  const choices = honestRun(DAY);
+  await submitRun(store, DAY, SUB, 'alice', choices, NOW);
+
+  const posted: string[] = [];
+  const result = await postRunComment(
+    store, async (text) => { posted.push(text); }, DAY, SUB, 'alice', NOW,
+  );
+
+  assert.ok(result.ok, 'a submitted run should be shareable');
+  assert.equal(posted.length, 1, 'exactly one comment');
+  assert.equal(
+    posted[0],
+    renderShareText(simulateRun(seedForDay(DAY), choices), DAY),
+    'the posted text must be the same string the client previewed',
+  );
+});
+
+await check('NOTHING IS POSTED for a run that was never submitted', async () => {
+  const store = fakeRunStore();
+  let posts = 0;
+  const result = await postRunComment(
+    store, async () => { posts++; }, DAY, SUB, 'nobody', NOW,
+  );
+  assert.equal(result.ok, false);
+  assert.equal(posts, 0, 'no stored run, no comment');
+});
+
+await check('the SECOND tap posts nothing — one grid per player per day', async () => {
+  const store = fakeRunStore();
+  await submitRun(store, DAY, SUB, 'alice', honestRun(DAY), NOW);
+
+  let posts = 0;
+  const post = async (): Promise<void> => { posts++; };
+  const first = await postRunComment(store, post, DAY, SUB, 'alice', NOW);
+  const second = await postRunComment(store, post, DAY, SUB, 'alice', NOW + 50);
+
+  assert.ok(first.ok);
+  assert.equal(second.ok, false, 'a double tap must not double-post');
+  assert.equal(posts, 1, 'Reddit saw exactly one comment');
+});
+
+await check('a REFUSED comment gives the claim back, so it can be retried', async () => {
+  // The claim is taken before the post so a double tap cannot win twice. That means
+  // a network failure would otherwise lock a player out of sharing for the day, for
+  // something that was never their fault.
+  const store = fakeRunStore();
+  await submitRun(store, DAY, SUB, 'alice', honestRun(DAY), NOW);
+
+  let attempts = 0;
+  const flaky = async (): Promise<void> => {
+    attempts++;
+    if (attempts === 1) throw new Error('reddit said no');
+  };
+  const failed = await postRunComment(store, flaky, DAY, SUB, 'alice', NOW);
+  const retried = await postRunComment(store, flaky, DAY, SUB, 'alice', NOW + 50);
+
+  assert.equal(failed.ok, false, 'the failure is reported, never swallowed');
+  assert.ok(retried.ok, 'and the retry works');
+  assert.equal(attempts, 2);
 });
 
 /** A run that ends the turn until the player dies — a legal, complete, terrible

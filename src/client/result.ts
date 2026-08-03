@@ -1,25 +1,32 @@
-// Screen 10 and its neighbours — how a run ends, and what you do with it afterwards.
+// Screen 10 — how a run ends, and what you do with it afterwards.
 //
-// The result, the share grid, the leaderboard rows and the replay transport, because
-// they are one surface: the run is over, here is the number, here is who else has one,
-// here is theirs.
+// The result, the share grid and the leaderboard rows, because they are one surface:
+// the run is over, here is the number, here is the thing you paste, here is who else
+// has one. Screen 12 (watching theirs) is `replay.ts`.
 //
-// **Stage 4 owns the finished versions of all three.** What is here renders the seams
-// Stage 1 built — `depthBands`, `depthMarks`, the score breakdown — so they are
-// visibly working, and no more than that. Specifically still owed at Stage 4: the
-// pasted-text share format, `renderShareText`'s rewrite, post-to-comment, and the
-// second colour channel every band needs.
+// **The alphabet is not written here.** `shared/share.ts` owns the five bands, their
+// shapes and their words, because the comment this screen previews is posted by the
+// server from the same function — see that file's header for why one implementation
+// is not optional.
 //
-// The one thing you must not break: **the grid must not encode meaning in colour
-// alone.** Green / amber / orange / red is four hues, two of them adjacent, carrying
-// the entire message — and this is the most-pasted artifact in the game. Every band
-// needs a second channel: distinct lightness in-app (the `.sq` rules do that much) and
-// shape-distinct characters in the pasted version. Cheap now, expensive once the
-// format is in thousands of comments.
+// Two things you must not break:
+//
+//  1. **The grid must not encode meaning in colour alone.** Every square carries its
+//     band's GLYPH as well as its hue, the key underneath names each shape in words,
+//     and `game.css` steps the four bands down in lightness. Cover the colour and the
+//     grid still says what happened. This is the most-pasted artifact in the game and
+//     roughly 8% of men cannot separate its two adjacent hues.
+//  2. **Nothing is posted without an explicit tap on the exact text.** The COMMENT
+//     button opens a preview of the real string and posts nothing; the second tap, on
+//     a button that says what it does, is what calls the server.
 
 import { boonById } from '../shared/boons';
-import { TUNING, type DepthBand, type RunResult } from '../shared/sim';
+import {
+  BAND_MARKS, BAND_ORDER, depthReached, renderShareText, shareRows, TUNING,
+  type DepthBand, type RunResult,
+} from '../shared/sim';
 import { ABILITIES } from '../shared/abilities';
+import type { DayStats } from './session';
 import { escapeHtml, inShell } from './shell';
 
 export interface BoardEntry {
@@ -27,7 +34,14 @@ export interface BoardEntry {
   score: number;
   cleared: number;
   hp: number;
+  /** The spoiler-free depth trace — screen 11's whole strategic half, with `barSize`. */
+  bands: DepthBand[];
+  barSize: number;
 }
+
+/** Where the one-tap comment has got to. `preview` is a hard gate, not a courtesy:
+ *  nothing reaches Reddit until the player has seen the exact text and tapped again. */
+export type CommentPhase = 'idle' | 'preview' | 'posting' | 'posted';
 
 export interface ResultContext {
   day: string;
@@ -42,6 +56,11 @@ export interface ResultContext {
    *  transport. Shown, never swallowed: a button that silently does nothing is worse
    *  than a rejection with a reason. */
   submitError: string | null;
+  commentPhase: CommentPhase;
+  commentError: string | null;
+  /** The day's community tally, or null offline. Only ever used to say how many
+   *  people did the same thing — never to change a number. */
+  stats: DayStats | null;
   /** Someone else's run, watched to the end. Nothing here may be submitted. */
   readOnly?: boolean;
 }
@@ -50,33 +69,79 @@ export interface ResultContext {
  *  are the strata. `HOLD`, never `CAMP`: this label is the collision GAME_DESIGN.md
  *  override #6 exists to prevent, and it lands in every pasted comment. */
 function shareGrid(result: RunResult): string {
-  const labels = ['WARRENS', 'HOLD', 'CRYPT'];
-  const rows = labels
-    .map((label, r) => {
-      const squares = result.depthBands
-        .slice(r * 4, r * 4 + 4)
-        .map((band: DepthBand, c) => {
-          const index = r * 4 + c;
-          return `<div class="sq ${band === 'none' ? '' : band}" style="--n:${index}"></div>`;
+  const rows = shareRows(result.depthBands)
+    .map((row) => {
+      const squares = row.bands
+        .map((band, column) => {
+          const index = row.firstDepth - 1 + column;
+          const glyph = BAND_MARKS[band].glyph;
+          return `<div class="sq ${band}" style="--n:${index}">`
+            + `<i>${glyph}</i></div>`;
         })
         .join('');
-      return `<div class="srow"><span class="sl">${label}</span>${squares}</div>`;
+      return `<div class="srow"><span class="sl">${row.label}</span>${squares}</div>`;
     })
     .join('');
   return `<div class="sgrid">${rows}</div>`;
 }
 
+/** The key. A shape nobody can name is not a second channel — this is the line that
+ *  makes the grid readable to a player who has never opened the game, and it is the
+ *  same list the pasted comment ends with. */
+function shareKey(): string {
+  const items = BAND_ORDER.filter((band) => band !== 'none')
+    .map((band) => `<span><i class="k ${band}">${BAND_MARKS[band].glyph}</i>`
+      + `${BAND_MARKS[band].name}</span>`)
+    .join('');
+  return `<div class="skey">${items}</div>`;
+}
+
 /** Spoiler-free by construction: no enemy, no ability, no order. Bar size is the
  *  strategic signature and it costs one integer. */
-function shareBlock(result: RunResult, day: string): string {
-  const fell = result.outcome === 'won' ? TUNING.depths : result.cleared + 1;
+function shareBlock(result: RunResult, context: ResultContext): string {
+  const reached = depthReached(result);
   return '<div class="share"><div class="sh"><span>your comment</span>'
     + '<span>spoiler-free</span></div>'
     + shareGrid(result)
-    + `<div class="sfoot">Daily Delve &middot; ${escapeHtml(day)} &middot; depth `
-    + `<b>${Math.min(fell, TUNING.depths)}</b>/${TUNING.depths}<br>`
+    + shareKey()
+    + `<div class="sfoot">Daily Delve &middot; ${escapeHtml(context.day)} &middot; depth `
+    + `<b>${reached}</b>/${TUNING.depths}<br>`
     + `<b>${result.score}</b> &middot; ${result.hp} HP &middot; ${result.bar.length} `
-    + 'abilities</div></div>';
+    + 'abilities</div>'
+    + shareActions(result, context)
+    + '</div>';
+}
+
+/** COPY is always available — it is just text. COMMENT needs a submitted run, because
+ *  the server rebuilds the comment from the STORED choice list and there is nothing
+ *  stored until then. */
+function shareActions(result: RunResult, context: ResultContext): string {
+  if (context.readOnly) return '';
+  if (context.commentPhase === 'preview' || context.commentPhase === 'posting') {
+    return commentPreview(result, context);
+  }
+  const posted = context.commentPhase === 'posted';
+  const canComment = context.serverAvailable && (context.submitted || context.alreadyPlayed);
+  const commentButton = posted
+    ? '<button class="btn small" disabled>POSTED &#10003;</button>'
+    : `<button class="btn small" data-action="comment-preview"${canComment ? '' : ' disabled'}>`
+      + 'COMMENT</button>';
+  const error = context.commentError
+    ? `<div class="cerr">${escapeHtml(context.commentError)}</div>`
+    : '';
+  return '<div class="sact">'
+    + '<button class="btn small" data-action="copy-grid">COPY</button>'
+    + `${commentButton}</div>${error}`;
+}
+
+/** The gate. The exact string, then a button that says exactly what it will do. */
+function commentPreview(result: RunResult, context: ResultContext): string {
+  const text = renderShareText(result, context.day);
+  const posting = context.commentPhase === 'posting';
+  return `<div class="cprev"><pre>${escapeHtml(text)}</pre>`
+    + '<div class="sact"><button class="btn small" data-action="comment-cancel">BACK</button>'
+    + `<button class="btn go" data-action="comment-post"${posting ? ' disabled' : ''}>`
+    + `${posting ? 'POSTING&hellip;' : 'POST COMMENT'}</button></div></div>`;
 }
 
 function breakdown(result: RunResult): string {
@@ -99,7 +164,23 @@ function stamp(result: RunResult): string {
   if (result.outcome === 'won') {
     return '<div class="stamp won">REACHED THE FLOOR</div>';
   }
-  return `<div class="stamp">FELL AT DEPTH ${Math.min(result.cleared + 1, TUNING.depths)}</div>`;
+  return `<div class="stamp">FELL AT DEPTH ${depthReached(result)}</div>`;
+}
+
+/** Where this run sits among everyone on the same shaft. Says nothing it cannot back
+ *  up: no board means no rank, and no tally means no crowd. */
+function rankLine(context: ResultContext): string {
+  const index = context.board?.findIndex((entry) => entry.username === context.username) ?? -1;
+  const delvers = context.stats?.runs ?? 0;
+  if (index >= 0 && delvers > 0) {
+    return `rank <b>#${index + 1}</b> of ${delvers.toLocaleString()} delvers today`;
+  }
+  if (delvers > 0) {
+    const floor = context.stats?.floor ?? 0;
+    return `<b>${delvers.toLocaleString()}</b> descended today &middot; `
+      + `<b>${floor}</b> reached the floor`;
+  }
+  return 'the first run of the day is yours';
 }
 
 /** Escape each name, THEN join with the separator — joining first and escaping after
@@ -122,6 +203,24 @@ function loadoutLine(result: RunResult): string {
     + `${boonRow}</div>`;
 }
 
+/** A row is a play button, a rank, a name, the depth trace and the score — and the
+ *  trace plus the ability count are the whole spoiler-free strategic signature the
+ *  design asks screen 11 to carry. */
+function boardRow(entry: BoardEntry, index: number, context: ResultContext): string {
+  const me = context.username !== undefined && entry.username === context.username;
+  const medal = index < 3 ? ` m${index + 1}` : '';
+  const trace = entry.bands
+    .map((band) => `<div class="ds ${band}"></div>`)
+    .join('');
+  return `<div class="row${me ? ' me' : ''}" data-action="replay-load" `
+    + `data-username="${escapeHtml(entry.username)}"><div class="pb">&#9654;</div>`
+    + `<div class="rk${medal}">${index + 1}</div><div class="who">`
+    + `<div class="nm2">${me ? 'YOU' : `u/${escapeHtml(entry.username)}`}</div>`
+    + `<div class="dep">${trace}</div></div>`
+    + `<div class="sc"><div class="v">${entry.score}</div>`
+    + `<div class="d">D${entry.cleared} &middot; ${entry.barSize} AB</div></div></div>`;
+}
+
 function boardRows(context: ResultContext): string {
   if (!context.serverAvailable) {
     return '<div class="notice">Offline preview &mdash; no leaderboard here.</div>';
@@ -135,18 +234,7 @@ function boardRows(context: ResultContext): string {
   if (context.board.length === 0) {
     return '<div class="notice">Nobody else has descended today. Be the first.</div>';
   }
-  return context.board
-    .map((entry, i) => {
-      const me = context.username !== undefined && entry.username === context.username;
-      const medal = i < 3 ? ` m${i + 1}` : '';
-      return `<div class="row${me ? ' me' : ''}" data-action="replay-load" `
-        + `data-username="${escapeHtml(entry.username)}"><div class="pb">&#9654;</div>`
-        + `<div class="rk${medal}">${i + 1}</div><div class="who">`
-        + `<div class="nm2">${me ? 'YOU' : `u/${escapeHtml(entry.username)}`}</div></div>`
-        + `<div class="sc"><div class="v">${entry.score}</div>`
-        + `<div class="d">D${entry.cleared} &middot; ${entry.hp} HP</div></div></div>`;
-    })
-    .join('');
+  return context.board.map((entry, i) => boardRow(entry, i, context)).join('');
 }
 
 function resultActions(context: ResultContext): string {
@@ -169,57 +257,25 @@ function resultActions(context: ResultContext): string {
 }
 
 export function resultScreen(result: RunResult, context: ResultContext): string {
-  const depth = Math.max(1, Math.min(TUNING.depths, result.cleared + 1));
   const rows = boardRows(context);
   const failed = context.submitError
     ? `<div class="pane" style="margin-top:9px"><div class="notice">`
       + `${escapeHtml(context.submitError)}</div></div>`
     : '';
-  const body = `<div class="rtop">${stamp(result)}<div class="score">${result.score}</div>`
-    + `<div class="rankline">${result.shards} shards &middot; `
+  // The number is in the DOM at its final value and the count-up is an effect layered
+  // on top by `mount.ts`. That direction is deliberate: reduced motion, a backgrounded
+  // tab or no JS at all all land on the right score.
+  const body = `<div class="rtop">${stamp(result)}`
+    + `<div class="score" data-count-to="${result.score}">${result.score}</div>`
+    + `<div class="rankline">${rankLine(context)}</div>`
+    + `<div class="rankline sub2">${result.shards} shards &middot; `
     + `${result.facts.turns} turns &middot; ${result.facts.damageDealt} damage dealt</div></div>`
     + breakdown(result)
     + loadoutLine(result)
-    + shareBlock(result, context.day)
+    + shareBlock(result, context)
     + failed
     + (rows ? `<div class="lb">${rows}</div>` : '')
     + '<div class="grow"></div>'
     + resultActions(context);
-  return inShell({ shell: 'crypt', depth }, body);
-}
-
-// ---- screen 12 · the replay transport --------------------------------------------
-
-export interface ReplayContext {
-  username: string;
-  step: number;
-  total: number;
-  playing: boolean;
-  /** Choice index at which each depth began — the scrubber's segments. */
-  depthMarks: number[];
-  depth: number;
-}
-
-/** Scrubbing RE-SIMULATES to step N. There is no persistent DOM to rewind and no
- *  second state machine to keep in sync — the sim is the only thing that decides what
- *  happened, so a scrub is just a shorter choice list. Segments are DEPTHS, not
- *  seconds, so "jump to 9" is one tap. */
-export function replayTransport(context: ReplayContext): string {
-  let segments = '';
-  for (let depth = 1; depth <= TUNING.depths; depth++) {
-    const state = depth < context.depth ? 'past' : depth === context.depth ? 'cur' : '';
-    segments += `<div class="tseg ${state}" data-action="replay-jump" `
-      + `data-index="${depth}"></div>`;
-  }
-  const atStart = context.step <= 0;
-  const atEnd = context.step >= context.total;
-  return '<div class="transport"><div class="trtop">'
-    + `<button class="trb" data-action="replay-prev"${atStart ? ' disabled' : ''}>&#9664;</button>`
-    + `<button class="trb" data-action="replay-play">${context.playing ? '&#9208;' : '&#9654;'}</button>`
-    + `<button class="trb" data-action="replay-next"${atEnd ? ' disabled' : ''}>&#9654;&#9654;</button>`
-    + `<div class="trb wide">DEPTH ${context.depth} &middot; STEP ${context.step} / ${context.total}</div>`
-    + '<button class="trb" data-action="camp">&#10005;</button></div>'
-    + `<div class="track">${segments}</div>`
-    + '<div class="trmeta"><span>TAP A DEPTH TO JUMP</span>'
-    + `<span>u/${escapeHtml(context.username).toUpperCase()}</span></div></div>`;
+  return inShell({ shell: 'crypt', depth: depthReached(result) }, body);
 }

@@ -6,6 +6,8 @@ import { context, reddit } from '@devvit/web/server';
 import { dayKey, seedForDay, MAX_RUN_CHOICES, TUNING } from '../shared/sim';
 import { submitRun, getBoard, getRun, hasSubmitted, isSubmittableDay } from './core/run';
 import { redisRunStore } from './core/runStore';
+import { readDayStats } from './core/stats';
+import { postRunComment } from './core/comment';
 
 /**
  * Initialization of tRPC backend
@@ -67,7 +69,12 @@ export const appRouter = t.router({
       if (username) {
         alreadyPlayed = await hasSubmitted(redisRunStore, day, subreddit, username);
       }
-      return { day, seed, username, subreddit, alreadyPlayed };
+      // The day's tally rides along with init rather than getting an endpoint of its
+      // own: the descent screen needs it MID-RUN, between two depths, and a screen
+      // that has to wait for a round trip to say its one line will show the line
+      // late or not at all.
+      const stats = await readDayStats(redisRunStore, day, subreddit);
+      return { day, seed, username, subreddit, alreadyPlayed, stats };
     }),
   }),
 
@@ -102,6 +109,34 @@ export const appRouter = t.router({
       .query(async ({ input }) => {
         const subreddit = context.subredditName;
         return await getRun(redisRunStore, input.day, subreddit, input.username);
+      }),
+
+    // Post the player's grid as a comment. Note what is NOT in the input: the text.
+    // It is rebuilt server-side from the stored choice list, so there is no parameter
+    // here through which a comment body could be supplied. The tap is the client's
+    // job; this only ever runs because one happened.
+    comment: publicProcedure
+      .input(z.object({ day: z.string().regex(dayRegex) }))
+      .mutation(async ({ input }) => {
+        const subreddit = context.subredditName;
+        const username = await reddit.getCurrentUsername();
+        if (!username) {
+          return { ok: false as const, error: 'You must be logged in to comment' };
+        }
+        const postId = context.postId;
+        if (!postId) {
+          return { ok: false as const, error: 'No post to comment on' };
+        }
+        return await postRunComment(
+          redisRunStore,
+          // `runAs: 'USER'` — it is the player's grid and it goes out under the
+          // player's name. `SUBMIT_COMMENT` in devvit.json is what permits it.
+          async (text) => { await reddit.submitComment({ id: postId, text, runAs: 'USER' }); },
+          input.day,
+          subreddit,
+          username,
+          Date.now(),
+        );
       }),
   }),
 

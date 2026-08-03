@@ -1,27 +1,29 @@
-// M2 leaderboard rendering: spoiler-free share text (the Wordle share mechanic)
-// and leaderboard display helpers.
+// Leaderboard rendering: a board as text, for the places Reddit takes text rather
+// than a screen (a moderator reply, a log line, a future season post).
+//
+// **`renderShareText` is not here any more, and that is the Stage 4 rewrite.** The old
+// one emitted a flat twelve-square strip, knew nothing about `depthBands`, the 3×4
+// layout, the five band states, the stratum row labels or the bar size, and was never
+// imported by anything. Rewriting it *in place* would have left the client drawing one
+// grid and the server posting another; the two have to be the same string, so it was
+// rewritten in `src/shared/share.ts` where both sides can import it. The comment this
+// server actually posts is built in `core/comment.ts` from that one function.
 
-import { TUNING } from '../../shared/sim';
+import { shareTrace, TUNING, type DepthBand } from '../../shared/sim';
 import type { BoardEntry } from './run';
 
-/**
- * Render a single row of the share grid as text suitable for a Reddit comment.
- *
- * **Stage 4 REWRITES this.** It emits a flat twelve-square strip and knows nothing
- * about `depthBands`, the 3×4 layout, the five band states, the stratum row labels or
- * the bar size — and it is still unimported by anything. Repointed here only so the
- * depth count comes from `TUNING` instead of a registry that no longer exists;
- * "wire it up" was and remains the wrong instruction.
- */
-export function renderShareText(score: number, cleared: number, hp: number): string {
-  const squares = Array.from({ length: TUNING.depths }, (_, i) => (i < cleared ? '🟩' : '⬛'))
-    .join('');
-  return `Daily Delve — ${score} pts\n${squares}  ${cleared}/${TUNING.depths} · ${hp} HP`;
+/** Render a leaderboard entry as a single line — rank, who, score, and the
+ *  spoiler-free strategic signature the design asks a row to carry: how deep, and how
+ *  many abilities they took down with them. */
+export function renderBoardEntry(entry: BoardEntry, rank: number): string {
+  const trace = renderTrace(entry.bands);
+  return `${rank}. u/${entry.username} — ${entry.score} pts `
+    + `(D${entry.cleared} · ${entry.hp} HP · ${entry.barSize} abilities) ${trace}`;
 }
 
-/** Render a leaderboard entry as a single line. */
-export function renderBoardEntry(entry: BoardEntry, rank: number): string {
-  return `${rank}. u/${entry.username} — ${entry.score} pts (${entry.cleared}/${TUNING.depths}, ${entry.hp} HP)`;
+/** `ffffhhfhhcdn` — the compact depth trace from GAME_DESIGN.md's band table. */
+function renderTrace(bands: readonly DepthBand[]): string {
+  return bands.length === TUNING.depths ? shareTrace(bands) : '';
 }
 
 /** Render a full leaderboard as text. */

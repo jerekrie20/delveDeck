@@ -20,6 +20,7 @@
 import { boonById } from '../shared/boons';
 import { enemyForDepth, isBossDepth, stratumForDepth, TUNING, type BoonView } from '../shared/sim';
 import { archetypeClass, boonGlyph } from './art';
+import type { DayStats } from './session';
 import { escapeHtml, inShell } from './shell';
 
 /** Transcribed from `game_design/LORE.md` § the strata. Shown once, on the depth you
@@ -47,6 +48,27 @@ function fallingWalls(): string {
 }
 
 /**
+ * How many delvers a shared-seed line needs behind it before it is worth printing.
+ *
+ * Not a gameplay constant — it is an editorial floor. *"1 of 3 never got this far"*
+ * is arithmetically true and rhetorically empty, and on a subreddit's first morning
+ * that is every line it would ever show. Below this the screen falls back to copy
+ * that claims nothing, which is the same rule the whole descent screen was built on.
+ */
+const MIN_DELVERS_FOR_STAT = 10;
+
+/** The mockup's *"612 of 1,284 never got this far"* — the one thing Stage 2 left off
+ *  this screen, because inventing a plausible number would have been worse than
+ *  omitting it. A threat, not a cheer: it names the people who stopped. */
+function sharedSeedLine(depth: number, stats: DayStats | null): string | null {
+  if (!stats || stats.runs < MIN_DELVERS_FOR_STAT) return null;
+  const stopped = stats.runs - (stats.reached[depth - 1] ?? stats.runs);
+  if (stopped <= 0) return null;
+  return `<b>${stopped.toLocaleString()} of ${stats.runs.toLocaleString()}</b> `
+    + 'never got this far.';
+}
+
+/**
  * Screen 09, and the only place in a four-minute run that is allowed to be still.
  *
  * **It is a gate, not a timer.** The player taps to go down. Two reasons, and the
@@ -54,14 +76,8 @@ function fallingWalls(): string {
  * reads — by the time you have registered THE CRYPT you are already being attacked in
  * it. And killing something should not instantly teleport you somewhere worse; the
  * beat between is where a delve gets to feel like a descent rather than a queue.
- *
- * The mockup lands a shared-seed stat here as a threat rather than a cheer
- * (*"612 of 1,284 never got this far"*). That number needs the community stats Stage 4
- * builds, and inventing a plausible one would be worse than not showing it — so this
- * carries the honest half until then: what you cleared, the stratum, and the thing at
- * the bottom of the ladder, by name.
  */
-export function descentScreen(seed: number, depth: number): string {
+export function descentScreen(seed: number, depth: number, stats: DayStats | null): string {
   const stratum = stratumForDepth(depth);
   const arriving = depth === 1 || depth === 5 || depth === 9;
   const waiting = enemyForDepth(seed, depth);
@@ -69,10 +85,16 @@ export function descentScreen(seed: number, depth: number): string {
   const cleared = depth > 1
     ? `<div class="cleared">DEPTH ${depth - 1} CLEARED</div>`
     : '';
+  // The stratum's lore line wins on the depth you arrive in a band — it is shown once
+  // per run and this is the once. Every other depth takes the community line if the
+  // day has enough delvers behind it, and the honest fallback if it does not.
+  const shared = sharedSeedLine(depth, stats);
   const warning = arriving
     ? `<div class="warn">${escapeHtml(ARRIVAL[stratum] ?? '')}</div>`
-    : '<div class="warn">The air is colder here. '
-      + `<b>${TUNING.depths - depth + 1}</b> between you and the floor.</div>`;
+    : shared
+      ? `<div class="warn">${shared}<br>The air is colder here.</div>`
+      : '<div class="warn">The air is colder here. '
+        + `<b>${TUNING.depths - depth + 1}</b> between you and the floor.</div>`;
   const foot = boss
     ? `&#9760; ${escapeHtml(waiting.name).toUpperCase()} HOLDS THIS FLOOR`
     : `${escapeHtml(waiting.name).toUpperCase()} WAITS BELOW`;

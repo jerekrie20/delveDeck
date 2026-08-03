@@ -17,11 +17,24 @@ export interface BoardScore {
   score: number;
 }
 
+/** One counter to add to. Grouped so a caller bumps a whole day's tally in one
+ *  call rather than four, and so the TTL is set in the same place it is written. */
+export interface CounterBump {
+  field: string;
+  by: number;
+}
+
 export interface RunStore {
   /** Read a stored run blob. Null when the key is absent. */
   readRun(key: string): Promise<string | null>;
-  /** Write only if the key is absent. False means someone already wrote it. */
+  /** Write only if the key is absent. False means someone already wrote it.
+   *  ATOMIC — see the note on `claimOnce`, which is the same primitive. */
   writeRunIfAbsent(key: string, value: string, expiresAt: Date): Promise<boolean>;
+  /** Take a key nobody else holds. True means this caller took it. The
+   *  one-run-per-day guard and the one-comment-per-day guard are both this. */
+  claimOnce(key: string, value: string, expiresAt: Date): Promise<boolean>;
+  /** Give a claim back, so a failed side effect can be retried. */
+  releaseClaim(key: string): Promise<void>;
   /** Add or update a member's score on a board. */
   addBoardScore(key: string, member: string, score: number): Promise<void>;
   /** How many members a board currently holds. */
@@ -30,6 +43,10 @@ export interface RunStore {
   dropLowestBoardScores(key: string, count: number): Promise<void>;
   /** Up to `limit` members, highest score first. */
   readTopBoardScores(key: string, limit: number): Promise<BoardScore[]>;
+  /** Add to a hash of counters and (re)set the whole hash's expiry. */
+  bumpCounters(key: string, bumps: readonly CounterBump[], ttlSeconds: number): Promise<void>;
+  /** Every counter on a hash. An absent key reads as `{}`, never as a throw. */
+  readCounters(key: string): Promise<Record<string, number>>;
 }
 
 /** The production store, backed by Devvit's per-installation Redis. */
@@ -39,12 +56,20 @@ export const redisRunStore: RunStore = {
   },
 
   async writeRunIfAbsent(key, value, expiresAt) {
+    return await redisRunStore.claimOnce(key, value, expiresAt);
+  },
+
+  async claimOnce(key, value, expiresAt) {
     // Devvit's `set` is typed `Promise<string>` and is backed by a protobuf
     // StringValue, so a refused NX write comes back as '' — never null. The old
     // `result !== null` was therefore ALWAYS true, which silently disarmed the
     // one-run-per-day guard. 'OK' is the only success value.
     const result = await redis.set(key, value, { nx: true, expiration: expiresAt });
     return result === 'OK';
+  },
+
+  async releaseClaim(key) {
+    await redis.del(key);
   },
 
   async addBoardScore(key, member, score) {
@@ -75,5 +100,26 @@ export const redisRunStore: RunStore = {
       limit: { offset: 0, count: limit },
     });
     return entries ?? [];
+  },
+
+  async bumpCounters(key, bumps, ttlSeconds) {
+    for (const bump of bumps) await redis.hIncrBy(key, bump.field, bump.by);
+    // `hIncrBy` creates the hash without an expiry, so the TTL has to be (re)set
+    // every time. Re-setting it on each write is deliberate: the day's tally should
+    // outlive its last submission by the full window, not by whatever is left of one
+    // started at the first.
+    await redis.expire(key, ttlSeconds);
+  },
+
+  async readCounters(key) {
+    const raw = await redis.hGetAll(key);
+    const counters: Record<string, number> = {};
+    for (const [field, value] of Object.entries(raw ?? {})) {
+      const parsed = Number(value);
+      // A field that is not a number is a field somebody else wrote. Skip it rather
+      // than propagating a NaN into an average printed at a thousand people.
+      if (Number.isFinite(parsed)) counters[field] = parsed;
+    }
+    return counters;
   },
 };

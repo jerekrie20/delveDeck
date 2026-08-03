@@ -20,12 +20,23 @@ import type { RunChoice } from '../shared/sim';
 import { trpc } from './trpc';
 import type { BoardEntry } from './result';
 
+/** What the whole subreddit did with today's shaft. Rides along with `init` because
+ *  the descent screen needs it mid-run and cannot wait for a round trip. */
+export interface DayStats {
+  runs: number;
+  /** 0-based by depth: `reached[8]` is how many reached depth 9. */
+  reached: number[];
+  floor: number;
+  averageDepth: number;
+}
+
 export interface ServerInit {
   day: string;
   seed: number;
   username: string | undefined;
   subreddit: string;
   alreadyPlayed: boolean;
+  stats: DayStats;
 }
 
 interface SessionState {
@@ -72,6 +83,26 @@ export async function submitRun(choices: readonly RunChoice[]): Promise<string |
   } catch {
     session.available = false;
     return 'The board could not be reached.';
+  }
+}
+
+/**
+ * Post this player's grid as a comment. Note what is NOT sent: the text. The server
+ * rebuilds it from the stored choice list, and the preview the player approved is the
+ * same pure `renderShareText` over the same deterministic result — identical without
+ * ever having been trusted.
+ *
+ * Resolves to the posted text, or an error string. Never throws: a rejected promise
+ * here is a button that appears to do nothing.
+ */
+export async function postComment(): Promise<{ text: string } | { error: string }> {
+  const playedDay = session.init?.day;
+  if (!session.available || !playedDay) return { error: 'No server — nothing to post to.' };
+  try {
+    const result = await trpc.run.comment.mutate({ day: playedDay });
+    return result.ok ? { text: result.text } : { error: result.error };
+  } catch {
+    return { error: 'Reddit could not be reached.' };
   }
 }
 

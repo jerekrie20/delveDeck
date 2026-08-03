@@ -1256,6 +1256,13 @@ body {
   color: var(--dim);
 }
 
+/* The tag crosses the NAME row, so the name gives it room rather than running into
+   it. Reserved only where there IS a tag — a tile with no cooldown keeps its full
+   width for the name, which is how you find the ability you meant to press. */
+.ab.hascd .nm {
+  padding-right: 26px;
+}
+
 .ab.ready {
   box-shadow:
     inset 0 0 0 1px #000,
@@ -1407,7 +1414,11 @@ body {
   cursor: pointer;
   border: 0;
   color: #fff;
-  font: 400 var(--px-5)/1 var(--px);
+  /* 1.2, not 1: a label that wraps at 320px printed its two lines on top of each
+     other, because a line-height of 1 in the monospace fallback leaves no room for
+     the ascenders of the line below. Single-line labels are flex-centred, so this
+     moves nothing that was already right. */
+  font: 400 var(--px-5)/1.2 var(--px);
   letter-spacing: 0.06em;
   display: flex;
   flex-direction: column;
@@ -2141,11 +2152,28 @@ body {
   letter-spacing: 0.12em;
 }
 
-/* Stage 4 owns the real grid, including the SECOND CHANNEL every band needs — this is
-   the most-pasted artifact in the game and four hues, two of them adjacent, cannot
-   carry the whole message. The distinct lightness below is the start of that, not the
-   end of it. */
+/* THE SECOND CHANNEL — GAME_DESIGN.md § The grid must not encode meaning in colour
+   alone, and it is a correctness requirement rather than a polish item.
+ *
+ * Green / amber / orange / red is four hues, two of them adjacent, carrying the whole
+ * message, at 26px, in the most-pasted artifact in the game. Red–green deficiency is
+ * ~8% of men and amber-vs-orange is hard for everyone at this size. So each band
+ * carries THREE signals, and any one of them is enough:
+ *
+ *   1. a SHAPE — the glyph in `.sq i`, the same alphabet the pasted text uses
+ *      (● ◆ ▼ ✕), so the comment and the app teach each other;
+ *   2. distinct LIGHTNESS — the four gradients step down 59% → 42% → 19% → 7% mean
+ *      relative luminance, and BOTH ends of every gradient descend too, so the ladder
+ *      survives a greyscale screenshot. `tests/share.test.ts` reads these four
+ *      declarations and fails if the order ever breaks;
+ *   3. the hue the mockup drew.
+ *
+ * The mockup's own gradients were colour-only and near-equal in lightness; these are
+ * its hues re-lit, which is the doc overriding the mockup with its reason in place. */
 .sq {
+  position: relative;
+  display: grid;
+  place-items: center;
   width: 26px;
   height: 26px;
   background: #1c212b;
@@ -2154,25 +2182,106 @@ body {
   animation-delay: calc(var(--n) * 45ms);
 }
 
+.sq i {
+  font: 400 var(--px-4)/1 var(--ui);
+  font-style: normal;
+  color: rgb(0 0 0 / 72%);
+  text-shadow: 0 1px 0 rgb(255 255 255 / 22%);
+}
+
 @keyframes sqin {
   from { transform: scale(0) rotate(-40deg); }
 }
 
-.sq.full { background: linear-gradient(160deg, #8aeaae, #2f8a52); box-shadow: 0 0 10px var(--ok-glow); }
-.sq.hurt { background: linear-gradient(160deg, #f7d97a, #a8811f); }
-.sq.crit { background: linear-gradient(160deg, #ffab6e, #a34c17); }
+.sq.full { background: linear-gradient(160deg, #c3f5d6, #57b57e); box-shadow: 0 0 10px var(--ok-glow); }
+.sq.hurt { background: linear-gradient(160deg, #f0cf74, #9a761a); }
+.sq.crit { background: linear-gradient(160deg, #d8823f, #7c3610); }
 
 .sq.dead {
-  background: linear-gradient(160deg, #ff7365, #6d1a16);
+  background: linear-gradient(160deg, #a83a2f, #4a0f0c);
   box-shadow: 0 0 14px var(--atk-glow);
-  position: relative;
 }
 
-.sq.dead::after {
-  content: "";
-  position: absolute;
-  inset: 8px;
-  background: #fff;
+/* The darkest band needs its glyph light, or the shape channel is the one thing on
+   the square you cannot see. */
+.sq.dead i {
+  color: rgb(255 255 255 / 92%);
+  text-shadow: 0 1px 0 rgb(0 0 0 / 55%);
+}
+
+.sq.none i { color: transparent; }
+
+/* The key. Four shapes and four words — the half of the second channel that makes the
+   grid readable to somebody who has never opened the game, and the same list the
+   pasted comment ends with. */
+.skey {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 9px;
+  justify-content: center;
+  margin-bottom: 9px;
+  font-size: var(--ui-1);
+  color: var(--dim);
+}
+
+.skey span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.skey i.k {
+  display: grid;
+  place-items: center;
+  width: 12px;
+  height: 12px;
+  font: 400 var(--px-1)/1 var(--ui);
+  font-style: normal;
+  color: rgb(0 0 0 / 72%);
+}
+
+.skey i.k.full { background: #57b57e; }
+.skey i.k.hurt { background: #9a761a; }
+.skey i.k.crit { background: #7c3610; color: rgb(255 255 255 / 92%); }
+.skey i.k.dead { background: #4a0f0c; color: rgb(255 255 255 / 92%); }
+
+/* ── the one-tap comment ──────────────────────────────────────────────────────
+ *
+ * Two taps on purpose. GAME_DESIGN.md § The comment section: never post on a
+ * player's behalf without an explicit tap, never automatically at run end, always
+ * previewed first. `.cprev` IS that preview, and it shows the real string — the same
+ * `renderShareText` the server posts, not a mock-up of it. */
+.sact {
+  display: flex;
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.sact .btn { flex: 1; }
+
+.cprev {
+  margin-top: 9px;
+}
+
+.cprev pre {
+  max-height: 190px;
+  overflow: auto;
+  padding: 9px;
+  background: #05070b;
+  box-shadow: inset 0 0 0 1px #262c38;
+  font: 400 var(--ui-2)/1.6 var(--ui);
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--ink2);
+  user-select: text;
+}
+
+.cerr {
+  margin-top: 7px;
+  font-size: var(--ui-1);
+  line-height: 1.5;
+  color: #ff8b82;
+  text-align: center;
 }
 
 .sfoot {
@@ -2267,10 +2376,21 @@ body {
   background: #2a303b;
 }
 
-.ds.full { background: #48a86e; }
+/* The same lightness ladder as `.sq` — a 7px pip has no room for a glyph, so
+   lightness is the second channel that fits: 57% → 30% → 7% → the unreached grey.
+ *
+ * `dead` is the exception and it is the design's own: *"red + white pip"*. A dark
+ * band would collide with `none` at this size in greyscale, so the death pip inverts
+ * — a light core in a dark ring — and reads by SHAPE instead of by level. It is the
+ * one cell in a row you must not be able to miss. */
+.ds.full { background: #8fd6aa; }
 .ds.hurt { background: #b8901f; }
-.ds.crit { background: #b05c22; }
-.ds.dead { background: #a02c26; box-shadow: 0 0 7px var(--atk-glow); }
+.ds.crit { background: #7c3610; }
+.ds.dead {
+  background: #ffd9d3;
+  box-shadow: inset 0 0 0 2px #6d1a16, 0 0 7px var(--atk-glow);
+}
+.ds.none { background: #2a303b; }
 
 .sc {
   flex: 0 0 auto;
@@ -2356,6 +2476,13 @@ body {
 .tseg.past { background: linear-gradient(180deg, #6bdd92, #2f8a52); }
 .tseg.cur { background: #fff; box-shadow: 0 0 10px rgb(255 255 255 / 80%); }
 
+/* A depth this run never reached. Drawn — the shaft is always twelve — but not
+   tappable, because a control that silently does nothing reads as broken. */
+.tseg.void {
+  background: #181c24;
+  cursor: default;
+}
+
 .trmeta {
   display: flex;
   justify-content: space-between;
@@ -2363,6 +2490,20 @@ body {
   color: var(--dim);
   margin-top: 7px;
   letter-spacing: 0.12em;
+}
+
+/* The WATCHING badge lands on the stage's own top strip, and the stage has no spare
+   strip: `.stagetop` is at 16px and `.foe` at 26px, so there is nowhere to move either
+   of them to. So the badge takes the slot and the depth tag steps aside — nothing is
+   lost, because the depth spine names the depth down the whole left edge and the
+   transport names it again under the board. `visibility` rather than `display`, so
+   `.stagetop`'s space-between keeps N BELOW where it was.
+ *
+ * Caught by PLAYING the replay: the badge was printing straight over DEPTH 7 · HOLD,
+ * and both were legible enough individually that a screenshot review would have read
+ * it as a design. */
+.watchtag + .stage .depthtag {
+  visibility: hidden;
 }
 
 .watchtag {

@@ -67,11 +67,13 @@ Severity: **🔴 blocks work** · **🟡 will bite** · **⚪ tidy up**
 
 ### Code that contradicts the design
 
-- **C5 🔴 · `renderShareText` is a rewrite, not a wiring.** `TODO.md` and
-  `MIGRATION.md` both say Stage 4 "wires" the existing function. It renders a **flat
-  12-square strip** (`🟩⬛…`) labelled "Daily Deck", takes `(score, cleared, hp)`, and
-  knows nothing about `depthBands`, the 3×4 layout, the five band states, stratum row
-  labels, or bar size. Correct the claim, then rewrite the function.
+- **C5 ✅ FIXED 2026-08-03 · `renderShareText` was a rewrite, not a wiring.** Rewritten
+  at Stage 4 — and **moved** while it was: it now lives in `src/shared/share.ts`, not
+  `server/core/leaderboard.ts`. The reason is the one the old placement made
+  impossible: the preview a player taps POST on and the comment the server writes have
+  to be the same string, so the function has to be reachable from both sides. It takes
+  a `RunResult` and the day, and it emits the 3×4 grid, the five band states, the
+  stratum row labels, the score, the HP, the bar size and the key.
 - **C6 🔴 · `tests/art.test.ts` breaks at Stage 1, not Stage 2.** It imports `CARDS`
   from `src/shared/cards.ts`, which Stage 1 renames to `abilities.ts`. `TODO.md`
   lists the rename and not the dependent.

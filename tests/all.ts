@@ -11,6 +11,9 @@ await import('./sim.test');
 await import('./content.test');
 await import('./server.test');
 await import('./art.test');
+// `share` owns the artifact that LEAVES the game — the alphabet, the grid, the
+// pasted comment. It fails when the share format changes and nothing else does.
+await import('./share.test');
 // `tutorial` is the five beats' script, on top of the two invariants `content.test`
 // sweeps. Both halves are needed: the invariants say the lesson is possible on every
 // seed, and this says the coaching actually delivers it.

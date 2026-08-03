@@ -3,6 +3,7 @@ import { serve } from '@hono/node-server';
 import { trpcServer } from '@hono/trpc-server';
 
 import { createServer, getServerPort } from '@devvit/web/server';
+import { feedRoutes } from './routes/feed';
 import { menu } from './routes/menu';
 import { schedulerRoutes } from './routes/scheduler';
 import { triggers } from './routes/triggers';
@@ -20,6 +21,9 @@ api.use(
     createContext,
   })
 );
+// The feed card's numbers. Plain JSON so the inline splash can read it without a
+// tRPC client — see `routes/feed.ts`.
+api.route('/feed', feedRoutes);
 
 const internal = new Hono();
 internal.route('/menu', menu);

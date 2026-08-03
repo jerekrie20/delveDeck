@@ -177,10 +177,16 @@ and refreshing cannot inflate it.
 
 ## What there is to customise
 
-The delver has no portrait and no silhouette — eleven gear slots render as plates and
-a figure to dress would be the paper-doll pipeline this project exists to avoid. So
-customization is **light, identity and place**, which turns out to be a better fit than
-a wardrobe would have been.
+The delver has **one fixed generic portrait and no dressable silhouette** — eleven gear
+slots render as plates, and a figure to *dress* would be the paper-doll pipeline this
+project exists to avoid. So customization is **light, identity and place**, which turns
+out to be a better fit than a wardrobe would have been.
+
+> **Reconciled 2026-08-03.** This section used to read *"no portrait and no
+> silhouette"*, which contradicted [ART.md](ART.md)'s budgeted *"Hero portrait · 0 ·
+> +1 · Generate @64, display centred @32"*. The argument here was always against a
+> **dressable** figure, and one fixed portrait is neither dressable nor a paper-doll.
+> ART.md wins; `public/hero/delver.png` stays.
 
 | Surface | Where it is seen | Why it matters |
 |---|---|---|

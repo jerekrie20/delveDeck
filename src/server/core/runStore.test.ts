@@ -10,7 +10,10 @@ import { expect } from 'vitest';
 import { test } from '../test';
 import { redisRunStore } from './runStore';
 import { getBoard, submitRun } from './run';
-import { MAX_RUN_CHOICES, seedForDay, simulateRun, type RunChoice } from '../../shared/sim';
+import { readDayStats } from './stats';
+import {
+  depthReached, MAX_RUN_CHOICES, seedForDay, simulateRun, TUNING, type RunChoice,
+} from '../../shared/sim';
 
 const inAnHour = (): Date => new Date(Date.now() + 60 * 60 * 1000);
 
@@ -114,6 +117,60 @@ test('END TO END — the board ranks two players high score first', async () => 
   const board = await getBoard(redisRunStore, day, sub);
   expect(board).toHaveLength(2);
   expect(board[0]!.score).toBeGreaterThanOrEqual(board[1]!.score);
+});
+
+test('claimOnce is a real guard, and releaseClaim gives the key back', async () => {
+  // The one-comment-per-day guard rests entirely on this, and `writeRunIfAbsent`
+  // now delegates to it — so the SET NX semantics that bit this repo once (a refused
+  // write comes back as '' rather than null) are pinned in one place for both.
+  const key = 'shared:2026-07-27:testsub:alice';
+
+  expect(await redisRunStore.claimOnce(key, '1', inAnHour())).toBe(true);
+  expect(await redisRunStore.claimOnce(key, '2', inAnHour())).toBe(false);
+
+  await redisRunStore.releaseClaim(key);
+  expect(await redisRunStore.claimOnce(key, '3', inAnHour())).toBe(true);
+  expect(await redisRunStore.readRun(key)).toBe('3');
+});
+
+test('releasing a claim nobody holds is a no-op, not a throw', async () => {
+  await expect(redisRunStore.releaseClaim('shared:never:written')).resolves.toBeUndefined();
+});
+
+test('bumpCounters accumulates across calls and readCounters returns NUMBERS', async () => {
+  // `hGetAll` hands back strings — every value on a Devvit hash is a string, and a
+  // '1' + 1 = '11' in the day's tally would put a nonsense number on the feed card.
+  const key = 'stats:2026-07-27:countersub';
+  await redisRunStore.bumpCounters(key, [{ field: 'runs', by: 1 }, { field: 'd7', by: 1 }], 60);
+  await redisRunStore.bumpCounters(key, [{ field: 'runs', by: 1 }, { field: 'd9', by: 1 }], 60);
+
+  const counters = await redisRunStore.readCounters(key);
+  expect(counters['runs']).toBe(2);
+  expect(counters['d7']).toBe(1);
+  expect(counters['d9']).toBe(1);
+  expect(typeof counters['runs']).toBe('number');
+});
+
+test('an unwritten counter hash reads as empty, not as a throw', async () => {
+  expect(await redisRunStore.readCounters('stats:2026-07-27:nobody')).toEqual({});
+});
+
+test('END TO END — a submitted run lands in the day tally', async () => {
+  // The same gap `getBoard` fell into once: every piece passed its own unit test and
+  // the board was still empty, because nothing exercised submit and read together
+  // against real Redis.
+  const day = '2026-07-27';
+  const sub = 'statssub';
+  const choices = finishedRun(day);
+
+  expect((await submitRun(redisRunStore, day, sub, 'alice', choices, Date.now())).ok).toBe(true);
+
+  const stats = await readDayStats(redisRunStore, day, sub);
+  const deepest = depthReached(simulateRun(seedForDay(day), choices));
+  expect(stats.runs).toBe(1);
+  expect(stats.reached[0]).toBe(1);
+  expect(stats.reached[deepest - 1]).toBe(1);
+  if (deepest < TUNING.depths) expect(stats.reached[deepest]).toBe(0);
 });
 
 test('a second submission by the same user is refused and does not duplicate', async () => {

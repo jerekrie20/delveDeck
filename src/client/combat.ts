@@ -167,8 +167,12 @@ export function abilityBar(view: CombatView, live: boolean, focus?: CombatFocus)
       ? `<div class="cdmask"><b>${view.cds[i]}</b><i style="width:`
         + `${row.cd > 0 ? 100 - (view.cds[i]! / row.cd) * 100 : 0}%"></i></div>`
       : '';
+    // `hascd` reserves room in the NAME row for the cooldown tag, which is pinned to
+    // the tile's right edge across it. Without it a long name (Iron Will at 320px)
+    // runs straight into `CD 3` — found by playing the replay at the smallest
+    // viewport, where the name row is tightest.
     tiles += `<button class="ab ${abilityClass(id)}${off ? ' off' : ' ready'}`
-      + `${ringed ? ' hl' : ''}" style="--i:${i}"`
+      + `${row.cd > 0 ? ' hascd' : ''}${ringed ? ' hl' : ''}" style="--i:${i}"`
       + `${open ? ` data-action="cast" data-index="${i}"` : ' disabled'}>`
       + `<div class="ico">${abilityGlyph(id)}</div>`
       + `<div class="cost"><span>${row.cost}</span></div>`

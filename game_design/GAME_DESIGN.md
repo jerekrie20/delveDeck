@@ -237,21 +237,37 @@ leaderboard's `D10` is the latter.
 Three rows of four, read downward — **the grid is the shaft.** Row labels are the
 strata: `WARRENS` / `HOLD` / `CRYPT`.
 
-| Band | Meaning | Grid | Board trace |
-|---|---|---|---|
-| `full` | ended the depth near full HP | green | `f` |
-| `hurt` | mid | amber | `h` |
-| `crit` | low | orange | `c` |
-| `dead` | died here | red + white pip | `d` |
-| `none` | never reached | empty | blank |
+**One alphabet, rendered twice** — as squares in the app and as characters in a
+comment. The shape is the message and the hue agrees with it; see the next section
+for why that is not optional. Characters and glyphs are code (`src/shared/share.ts`),
+listed here because a change to them changes what a hundred thousand comments say.
 
-Thresholds are `TUNING`, pinned by a test at Stage 4 and tuned once real
-distributions exist. They must produce visible variety — a grid that is twelve
-greens or twelve oranges shares nothing.
+| Band | Meaning | Shape | Pasted | In-app | Grid | Board trace |
+|---|---|---|---|---|---|---|
+| `full` | ended the depth near full HP | circle | 🟢 | `●` | green, lightest | `f` |
+| `hurt` | mid | diamond | 🔶 | `◆` | amber | `h` |
+| `crit` | low | triangle | 🔻 | `▼` | orange | `c` |
+| `dead` | died here | cross | ❌ | `✕` | red + white pip | `d` |
+| `none` | never reached | — | ⬛ | *blank* | empty | `n` |
+
+Thresholds are `TUNING`, pinned by a test and tuned once real distributions exist.
+They must produce visible variety — a grid that is twelve greens or twelve oranges
+shares nothing. **Measured at Stage 4** over 1,200 floor-play runs: no run came out
+one colour, and every run that reached three depths showed at least two bands.
 
 Spoiler-free by construction: no enemy, no ability, no order. The footer is
-`Daily Delve #128 · depth 11/12 · 1037 · 37 HP · 5 abilities` — depth, score, HP and
-**bar size**. Bar size is the strategic signature and it costs one integer.
+`Daily Delve · 2026-08-03 · depth 11/12 · 1037 · 37 HP · 5 abilities` — depth, score,
+HP and **bar size**. Bar size is the strategic signature and it costs one integer.
+
+**In the pasted comment the squares LEAD and the stratum label TRAILS them.** Reddit
+renders a comment in a proportional face, so a leading `WARRENS` / `HOLD` / `CRYPT`
+starts each row at a different left edge and the shaft comes out as a staircase.
+Emoji are one width; putting them first is what makes the grid a grid.
+
+The comment closes with a **key** — `🟢 near full · 🔶 hurt · …` — which is the other
+half of the second channel: a shape nobody can name is not a channel. The in-app
+share block carries the same key under the grid, so the app and the comment teach
+each other.
 
 ### The grid must not encode meaning in colour alone
 
@@ -267,6 +283,14 @@ which defeats the only reason it exists.
 
 This is a correctness requirement, not a polish item, and it is cheap if done at
 Stage 4 and expensive once the share format is in thousands of comments.
+
+**Done at Stage 4, and guarded.** `tests/share.test.ts` fails if two bands share a
+shape, if a band loses its word, or if `game.css`'s four band gradients stop
+descending in relative luminance (59% → 42% → 19% → 7%, at both ends of every
+gradient). The 7px board-trace pip has no room for a glyph, so it carries the
+lightness ladder — except `dead`, which inverts to a light core in a dark ring,
+because at that size a very dark red and the unreached grey are the same cell in
+greyscale. That inversion is the design's own *"red + white pip"*.
 
 ---
 

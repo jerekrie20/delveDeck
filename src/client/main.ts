@@ -5,8 +5,12 @@
 // and the leaderboard is live.
 //
 // The screens live beside this file, one module per place (`camp`, `combat`,
-// `interlude`, `result`), each a pure string function of a view. This one owns the
-// state they render and the single click handler they all post into.
+// `interlude`, `result`, `replay`), each a pure string function of a view. This one
+// owns the state they render and the single click handler they all post into. Three
+// seams sit beside them and are NOT screens: `session` (the server), `host` (toasts
+// and the clipboard), `mount` (what happens to the DOM after a screen is installed),
+// and `sharing` (the comment flow, which owns its own state because none of it is a
+// fact about the run).
 //
 // Three things you must not break:
 //
@@ -24,6 +28,7 @@
 
 import {
   dayKey,
+  renderShareText,
   seedForDay,
   simulateRun,
   TUNING,
@@ -33,8 +38,11 @@ import {
 import { campScreen, loadoutScreen, type DailyState } from './camp';
 import { combatScreen } from './combat';
 import { boonScreen, descentScreen } from './interlude';
-import { replayTransport, resultScreen, type ResultContext } from './result';
+import { mountScreen } from './mount';
+import { replayTransport } from './replay';
+import { resultScreen, type ResultContext } from './result';
 import { loadBoard, loadInit, loadReplay, session, submitRun } from './session';
+import { commentError, commentPhase, shareAction } from './sharing';
 import { tutorialLoadout, tutorialScreen } from './tutorial';
 
 const app = document.getElementById('app');
@@ -224,8 +232,19 @@ function resultContext(readOnly: boolean): ResultContext {
     boardLoading: session.boardLoading,
     boardError: session.boardError,
     submitError,
+    commentPhase: commentPhase(),
+    commentError: commentError(),
+    stats: session.init?.stats ?? null,
     readOnly,
   };
+}
+
+/** The text that gets pasted and the text the server posts are the same pure function
+ *  of the same deterministic result — recomputed here rather than carried through the
+ *  DOM, so there is one expression of it and no attribute to get stale. */
+function shareTextForOwnRun(): string {
+  const day = session.init?.day ?? localDay;
+  return renderShareText(simulateRun(seed, choices), day);
 }
 
 function dailyState(result: RunResult): DailyState {
@@ -236,12 +255,16 @@ function dailyState(result: RunResult): DailyState {
 function replayScreen(result: RunResult): string {
   const total = replayChoices?.length ?? 0;
   const depth = result.depthMarks.filter((mark) => mark <= choices.length).length;
+  // The marks come from the WHOLE recording, not from the slice being watched. A
+  // scrubber built off the current step can only ever offer to jump backwards, which
+  // is the one direction a scrubber is not for — caught by playing it.
+  const marks = simulateRun(seed, replayChoices ?? []).depthMarks;
   const transport = replayTransport({
     username: replayUser,
     step: choices.length,
     total,
     playing: replayPlaying,
-    depthMarks: result.depthMarks,
+    depthMarks: marks,
     depth: Math.max(1, depth),
   });
   const banner = `<div class="watchtag">&#9654; WATCHING u/${replayUser.toUpperCase()}</div>`;
@@ -266,7 +289,9 @@ function screenFor(result: RunResult): string {
       msToReset: msToNextDelve(),
     });
   }
-  if (descentDepth !== null) return descentScreen(seed, descentDepth);
+  if (descentDepth !== null) {
+    return descentScreen(seed, descentDepth, session.init?.stats ?? null);
+  }
   const view = result.view;
   if (!view) return resultScreen(result, resultContext(false));
   if (view.phase === 'loadout') return loadoutScreen(view, pendingBar, pendingUltimate);
@@ -295,10 +320,10 @@ function render(): void {
     });
     // A practice run that has somehow left depth 1's combat screen has nothing left to
     // coach. Drop the tutorial rather than render half of one.
-    if (coached !== null) { app!.innerHTML = coached; return; }
+    if (coached !== null) { mountScreen(app!, coached); return; }
     tutorialChoices = null;
   }
-  app!.innerHTML = screenFor(simulateRun(seed, choices));
+  mountScreen(app!, screenFor(simulateRun(seed, choices)));
 }
 
 // ---- input -----------------------------------------------------------------------
@@ -371,6 +396,7 @@ app.addEventListener('click', (event) => {
 
   if (runAction(action, index)) return;
   if (replayAction(action, index, found)) return;
+  if (shareAction(action, shareTextForOwnRun, render)) return;
 
   switch (action) {
     case 'enter-daily': screen = 'run'; render(); break;
@@ -383,9 +409,13 @@ app.addEventListener('click', (event) => {
     case 'submit':
       // `void`: submitRun reports failure through its resolved value, so there is
       // nothing left to catch here.
-      void submitRun(choices).then((error) => {
+      void submitRun(choices).then(async (error) => {
         submitted = error === null;
         submitError = error;
+        // Re-read init so the day's tally includes this run — otherwise the result
+        // screen says "N descended today" with the player themselves missing from N,
+        // which is the first number they will check.
+        if (submitted) await loadInit();
         render();
       });
       break;
