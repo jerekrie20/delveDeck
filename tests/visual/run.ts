@@ -50,23 +50,18 @@ const VIEWPORTS = [
  * for the same reason. A stale entry is reported too: if a known finding stops
  * firing, the gate says so, so the list cannot quietly outlive the bug.
  */
-const KNOWN_FINDINGS = [
-  {
-    id: 'cdtag-over-rules',
-    screen: 'combat',
-    matches: (c: Collision) => /^CD \d/.test(c.b) || /^CD \d/.test(c.a),
-    why: 'TODO.md § Stage 6 — .cdtag is pinned at top:27px while the flex-end tile grows '
-      + 'upward, so a two-line rules string runs under it. The padding-right fix was '
-      + 'tried and REVERTED: it cut Ice Nova from 25 of 25 visible characters to 17.',
-  },
-  {
-    id: 'disabled-confirm-bleed',
-    screen: 'loadout (empty, confirm disabled)',
-    matches: (c: Collision) => /CONFIRM LOADOUT|LOCKED FOR THE DELVE/.test(`${c.a} ${c.b}`),
-    why: 'TODO.md § Stage 6 — a DISABLED .btn.go sits at opacity 0.8 (disabled is never '
-      + 'invisible here) on a sticky bar, so ~20% of the row behind bleeds through. The '
-      + 'enabled state — the one a player confirms from — is opacity 1 and fully occludes.',
-  },
+const KNOWN_FINDINGS: {
+  id: string;
+  screen: string;
+  matches: (c: Collision) => boolean;
+  why: string;
+}[] = [
+  // EMPTY, AND THAT IS THE GOAL STATE. Both original entries were fixed rather than
+  // carried: the cooldown tag moved into the name row (`.nmrow`) so it rides with the
+  // flex-end content instead of being pinned across it, and `.btn[disabled]` swapped
+  // `opacity: 0.8` for `brightness(0.72)` so a disabled button on a sticky bar dims
+  // without going see-through. An empty list means every collision the gate finds is
+  // news.
 ];
 
 /**

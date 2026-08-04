@@ -1239,8 +1239,26 @@ body {
 
 /* The name never wraps and never clips to nothing — it is how you find the ability you
    meant to press. */
-.ab .nm {
+/* The name and its cooldown tag share ONE ROW, so the tag rides with the content.
+   It used to be `position: absolute` at a fixed `top`, which is fine until the rules
+   text wraps to two lines: the tile is `justify-content: flex-end`, so its rows grow
+   UPWARD past a tag that cannot move, and the first rules line ran under `CD 3`
+   (measured at 17×4px of real glyph overlap, 359px). In the row that is not a bug
+   that can happen. */
+.ab .nmrow {
   flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+
+.ab .nm {
+  /* The name is the part that GIVES. `0 1 auto` plus `min-width: 0` is what lets it
+     ellipsise instead of shoving the tag out of the tile — the same shrink-0 trap the
+     camp head's identity column hit, one screen over. */
+  flex: 0 1 auto;
+  min-width: 0;
   font: 400 var(--px-2)/1.15 var(--px);
   color: #fff;
   text-shadow: 0 2px 0 #000;
@@ -1262,34 +1280,16 @@ body {
   overflow: hidden;
 }
 
-/* Pinned to the tile, NOT part of the flex flow — which is the whole reason the two
-   rules below exist. The tile is `justify-content: flex-end`, so its rows are anchored
-   to the bottom and grow UPWARD; this tag stays at 27px while they move past it. */
+/* IN THE FLOW, never pinned. It sits in `.nmrow` beside the name and shrinks nothing:
+   the name is the flexible half. Two earlier versions of this are worth not repeating
+   — `position: absolute` collided with two-line rules text, and reserving the width on
+   `.rx` to dodge that cut Ice Nova's rules from 25 visible characters to 17. **Never
+   trade what an ability DOES for a secondary metadata tag.** */
 .ab .cdtag {
-  position: absolute;
-  top: 27px;
-  right: 7px;
+  flex: 0 0 auto;
   font: 400 var(--px-1)/1 var(--px);
   color: var(--dim);
 }
-
-/* The tag crosses the NAME row, so the name gives it room rather than running into
-   it. Reserved only where there IS a tag — a tile with no cooldown keeps its full
-   width for the name, which is how you find the ability you meant to press. */
-.ab.hascd .nm {
-  padding-right: 26px;
-}
-
-/* ⚠ KNOWN, MEASURED, AND DELIBERATELY NOT FIXED HERE — see TODO.md § Stage 6.
-   The tag also crosses the RULES row once that row is two lines: the block grows
-   upward into the tag's band and the first line runs under `CD 3` (17×4px of real
-   glyph overlap at 359px). The obvious fix — `padding-right: 26px` here, matching
-   `.nm` above — was tried and REVERTED, because it is a worse bug than the one it
-   fixes: it cuts Ice Nova's rules from "Deal 15 damage. Weaken 4." (25 of 25
-   characters shown) to "Deal 15 damage. W" (17 of 25), and Tumble's from 32 visible
-   characters to 16. Losing what an ability DOES, to protect a secondary metadata tag,
-   is the wrong trade. The real fix moves the tag into the flex flow so it rides up
-   with the content — a `combat.ts` markup change, not a CSS one. */
 
 .ab.ready {
   box-shadow:
@@ -1514,9 +1514,16 @@ body {
   background: linear-gradient(180deg, #3a4251, #20252f);
 }
 
+/* DISABLED IS DIMMED, NOT TRANSLUCENT.
+   `opacity: 0.8` used to do the dimming, and it composites the whole button — fill
+   included — against whatever is behind it. On the loadout's STICKY confirm bar that
+   is the ability list scrolling underneath, so ~20% of a row's text showed through
+   the button's own label. `brightness` reaches the same washed-out look by darkening
+   the paint instead of thinning it, so the button stays opaque and keeps covering what
+   it is sitting on top of. The hatch below is unchanged; disabled is still never
+   invisible, and the label keeps its contrast. */
 .btn[disabled] {
-  filter: saturate(0.3);
-  opacity: 0.8;
+  filter: saturate(0.3) brightness(0.72);
   pointer-events: none;
 }
 

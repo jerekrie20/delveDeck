@@ -583,14 +583,17 @@ collision at all. It has to compare **rendered text rectangles**, clamped to the
 content box where `text-overflow: ellipsis` clips. A gate that cries wolf gets ignored,
 which is the same failure as a gate that misses things.
 
-> **⚠ The server half of the gate was played against a LOCAL tRPC fake, not a real
-> subreddit.** This environment has no Devvit runtime, so `reddit.submitComment`,
-> `context.postId` and the real Redis were never exercised in a browser. They are
-> covered by tests — `runStore.test.ts` runs against Devvit's own Redis mock, and
-> `server.test.ts` drives submit / board / tally / comment through an in-memory store
-> — but **the first real playtest should confirm one thing specifically: that a posted
-> comment appears under the player's own name.** That is the one path no test here can
-> reach.
+> **✅ CONFIRMED ON A REAL SUBREDDIT (Stage 5).** The server half of this gate was
+> played against a local tRPC fake, because this environment has no Devvit runtime —
+> so `reddit.submitComment`, `context.postId` and the real Redis were never exercised
+> in a browser here. That was the one path no test in this repo could reach, and the
+> owner has now **posted a grid on a real subreddit and confirmed it appears under
+> their own username.**
+>
+> That closes the last unverified thing in the Stage 4 ship gate. `runAs: 'USER'` plus
+> `SUBMIT_COMMENT` in `devvit.json` behaves as designed against real Reddit, which also
+> means the one-claim-per-day guard and the release-on-refusal path are running against
+> the real `claimOnce` rather than a fake.
 
 ### Owner call: Silkscreen does not ship, and here is the reasoning
 
@@ -689,8 +692,10 @@ whether this user already has a run today — so the one-per-day claim guards th
 leaderboard, not the CPU in front of it. Stage 5 is also the first stage where a
 request writes something permanent. The limiter runs **before** the replay.
 
-> **GATE — the first write is forever. PASSED**, with two pre-existing findings
-> recorded above and neither of them on a screen this stage touches.
+> **GATE — the first write is forever. PASSED**, and the three pre-existing visual
+> findings it turned up were all fixed rather than carried, so `KNOWN_FINDINGS` is
+> empty and the real subreddit comment is confirmed. Nothing about this stage is
+> outstanding.
 >
 > | check | result |
 > |---|---|
@@ -735,6 +740,31 @@ centre that nothing can be compared against; buys a column that never moves.
 > **Vertical overflow is reported and never failed on.** The loadout is *meant* to
 > scroll. A gate that failed on it would be demanding the design change.
 
+**Two pre-existing text collisions, both fixed rather than carried.**
+
+- **The cooldown tag crossed the rules text on a two-line tile** (17×4px at 359px).
+  The tile is `justify-content: flex-end`, so its rows grow **upward**, while `.cdtag`
+  was absolutely positioned at a fixed `top: 27px` — one-line rules sat below it and
+  looked right, two-line rules slid up and ran under `CD 3`. The tag is a flex sibling
+  of the name inside `.nmrow` now, so it rides with the content. The name is the half
+  that gives (`flex: 0 1 auto` + `min-width: 0`) and ellipsises instead of pushing the
+  tag out — verified at 320px with a name longer than any real ability. `hascd` went
+  with it; it existed only to reserve width for a pinned tag.
+  - **The obvious fix was tried first and reverted, and that is the part to remember.**
+    `padding-right: 26px` on `.rx` to dodge the tag cut Ice Nova from *"Deal 15 damage.
+    Weaken 4."* (25 of 25 characters visible) to *"Deal 15 damage. W"* (17 of 25), and
+    Tumble from 32 to 16. **Never trade what an ability does for a metadata tag.**
+    Under the real fix the rules text keeps the full tile width.
+- **A disabled sticky confirm button was 80% opaque**, so the ability list scrolling
+  behind it bled through its own label. `.btn[disabled]` expressed dimming with
+  `opacity`, which composites the whole button — fill included — against what is
+  behind. It is `filter: saturate(0.3) brightness(0.72)` now: the same washed-out look
+  reached by darkening the paint rather than thinning it. Disabled is still never
+  invisible and the hatch is unchanged.
+  - **`.trb[disabled]` still uses `opacity: 0.7`** and was left alone deliberately —
+    the replay transport is in normal flow, not an overlay, so there is nothing behind
+    it to bleed through. It inherits this bug the day it becomes sticky.
+
 **One real bug, in the new code, that reading it would not have found.** The camp
 head's identity column reused `.grow`, which is `flex: 1 0 auto` — **shrink 0**. It is
 the right rule for the empty spacer divs that push a button row to the bottom and the
@@ -756,13 +786,23 @@ assert-and-type-check pass needing no server and no browser; folding a browser i
 would make the fast loop slow and make a network hiccup look like a broken build. This
 is the slow gate you run before calling a stage done.
 
-**`KNOWN_FINDINGS` in `run.ts` is the part to be careful with.** The two findings above
-are real, understood, and deferred — without an allowlist the gate would fail forever,
-and a gate that always fails teaches people to stop reading it. So each entry carries
-its reasoning and a `TODO.md` reference, **anything not on the list still fails**, and
-a known finding that stops reproducing is reported as stale so the list cannot outlive
-its bugs. Adding an entry needs a `TODO.md` line naming the stage that removes it —
-the same rule `eslint.config.js` carries for size exemptions.
+**`KNOWN_FINDINGS` in `run.ts` is EMPTY, and that is the goal state.** Both findings it
+was created for were fixed rather than carried, so every collision the gate reports is
+now news. The mechanism stays because it will be needed again: each entry carries its
+reasoning and a `TODO.md` reference, **anything not on the list still fails**, and an
+entry that stops reproducing is reported as stale so the list cannot outlive its bugs.
+Adding one needs a `TODO.md` line naming the stage that removes it — the same rule
+`eslint.config.js` carries for size exemptions.
+
+> **The gate was wrong about one of those two, and the reason generalises.** After
+> `.btn[disabled]` was made opaque, the gate *still* reported the list bleeding through
+> it. The pixels were right and the instrument was wrong: `elementFromPoint` answers
+> *"what would receive this click"*, not *"what is painted here"*, and a disabled
+> button has `pointer-events: none` — so hit-testing walked straight past it to the bar
+> underneath. `measure()` now forces `pointer-events: auto` for the duration of a
+> measurement, which makes hit-testing follow paint order again. **A gate that reports
+> a bug you have already fixed burns exactly as much trust as one that misses a real
+> one.**
 
 **The gate was verified by re-breaking the thing it found.** Putting `flex: 1 0 auto`
 back on `.chid` and re-running produced `✗ camp (worst case): the camp head overflows
@@ -854,31 +894,6 @@ on the far side of the claim `submitRun` had to win.
       the hero's already-shipped empty `records` key. Streak belongs to the Daily
       only; whether a missed day resets or decays it is still undecided
       (`GAME_DESIGN.md` § Accounts) and is a retention call, not a mechanical one.
-- [ ] **The cooldown tag crosses the rules text on a two-line tile.** Found by playing
-      Stage 5's gate at 359×632; **pre-existing, not a Stage 5 regression** — nothing
-      in that stage touches `.ab`. The tile is `justify-content: flex-end`, so its rows
-      grow **upward**, while `.cdtag` is absolutely positioned at a fixed `top: 27px`.
-      One-line rules sit below it and look right; two-line rules — most strings at
-      phone width — slide up and the first line runs under `CD 3`. **Measured: 17×4px
-      of real glyph overlap.**
-  - The obvious fix, `padding-right: 26px` on `.ab.hascd .rx` to match the `.nm` rule
-    beside it, was **tried and reverted**. It is a worse bug: Ice Nova drops from
-    *"Deal 15 damage. Weaken 4."* (25 of 25 characters visible) to *"Deal 15 damage.
-    W"* (17 of 25), and Tumble from 32 visible characters to 16. **Never trade what an
-    ability does for a secondary metadata tag.**
-  - The real fix is to move the tag **into the flex flow** — a sibling in the name
-    row, which already reserves 26px for it — so it rides up with the content instead
-    of being pinned past it. That is a `combat.ts` markup change and it belongs in a
-    pass that can re-play the whole ability bar, not bolted onto the accounts stage.
-- [ ] **A DISABLED sticky confirm button is 80% opaque, so the list bleeds through it.**
-      Also found by Stage 5's gate, also pre-existing, at all three viewports. `.btn.go`
-      disabled sits at `opacity: 0.8` — which is the deliberate *"disabled is not
-      invisible"* treatment — but it is a sticky overlay, so ~20% of whatever row is
-      scrolled behind it shows through its label. **The enabled state is clean**
-      (`opacity: 1`, fully occluding), and enabled is the state a player actually
-      confirms from, which is why this is a cosmetic softness rather than a legibility
-      bug. Fix by giving the *bar* the opacity and the *button* a solid fill, so
-      "disabled" stops meaning "translucent" on a layer that has to cover something.
 - [ ] **Server-side run resume.** An Endless run is 20–40 minutes on a phone in a feed
       iframe. Persist `{seed, choices}` **at every fork** — the choice list is already
       the save file — so a closed tab, a device switch or lost signal resumes at the

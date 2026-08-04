@@ -167,18 +167,22 @@ export function abilityBar(view: CombatView, live: boolean, focus?: CombatFocus)
       ? `<div class="cdmask"><b>${view.cds[i]}</b><i style="width:`
         + `${row.cd > 0 ? 100 - (view.cds[i]! / row.cd) * 100 : 0}%"></i></div>`
       : '';
-    // `hascd` reserves room in the NAME row for the cooldown tag, which is pinned to
-    // the tile's right edge across it. Without it a long name (Iron Will at 320px)
-    // runs straight into `CD 3` — found by playing the replay at the smallest
-    // viewport, where the name row is tightest.
+    // The cooldown tag sits INSIDE the name row, as its sibling. It used to be pinned
+    // to the tile with `position: absolute`, which works right up until the rules text
+    // wraps to two lines: the tile is `justify-content: flex-end`, so its rows grow
+    // UPWARD past a tag that cannot move, and the first rules line runs under `CD 3`.
+    // In the row it rides with the content and the collision cannot happen at all.
+    // No `hascd` class any more: it existed solely to reserve width on the name for a
+    // tag pinned across it, and the tag is not pinned any more. Flex does the reserving.
     tiles += `<button class="ab ${abilityClass(id)}${off ? ' off' : ' ready'}`
-      + `${row.cd > 0 ? ' hascd' : ''}${ringed ? ' hl' : ''}" style="--i:${i}"`
+      + `${ringed ? ' hl' : ''}" style="--i:${i}"`
       + `${open ? ` data-action="cast" data-index="${i}"` : ' disabled'}>`
       + `<div class="ico">${abilityGlyph(id)}</div>`
       + `<div class="cost"><span>${row.cost}</span></div>`
-      + `<div class="nm">${escapeHtml(row.name)}</div>`
-      + `<div class="rx">${escapeHtml(row.text)}</div>`
+      + `<div class="nmrow"><div class="nm">${escapeHtml(row.name)}</div>`
       + (row.cd > 0 ? `<div class="cdtag">CD ${row.cd}</div>` : '')
+      + '</div>'
+      + `<div class="rx">${escapeHtml(row.text)}</div>`
       + `${mask}</button>`;
   });
   const ultimate = ABILITIES[view.ultimate]!;
@@ -188,7 +192,9 @@ export function abilityBar(view: CombatView, live: boolean, focus?: CombatFocus)
     + `${ready ? ' ready charged' : ' off'}" style="--i:5"`
     + `${ultOpen ? ' data-action="ult"' : ' disabled'}><div class="sheen"></div>`
     + `<div class="ico">${abilityGlyph(view.ultimate)}</div>`
-    + `<div class="nm">${escapeHtml(ultimate.name)}</div>`
+    // The ultimate is rage-gated rather than cooldown-gated, so it never carries a
+    // tag — but it keeps the same row wrapper so one set of rules styles both.
+    + `<div class="nmrow"><div class="nm">${escapeHtml(ultimate.name)}</div></div>`
     + `<div class="rx">${escapeHtml(ultimate.text)}</div>`
     + `<div class="chargebar"><span style="width:`
     + `${fillPercent(view.rage, view.maxRage)}%"></span></div></button>`;

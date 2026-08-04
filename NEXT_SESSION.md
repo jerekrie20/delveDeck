@@ -3,210 +3,172 @@
 **Two parts.** Part 1 is questions for me — I answer them in place, in this file.
 Part 2 is the brief, which I paste as the opening prompt once Part 1 is filled in.
 
+> **Skipping a question is an answer.** Anything left blank stands at the
+> recommendation under it. That is how the last eight were decided, and it worked —
+> so leave the ones you agree with alone and only type where you disagree.
+
 ---
 
 # PART 1 — questions I need to answer
 
-Written in plain language on purpose. Type your answer on the `**Answer:**` line under
-each one; anything you skip stays as it is, which is what the recommendation says.
+Stage 6 is **the Endless**, and it is the biggest stage in the file by a wide margin:
+eleven gear slots, classes, the fork, the haul, a second leaderboard, run resume. These
+questions are the ones that decide its *shape*, and every one of them is expensive to
+change once there is code against it.
 
 ---
 
-### Q1 · Should a new subreddit see the "how many people got this far" line right away?
+### Q1 · Should Stage 6 ship the whole Endless, or the fork first?
 
-Between depths, the game can tell you how many people playing today never got this
-deep — *"612 of 1,284 never got this far."* It is meant to land as a threat.
+Every stage so far shipped something playable end to end. Stage 6 as written in
+`TODO.md` is not one stage — it is roughly six: the sim entry point, gear, classes,
+the fork, the haul, the board, run resume. Built in one pass, nothing is playable until
+almost all of it is done, and the balance probe cannot measure any of it in the
+meantime.
 
-Right now that line **stays hidden until at least ten people have played that day.**
-The reason: on a brand new subreddit the first player would see *"1 of 3 never got this
-far"*, which is true, means nothing, and makes the game look empty. On those days the
-screen falls back to a line that claims no numbers at all.
+The alternative is to split it where the design already has a seam:
 
-- **Leave it** → small communities and launch day show atmosphere instead of a
-  statistic. Nobody ever sees an embarrassing number.
-- **Change it** → the line shows from the very first player, tiny numbers and all.
+- **6a — the fork, with no gear.** `simulateEndless` with an issued kit identical to
+  the Daily's, the surface-or-descend screen, the haul as *shards only*, and the death
+  screen. That is the entire risk/reward loop, playable, measurable by the probe, and
+  it touches no account state beyond the `shards` field that already ships.
+- **6b — gear and classes**, once 6a proves the loop is fun.
 
-**My recommendation: leave it at ten.** A number that small is worse than no number.
-
-**Answer:**
-
-*(Where it lives: `src/client/interlude.ts`, the value named `MIN_DELVERS_FOR_STAT`.
-One line to change.)*
-
----
-
-### Q2 · Does the tutorial's first lesson being "end your turn" bother you?
-
-The tutorial runs on the real dungeon, so it has to cope with whatever monster the day
-happens to put on the first floor. About one day in ten, that monster spends its first
-turn **putting up a guard** — so nothing is coming at you yet.
-
-The lesson at that moment is supposed to be *"block, because a hit is coming."* On
-those days there is no hit coming, and teaching "block now" would teach a bad habit —
-blocking is a decision about the turn the hit actually lands on.
-
-So on those days **the first lesson becomes "end your turn"** instead, which is the
-strongest possible proof that the threat display is telling the truth. Every lesson
-after it then starts on a turn that really does have an attack coming.
-
-I measured the alternative — doing the wait *after* the two practice attacks instead —
-and on 15 days out of 3,000 it killed the first floor before the block lesson could
-happen at all. Doing it first is clean on every single day.
-
-**My recommendation: keep it.**
+**My recommendation: split it, 6a first.** The fork is the thing the whole mode rests
+on — *"is one more depth worth it?"* — and it is the one part that can be wrong in a
+way no amount of gear fixes. Shipping it alone means finding that out in a week rather
+than in two months.
 
 **Answer:**
 
 ---
 
-### Q3 · Is it fine that the last tutorial lesson sometimes happens one floor down?
+### Q2 · How much can the Endless be allowed to hurt?
 
-The tutorial teaches two practice attacks. On about one day in nine, the day's basic
-attack causes bleeding, two of them stack it up, and **the monster dies at the end of
-the fourth lesson** — so the fifth and final lesson happens standing on the second
-floor instead of the first.
+The fork's whole design is that death takes the unbanked haul. `MODES.md` sets
+`+8% enemy HP` per depth past your record and one lantern slot unlit. What it does not
+say is **how deep a typical player gets before the maths stops being survivable** —
+that is a tuning question the probe answers, but it needs a target first.
 
-I treated that as a good moment rather than a broken one and wrote a second version of
-the final coaching line that names it: you killed something, here is where you are now.
+The number that matters is the **fork ratio**: surfaces ÷ deaths. `GAME_DESIGN.md`
+already calls it *"the one to watch"*.
 
-The alternative is to teach **one** practice attack instead of two — but the "two
-attacks leave it alive but nearly dead" guarantee is what makes the tutorial work on
-every single day of the year, and cutting to one weakens it.
+- **Around 50/50** → every fork is a real decision, and losing a haul is common enough
+  to mean something. Harsh; some players will bounce off the first big loss.
+- **Around 70/30 toward surfacing** → the game feels generous, hauls mostly get banked,
+  and *"one more depth"* is a thrill rather than a gamble. The risk is the fork stops
+  being a decision at all.
 
-**My recommendation: keep two attacks and the second version of the line.**
-
-**Answer:**
-
----
-
-### Q4 · Do you like the thing that gets pasted into comments?
-
-This is the artifact everything else was built around, and once people start posting it
-the format is effectively permanent. Here is exactly what a real run produces:
-
-```
-**Daily Delve** · 2026-08-03 · depth 5/12
-
-🟢🟢🔶🔻 WARRENS
-❌⬛⬛⬛ HOLD
-⬛⬛⬛⬛ CRYPT
-
-**400** · 0 HP · 3 abilities
-
-🟢 near full · 🔶 hurt · 🔻 hanging on · ❌ fell here · ⬛ never reached
-```
-
-Each square is one floor, read left to right, top to bottom. **The shapes carry the
-meaning, not the colours** — circle, diamond, triangle, cross — so it still reads for
-the roughly 8% of men who cannot separate red from green, and it still reads in a
-screenshot with the colour stripped out. The last line explains the shapes to anyone
-who has never played.
-
-It gives away nothing about the day: no monster names, no ability names, no order.
-
-Things you might want changed: the last line could go (shorter, but then a first-time
-reader has no idea what the shapes mean), the floor names could go, or the shapes
-themselves could be different.
-
-**My recommendation: ship it as it is.**
+**My recommendation: tune toward 60/40 surfacing**, and treat it as the probe's Stage 6
+gate the same way skill headroom was Stage 1's. It keeps the loss real without making
+the mode feel like it is punishing you for playing it.
 
 **Answer:**
 
 ---
 
-### Q5 · Should the rage meter carry between floors?
+### Q3 · Does a player keep one Endless run, or can they abandon it freely?
 
-Right now, when you finish a floor, **your rage meter and all your ability cooldowns
-reset to zero.** The design never said either way, and the game could not be built
-without picking one, so I picked reset.
+`TODO.md` says one run in progress at a time, and starting a new one counts the old as
+a death. That is the honest rule — it stops "reroll until the shaft is nice" — but it
+means a player who opens the app, starts a run, gets interrupted for three days and
+comes back has a stale run they must either finish or lose.
 
-The alternative opens up a real tactic: deliberately take some hits on the easy early
-floors to build rage, so you walk into the floor-4 boss with your big attack already
-loaded. That is an interesting decision and reset closes it off completely.
+- **Keep it strict** → abandoning is a death, the haul burns. No exploit surface.
+- **Add an expiry** → a run untouched for N days quietly banks whatever it was holding
+  and closes. Kinder, and it needs a scheduler job plus a rule about what N is.
 
-It is also a balance change — it would make the game meaningfully easier, and I would
-need to re-run the balance measurements and probably retune afterwards.
-
-**My recommendation: leave it as reset for now.** It is a good idea, but it is a
-gameplay change dressed as a technical detail, and it belongs in its own pass rather
-than bolted onto the accounts stage.
-
-**Answer:**
-
----
-
-### Q6 · When a score needs to come off the leaderboard, who takes it off?
-
-Nobody can *fake* a score — the server replays your actual moves and works the number
-out itself, so there is no number a player can send. That part is airtight and is not
-what this is about.
-
-The gap is that a score can be completely genuine and still be something you would want
-gone. Someone runs the puzzle through a solver overnight and pastes in the answer.
-Someone posts the perfect line in the comments at 8pm and forty people copy it. A bug
-in one ability makes today's top ten all the same build.
-
-| | Option | What it costs |
-|---|---|---|
-| **A** | Do nothing. The leaderboard resets every day anyway, so a bad entry is gone in 24 hours. | Nothing |
-| **B** | Subreddit moderators can remove an entry from their own board. | One menu button, one delete, one test |
-| **C** | Only you can remove an entry. | The same, but every report comes to you |
-| **D** | The server guesses and hides them automatically. | Real work, and it will be wrong about real players sometimes |
-
-**My recommendation: A now, B the first time it actually happens.** The daily reset is
-already a strong defence, and a removal button with nothing to remove is a feature
-about an imagined problem. The code is already shaped so B is easy to add later.
-
-There is a bigger question underneath, and it is yours rather than mine: **is solving
-the day's dungeon offline cheating, or is it the game?** The whole pitch is a puzzle
-everyone shares that can be reasoned out, and a comment thread arguing about the best
-line is the stated goal. If the answer is "that's the game", most of this table stops
-mattering.
+**My recommendation: keep it strict for Stage 6**, and revisit once there is data on
+how often runs actually go stale. An expiry that banks a haul is a free-haul exploit if
+N is short and a non-feature if N is long, and there is no way to pick N without
+knowing how people play.
 
 **Answer:**
 
 ---
 
-### Q7 · What actually ships in the accounts stage?
+### Q4 · Records and the streak — what happens when someone misses a day?
 
-The plan for the next stage says two things that pull against each other. One says ship
-**one** meaningful saved value — your shard total — and nothing else, so the saving
-machinery gets proven against real traffic before anything valuable rests on it. The
-other lists the **records screen**: a calendar coloured by how deep you got each day,
-and a daily streak.
+Deferred out of Stage 5 and still genuinely undecided (`GAME_DESIGN.md` § Accounts).
+The streak is the single strongest reason to come back tomorrow, and the rule for
+breaking it is a retention decision, not a mechanical one.
 
-The streak is the single strongest reason to come back tomorrow. It also needs a saved
-record of every day you have played, which is more storage, more shapes that have to
-survive future changes, and more that can go wrong on the first attempt.
+- **Reset to zero.** Brutal, legible, and what most daily games do. A 40-day streak
+  lost to one bad Tuesday is also the thing that makes people quit outright.
+- **Decay.** Miss a day and it drops by a few rather than to nothing. Forgiving, and
+  much harder to explain in one line on a screen.
+- **One freeze.** A missed day is forgiven once every N days, automatically and
+  silently. Explains itself as *"you had a free pass"* the moment it is used.
 
-- **Shards only** → smaller, safer, provable. No new reason to return yet.
-- **Shards + records/streak** → the retention hook lands immediately, with more risk on
-  the one thing that is genuinely hard to take back once written.
-
-**My recommendation: shards only, and records the stage after**, with the storage
-shaped from day one so adding the calendar later is not a rewrite.
+**My recommendation: reset to zero, and show the streak alongside a separate
+"days played" total that never resets.** The streak stays honest and sharp; the total
+means a long-time player never actually loses their history. Two numbers, one of which
+can never hurt you.
 
 **Answer:**
 
 ---
 
-### Q8 · Do you want the automated play-through test kept?
+### Q5 · Is the Endless board a leaderboard or a build feed?
 
-To check the last stage I drove the real game through a real browser automatically — a
-full run, submitting, the leaderboard, posting the comment, watching a replay, and a
-reload — at three screen sizes, checking that nothing overlapped and no text was too
-small. **It found four bugs that reading the code would not have**, including a replay
-scrubber that could only jump backwards.
+`TODO.md` specifies the row as `u/username, class, level, bar size, ultimate`, ranked
+by depth, resetting weekly. That is deliberately more build than score — the design
+says it should read *"as a build-sharing feed rather than a second score ladder."*
 
-I did not keep it, because it needs one extra testing tool added to the project's
-dependencies and that is your call, not mine.
+The tension: ranked by depth **is** a score ladder, whatever the row shows. And the
+Daily already owns the "one comparable number" job.
 
-- **Yes** → one dependency added, and every future stage can be checked this way in
-  minutes instead of an hour of rebuilding it.
-- **No** → I rebuild it from scratch each stage. It works; it just costs about an hour.
+- **Ranked by depth**, as specced. Simple, and a weekly reset keeps it winnable.
+- **Unranked feed** — recent notable runs, newest first, no position. Pure
+  build-sharing, and nothing to grind.
 
-**My recommendation: yes.** Every visual bug in this project so far was found by
-playing it, and this is the only way to play it the same way twice.
+**My recommendation: ranked, as specced.** The weekly reset is what makes it fair, and
+an unranked feed with no position is a feature people look at once. The build-first
+*row* is what carries the design's intent; the ranking is what gets them to look.
+
+**Answer:**
+
+---
+
+### Q6 · The `main.ts` question, and it is a real one now
+
+`src/client/main.ts` is **327 code lines** against a 400 limit. Stage 6 adds the fork
+screen, the death screen, gear, the stash, a resume prompt and a second board — every
+one of which needs state and a click handler.
+
+It will not fit, and the answer is not an exemption.
+
+- **Split by mode.** `main.ts` keeps boot, routing and the shared click dispatch; a
+  new `endless.ts` owns the fork/haul/resume state the way `sharing.ts` owns the
+  comment flow.
+- **Split by concern.** A `state.ts` holding the `let`s, leaving `main.ts` as routing.
+
+**My recommendation: split by mode.** `sharing.ts` is the precedent and it worked —
+it came out because the comment flow is *about* something, not because `main.ts` was
+long. The Endless is about something too. A `state.ts` is a pile with a filename,
+which is exactly what `CODING_BIBLE` §1.9 forbids.
+
+**Answer:**
+
+---
+
+### Q7 · Do you want the art for gear now, or code-drawn plates for another stage?
+
+`ART.md` budgets ≈40 gear base sprites — one per base **type**, never per item — with
+rarity ring, tint and glow drawn in CSS on top, so a thousand items ride on forty
+images. That is Stage 7 in `TODO.md`.
+
+Stage 6 ships gear with **no sprites at all**: a code-drawn rarity plate, the item
+name, and its affixes. That is exactly how enemies without portraits already degrade,
+and that path is proven.
+
+- **No sprites at Stage 6** → gear ships as plates, and looks deliberately austere.
+- **Sprites at Stage 6** → ~40 PixelLab generations, and the acceptance checklist in
+  `ART.md` run 40 times.
+
+**My recommendation: no sprites at Stage 6.** The plate path already works and 22 of
+30 enemies ship without a portrait today. Generating 40 images against a gear model
+that has never been played is the way to generate 40 images twice.
 
 **Answer:**
 
@@ -214,12 +176,15 @@ playing it, and this is the only way to play it the same way twice.
 
 ### One thing to check yourself, when you next put it on a real subreddit
 
-**Post your grid as a comment and confirm it shows up under your own username.**
+**Play the Daily two days running and confirm your shard total went up and stayed up.**
 
-Everything around that button is tested — the text is built from your saved moves, it
-cannot be posted twice, and a refused post lets you try again. But there is no Reddit
-inside a development environment, so the actual "post a comment as this user" call has
-only ever been faked. It is the one thing no test here can reach.
+The persistence layer is tested at both layers — the in-memory fake covers the CAS
+logic, Devvit's own Redis mock covers the wrapper — but *"the number is still there
+tomorrow"* crosses a real day boundary, a real key expiry policy and a real server
+restart, and no test here can do that.
+
+Everything else that could only be checked on a real subreddit is now confirmed: **the
+comment posts under your own username**, which was the last open item from Stage 4.
 
 ---
 ---
@@ -235,7 +200,8 @@ Continue **delvedeck** (the game is *Daily Delve*), a Reddit Devvit game at
 
 Read **AGENTS.md**, then **game_design/GAME_DESIGN.md**, **CODING_BIBLE.md** and
 **TODO.md** before touching anything. Follow CODING_BIBLE §4: **no builds, no `devvit`,
-no `vite build`** — validate with `npm run type-check`, `npm run lint`, `npm run test`.
+no `vite build`** — validate with `npm run type-check`, `npm run lint`, `npm run test`,
+and **`npm run test:visual`** for anything that changes a screen.
 
 **🔒 The design is LOCKED.** `game_design/` (17 docs + a canvas + the mockup) is the
 specification, not a sketch. Counts in it are caps. **If code and the folder disagree,
@@ -247,165 +213,161 @@ owns it before you write code against it** — the folder first, then `TODO.md`,
 code. That order is the rule, not a preference.
 
 
-## TASK — Stage 5: accounts ▸ **the first thing that outlives a day**
+## TASK — Stage 6: **the Endless**
 
-Stage 4 shipped. The gate passed, played end to end at three viewports, and the game is
-complete and comparable with **zero account state**. Stage 5 is where that stops being
-true, and it is the stage that is hardest to take back — every stage so far could be
-rewritten; a written key cannot.
+Stage 5 shipped. The game now has an account that outlives a day, and exactly one
+meaningful field on it. Stage 6 is where the *game* arrives — the mode people stay for
+— and it is the stage most likely to be built wrong by being built all at once.
 
-**Ship with exactly one meaningful field: `shards`.** Nothing spends them. The point is
-to prove the persistence layer against real traffic *before* an economy rests on it: a
-lost write costs a day's score today and would cost an account later. `TODO.md` § Stage
-5 has the list, and three rules decide it:
+`TODO.md` § Stage 6 has the list. Four rules decide it:
 
-1. **The hero's first schema version already contains every top-level key** the design
-   calls for — `codex`, `deeds`, `talents`, `unlocked`, `records`, `camp` — even where
-   the value is empty. Adding a key later is a migration; shipping an empty one is
-   free. **`name` is not one of them:** the delver is `u/you` (`IDENTITY.md`), and
-   shipping a field only to delete it means migrating away from a string people typed.
-2. **`heroStore`'s mutators must be pure functions of the hero they receive**, because
-   a compare-and-set conflict *replays* them. This is the contract the port hangs on
-   and it is the one that breaks silently.
-3. **No new Redis call ships without a test against `@devvit/test`'s mock**, in
-   `src/server/core/runStore.test.ts`. Stage 4 added four — `claimOnce`,
-   `releaseClaim`, `bumpCounters`, `readCounters` — and each has one. The in-memory
-   fake covers the CAS logic; the Devvit mock covers wrapper semantics. **Both are
-   needed:** `set NX` returns `''` not `null`, and `zRange`'s `reverse` reverses the
-   *result*, not the bounds. Each of those cost this repo a silently broken feature.
+1. **`simulateRun(seed, choices)` — two arguments, forever.** Stage 5 put this under
+   real pressure for the first time and it held; Stage 6 is where it is under
+   *constant* pressure, because Endless has a kit and the temptation to share one code
+   path is enormous. `simulateEndless(seed, choices, kit)` is a **third argument on a
+   different function**, and `tests/hero.test.ts` asserts `core/run.ts` cannot even
+   import an account.
+2. **The Endless kit is derived SERVER-SIDE from the stored hero.** The client sends
+   `{runId, seed, choices}` and never the kit. A client that can name its own gear is
+   a client that can name its own damage.
+3. **`heroStore`'s mutators must stay pure functions of the hero they receive**,
+   because a CAS conflict *replays* them. Stage 6 adds many more mutators — XP, level,
+   the haul, the stash — and this is the contract that breaks silently.
+4. **No new Redis call without a test against `@devvit/test`'s mock**, in
+   `src/server/core/runStore.test.ts`. And know what that mock cannot do: it records
+   watched keys and **never reads them**, so it can never produce a WATCH conflict.
+   The CAS path is covered by the in-memory fake in `tests/hero.test.ts`. Both are
+   needed; neither substitutes.
 
 
-## GATE — the first write is forever
+## GATE — the fork has to be a decision
 
 ```bash
-npm run preview      # then actually PLAY it, end to end
+npm run test:visual      # then actually PLAY it, end to end
+npx tsx scratchpad/probe.ts
 ```
 
-- [ ] A hero is created, banked and re-read across a reload
-- [ ] A migration test with a **fixture**, not a round-trip: write v1, read it as v2
-- [ ] A CAS conflict replays the mutator and neither write is lost
-- [ ] Shards from a Daily run land on the hero and the Daily itself is untouched —
-      `simulateRun.length === 2` still holds and shards stay a sim OUTPUT
+- [ ] The probe reports a **fork ratio** and it lands near the target in Part 1 Q2
+- [ ] A run survives a closed tab: `{seed, choices}` persisted at every fork, resumed
+      with the kit **re-derived from the run's start state**, not from current gear
+- [ ] Death takes the whole haul — including anything equipped from it mid-run — and
+      keeps equipped kit, depth record, XP, story and deeds
+- [ ] `simulateRun.length === 2` still holds, and the Daily is byte-identical: floor
+      6.6/12, ceiling 11.6/12, gap 5.0
 
-**Measure after the entrance animations settle, not during them**, and compare
-**rendered text rectangles**, not element boxes — Stage 4's first overlap check
-reported three collisions that did not exist, because a full-width block whose text is
-left-aligned and a badge floated to its right have intersecting boxes and no visual
-collision at all.
+**`npm run test:visual` is not optional for a screen change.** It plays a real daily
+headless at three viewports and fails on text collisions, sub-9px type, horizontal
+overflow, and content escaping its container. `KNOWN_FINDINGS` is **empty** — keep it
+that way, and if something has to go in it, it needs a `TODO.md` line naming the stage
+that takes it out.
 
 
 ## STATE
 
-- On **`main`**, at `6e423b9 "stage 4: the share grid, the comment, the board, the
-  replay — the ship gate"`. Stages 3 and 4 are both merged; the working tree is clean.
-- **134 checks green** — 121 tsx (`tests/all.ts`) + 13 vitest (`--project server`).
+- On **`main`**, at `2e6a7ab "stage 5 account additions and fixes"`. Working tree
+  clean; Stages 3, 4 and 5 all merged.
+- **165 checks green** — 145 tsx (`tests/all.ts`) + 20 vitest (`--project server`).
   `npm run test` runs both; don't "simplify" it to one, that has silently skipped a
-  whole suite before.
-- `tests/` is six files. **`sim.test.ts` (30) owns the RULES**, **`content.test.ts`
-  (16) owns the ROWS they are played over**, **`share.test.ts` (13) owns the artifact
-  that LEAVES the game** — the band alphabet, the layout, the thresholds, the pasted
-  comment. Plus `server.test.ts` (30), `art.test.ts` (18), `tutorial.test.ts` (14).
-  Split by what makes each fail, never by line count.
+  whole suite before. **Plus `npm run test:visual`**, which is a fourth command and a
+  real gate.
+- `tests/` is eight files. **`sim.test.ts` (30) owns the RULES**, **`content.test.ts`
+  (16) owns the ROWS**, **`share.test.ts` (13) owns the artifact that LEAVES the
+  game**, **`hero.test.ts` (24) owns the first thing that OUTLIVES A DAY**. Plus
+  `server.test.ts` (30), `art.test.ts` (18), `tutorial.test.ts` (14), and
+  `tests/visual/` (the gate, two halves). Split by what makes each fail, never by size.
 - **`eslint.config.js` has no size exemptions.** Do not add one without a line in
   `TODO.md` naming the stage that removes it.
 - `npx tsx scratchpad/probe.ts` (~2 min) is the balance instrument. **Run it after any
-  ability, enemy or tuning change.** Unchanged through Stage 4, which touched no
-  gameplay: floor 6.6/12, ceiling 11.6/12, headroom 5.0 depths, greedy full-clears
-  30/8064 (0.37%), median→best 4.5, composition template and both tutorial invariants
-  clean across 3,000 seeds.
-- `StoredRun` is **version 1 and did not change at Stage 4.** The leaderboard row's
-  depth trace and bar size are **derived** from the stored choices, not stored — the
-  same rule the score follows, and it cost a version bump nothing.
-- `public/` is 8 enemy portraits + **1 hero portrait** + 3 backdrops. **22 of the 30
-  roster rows have no portrait**; the renderer degrades to a code-drawn plate with
-  glowing eyes, which is deliberate.
+  ability, enemy or tuning change.** Unchanged since Stage 1: floor 6.6/12, ceiling
+  11.6/12, headroom 5.0 depths, greedy full-clears 30/8064 (0.37%), median→best 4.5,
+  composition template and both tutorial invariants clean across 3,000 seeds.
+- `StoredRun` is **version 1**. `StoredHero` is **version 1** and ships every top-level
+  key the design calls for, most of them empty — `records`, `unlocked`, `deeds`,
+  `talents`, `codex`, `camp`. **There is no `name` and that is a decision.**
+- `public/` is 8 enemy portraits + 1 hero portrait + 3 backdrops. **22 of the 30 roster
+  rows have no portrait**; the renderer degrades to a code-drawn plate with glowing
+  eyes, which is deliberate — and it is the same path gear plates will take.
 
 ### The client is thirteen modules — read this before editing a screen
 
-| file | code lines | owns |
-|---|---|---|
-| `main.ts` | 327 | run state, click dispatch, which screen renders |
-| `result.ts` | 208 | screen 10 · share grid · the key · board rows |
-| `tutorial.ts` | 172 | screen 07 — the five beats and their copy |
-| `combat.ts` | 164 | screen 06 — stage, threat track, plinth, ability bar, coach slots |
-| `camp.ts` | 118 | screens 02 + 03 — the hub and the loadout |
-| `interlude.ts` | 95 | screens 08 + 09 — the boon and the descent |
-| `session.ts` | 89 | the server seam: init, submit, board, replay, comment |
-| `art.ts` | 69 | id → how it is drawn (portraits, accents, glyphs) |
-| `shell.ts` | 48 | the frame: shell, atmosphere, depth spine, escaping |
-| `sharing.ts` | 45 | the comment flow — owns its own state, none of it a run fact |
-| `mount.ts` | 34 | what happens to the DOM AFTER a screen string is installed |
-| `replay.ts` | 30 | screen 12 — the transport |
-| `host.ts` | 16 | the seam to the page around us: toasts, the clipboard |
+`main.ts` is **327 code lines against a 400 limit** and Stage 6 adds the fork, the
+death screen, gear, the stash, a resume prompt and a second board. **It will not fit.**
+See Part 1 Q6; the answer is a split, never an exemption.
+
+| file | owns |
+|---|---|
+| `main.ts` | run state, click dispatch, which screen renders |
+| `result.ts` | screen 10 · share grid · the key · board rows |
+| `tutorial.ts` | screen 07 — the five beats and their copy |
+| `combat.ts` | screen 06 — stage, threat track, plinth, ability bar, coach slots |
+| `camp.ts` | screens 02 + 03 — the hub, the shard total, the loadout |
+| `interlude.ts` | screens 08 + 09 — the boon and the descent |
+| `session.ts` | the server seam: init, submit, board, replay, comment |
+| `art.ts` · `shell.ts` · `sharing.ts` · `mount.ts` · `replay.ts` · `host.ts` | drawing, the frame, the comment flow, post-render DOM, the transport, the page seam |
 
 Every screen module is a **pure string function of a view**. State lives in `main.ts`,
 the server seam in `session.ts`, the host seam in `host.ts`; a screen that reaches for
-any of them is wrong. **`main.ts` is the file to watch** — it went 311 → 358 during
-Stage 4 and came back to 327 by moving the comment flow into `sharing.ts`. Split by
-*what it is about*, and **do not add an exemption**.
+any of them is wrong.
 
-### The server grew four modules at Stage 4
+### The server, after Stage 5
 
-| file | code lines | owns |
-|---|---|---|
-| `core/run.ts` | 150 | submit, board, replay, the day's best trace |
-| `core/runStore.ts` | 68 | the Redis seam — claims, boards, counters |
-| `core/stats.ts` | 47 | the day's tally: runs, the reach curve, the floor count |
-| `core/comment.ts` | 38 | posting a grid, once, from the stored run |
-| `routes/feed.ts` | 28 | the feed card's numbers, plain JSON so the splash stays light |
-| `core/leaderboard.ts` | 16 | a board as text |
+| file | owns |
+|---|---|
+| `core/run.ts` | submit, board, replay, the day's best trace. **Imports no account, and a test enforces it.** |
+| `core/runStore.ts` | **the one file that speaks Devvit Redis** — claims, boards, counters, and the hero/rate-limit client bindings |
+| `core/heroSchema.ts` | the persisted hero + the migration step table. Pure: no redis, no clock. |
+| `core/heroStore.ts` | the CAS loop. **Mutators must be pure — a conflict replays them.** |
+| `core/hero.ts` | what a run does to a hero. The file that grows this stage. |
+| `core/rateLimit.ts` | ops policy, **not `TUNING`** |
+| `core/stats.ts` · `core/comment.ts` · `core/leaderboard.ts` · `routes/feed.ts` | the day's tally, posting a grid, a board as text, the feed card |
 
-**`renderShareText` is not on the server any more.** It is `src/shared/share.ts`,
-because the preview a player taps POST on and the comment the server writes have to be
-the same string — one pure function, both sides, byte for byte. That is the *reason*
-for the placement, not a convenience.
+### Four things settled, so they do not get re-argued
 
-### Two things settled at Stage 4, so they do not get re-argued
-
-- **Silkscreen does not ship.** Reasoning in `TODO.md` § Stage 4; reversible in one
-  `@font-face` whenever the owner disagrees.
-- **The hero portrait stays.** `ART.md` and `IDENTITY.md` no longer disagree —
-  IDENTITY's argument was against a *dressable* figure, and the reconciliation is
-  written into `IDENTITY.md` § What there is to customise.
+- **Silkscreen does not ship.** Reasoning in `TODO.md` § Stage 4.
+- **The hero portrait stays.** `ART.md` and `IDENTITY.md` are reconciled.
+- **Rage and cooldowns reset between depths; HP does not.** Carrying rage down is a
+  real idea and it is parked as its own balance pass, not a line changed inside
+  another stage (`GAME_DESIGN.md` § What crosses a depth boundary).
+- **The pasted comment format is approved and effectively permanent**, reproduced
+  verbatim in `GAME_DESIGN.md` § The share grid. **It posts correctly on a real
+  subreddit under the player's own username** — confirmed at Stage 5, and it was the
+  last thing in the project that no test here could reach.
 
 
 ## RULES THAT SHAPE THIS PROJECT
 
 1. **The Daily reads no account state.** `simulateRun(seed, choices)` — two arguments,
-   forever; a test asserts `.length === 2`. This is not the Daily being precious: every
-   power fantasy in the Endless is safe only while there is one mode it cannot touch.
-   **Stage 5 is where this is under real pressure for the first time.**
-2. **The client submits CHOICES, never outcomes.** The server recomputes every score —
-   and, since Stage 4, every depth trace and bar size on the board too.
+   forever; a test asserts `.length === 2`, and another asserts `core/run.ts` cannot
+   import an account. Every power fantasy in the Endless is safe only while there is
+   one mode it cannot touch.
+2. **The client submits CHOICES, never outcomes.** The server recomputes every score,
+   depth trace, bar size — and, from Stage 6, every kit.
 3. `src/shared/` stays pure — no I/O, no DOM, no `Math.random`.
 4. **Never re-implement a combat rule in `client/`.** If a screen needs a derived
    number, the sim reports it. `CombatView.incoming` exists for exactly this reason:
-   `max(0, value - block)` is the obvious formula and it is WRONG — `ethereal` eats
-   block and `frenzied` splits the beat.
-5. **Cohesion over size (CODING_BIBLE §1.9), and it is ENFORCED.** Files under 400
-   lines, functions under 80, comments and blanks not counted — `npm run lint` fails
-   otherwise. Split by *what it is about*, never into a `helpers.ts`. **`src/shared/`
-   uses modules and plain objects, never classes**; `client/` and `server/` may use
-   classes.
+   `max(0, value - block)` is the obvious formula and it is WRONG.
+5. **Cohesion over size, and it is ENFORCED.** Files under 400 lines, functions under
+   80, comments and blanks not counted. Split by *what it is about*, never into a
+   `helpers.ts`. **`src/shared/` uses modules and plain objects, never classes.**
 6. **Never mutate the `ABILITIES` registry.** Boons, talents, gear affixes and class
-   signatures all fold over a *copy* via `effectiveAbility()`. The server process is
-   long-lived; one write poisons every later verification.
-7. **No new Redis call without a test against `@devvit/test`'s mock.** The wrapper does
-   not behave like raw Redis and it has bitten this repo twice. **This includes
-   `redis.global`.**
+   signatures all fold over a *copy* via `effectiveAbility()`.
+7. **No new Redis call without a test against `@devvit/test`'s mock** — including
+   `redis.global`. Three wrapper traps have bitten this repo: `set NX` returns `''`
+   not `null`, `zRange`'s `reverse` reverses the *result*, and **`exec()` returns `[]`
+   on conflict, not `null`**, so the standard CAS idiom fails open and loses the write.
 8. **No art that animates or aligns.** Static squares only, enforced by
    `tests/art.test.ts`. Gear sprites are legal — one per base TYPE, never per item.
 9. **Entrance animations animate `transform` only, never `opacity`** — a backgrounded
-   tab pins a `backwards`-filled animation at frame one. The same trap in another
-   costume: **the DOM ships the FINAL state and an animation deviates from it.** The
-   result screen renders its real score and `mount.ts` walks it back to zero, never the
-   other way round.
+   tab pins a `backwards`-filled animation at frame one. Same trap in another costume:
+   **the DOM ships the FINAL state and an animation deviates from it.**
 10. **The grid may not encode meaning in colour alone.** Every band carries a shape, a
-    lightness and a word, in the app and in the comment. `tests/share.test.ts` fails if
-    two bands share a shape, if a band loses its word, or if `game.css`'s ladder stops
-    descending.
-11. **Verify any layout change by PLAYING it**, at 320×568 and at a desktop size — not
-    by measuring one viewport, and not by reading it.
+    lightness and a word, in the app and in the comment.
+11. **Verify any layout change by PLAYING it** — `npm run test:visual`, then by hand at
+    320×568 and a desktop size. The gate is good and it is **not** complete: it cannot
+    see a scrollbar (headless Chromium reports width 0), it took three rounds to stop
+    reporting collisions that did not exist, and it once measured the camp head's
+    overflow without ever failing on it. **A number a gate collects but never judges is
+    a number nobody reads.**
 12. Prefer fixing balance in `TUNING` + the probe over adding systems.
 
 ---

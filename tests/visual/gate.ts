@@ -189,6 +189,31 @@ function isSolid(style: CSSStyleDeclaration): boolean {
   return (hasImage || hasColor) && style.opacity === '1';
 }
 
+/**
+ * `elementFromPoint` answers *"what would receive this click"*, not *"what is painted
+ * here"* — and those differ for anything with `pointer-events: none`.
+ *
+ * A **disabled** button has exactly that, so hit-testing walks straight past it to
+ * whatever is underneath. The gate therefore reported the loadout's disabled CONFIRM
+ * button as letting the ability list bleed through it long after it had been made
+ * fully opaque: the pixels were right and the instrument was wrong.
+ *
+ * Forcing `pointer-events: auto` for the duration of a measurement makes hit-testing
+ * follow paint order again. Decorative overlays become hittable too, which is correct
+ * for this question — they really are on top — and `isSolid` still refuses to count
+ * the transparent ones as occluders.
+ */
+function withHitTestingThatFollowsPaint<T>(measureFn: () => T): T {
+  const style = document.createElement('style');
+  style.textContent = '*, *::before, *::after { pointer-events: auto !important; }';
+  document.head.appendChild(style);
+  try {
+    return measureFn();
+  } finally {
+    style.remove();
+  }
+}
+
 /** The opaque layer painted between two texts, or null if none is. */
 function occluderBetween(x: number, y: number, a: TextRect, b: TextRect): string | null {
   let node = document.elementFromPoint(x, y);
@@ -209,22 +234,24 @@ export function measure(at: string, escaped: string[] = []): ScreenReport {
   const real: Collision[] = [];
   const occluded: Collision[] = [];
   let unmeasurable = 0;
-  for (let i = 0; i < rects.length; i++) {
-    for (let j = i + 1; j < rects.length; j++) {
-      const a = rects[i]!;
-      const b = rects[j]!;
-      if (a.nodeId === b.nodeId) continue;
-      const ox = Math.min(a.r, b.r) - Math.max(a.l, b.l);
-      const oy = Math.min(a.b, b.b) - Math.max(a.t, b.t);
-      if (ox <= 1.5 || oy <= 1.5) continue;
-      const entry: Collision = { a: a.text, b: b.text, px: `${ox.toFixed(1)}x${oy.toFixed(1)}` };
-      if (transformRoot(a.el) !== transformRoot(b.el)) { unmeasurable += 1; continue; }
-      const cx = (Math.max(a.l, b.l) + Math.min(a.r, b.r)) / 2;
-      const cy = (Math.max(a.t, b.t) + Math.min(a.b, b.b)) / 2;
-      if (occluderBetween(cx, cy, a, b)) occluded.push(entry);
-      else real.push(entry);
+  withHitTestingThatFollowsPaint(() => {
+    for (let i = 0; i < rects.length; i++) {
+      for (let j = i + 1; j < rects.length; j++) {
+        const a = rects[i]!;
+        const b = rects[j]!;
+        if (a.nodeId === b.nodeId) continue;
+        const ox = Math.min(a.r, b.r) - Math.max(a.l, b.l);
+        const oy = Math.min(a.b, b.b) - Math.max(a.t, b.t);
+        if (ox <= 1.5 || oy <= 1.5) continue;
+        const entry: Collision = { a: a.text, b: b.text, px: `${ox.toFixed(1)}x${oy.toFixed(1)}` };
+        if (transformRoot(a.el) !== transformRoot(b.el)) { unmeasurable += 1; continue; }
+        const cx = (Math.max(a.l, b.l) + Math.min(a.r, b.r)) / 2;
+        const cy = (Math.max(a.t, b.t) + Math.min(a.b, b.b)) / 2;
+        if (occluderBetween(cx, cy, a, b)) occluded.push(entry);
+        else real.push(entry);
+      }
     }
-  }
+  });
   const primary = app().querySelector('.btn.go, [data-action="end"]');
   const shell = document.querySelector('.app');
   return {
