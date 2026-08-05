@@ -75,10 +75,10 @@ function dailyDoor(info: CampInfo): string {
 /**
  * The Endless door, open from Stage 6a.
  *
- * **It says "issued kit" and not "your gear", because at 6a that is the truth** — gear
- * and classes are 6b, and a door promising a build the mode does not have yet is the
- * one lie the camp cannot afford: this is the screen that tells a player what the game
- * is. The copy changes when the thing it describes does.
+ * **It said "issued kit for now" at 6a because that was the truth**, and it says "your
+ * gear is on" now because that is. A door promising a build the mode does not have is
+ * the one lie the camp cannot afford — this is the screen that tells a player what the
+ * game is — so the copy moves when the thing it describes does, and never before.
  *
  * A run in progress leads with the haul, because the haul is what makes coming back
  * urgent — and because it is what abandoning would cost.
@@ -90,11 +90,36 @@ function endlessDoorTile(door: EndlessDoor): string {
   const line = door.running
     ? `You are <b>${door.depth} deep</b> with <b>${door.haul} shards</b> unbanked. `
       + '&rsaquo; RESUME'
-    : 'No floor. <b>Issued kit for now &mdash; gear is next.</b> Shards bank only when '
+    : 'No floor. <b>Your gear is on.</b> Shards and everything you find bank only when '
       + 'you surface. &rsaquo; DESCEND';
   return '<div class="door endless" data-action="enter-endless">'
     + `<div class="badge">${badge}</div><div class="dt">THE ENDLESS DELVE</div>`
     + `<div class="dd">${line}</div></div>`;
+}
+
+/**
+ * The camp's four tiles — GEAR · LANTERN · SHRINE · RECORDS (`SCREENS.md`).
+ *
+ * **Stage 2 deliberately shipped none of them, and that call is now spent rather than
+ * reversed.** Its reasoning was *"four dead buttons is worse than none"*, which was
+ * right while all four were dead: a row of tiles that does nothing teaches a player that
+ * tapping things here is pointless. GEAR is a real screen now, so the row has something
+ * to be a row of, and the other three take the treatment the Community door already
+ * takes — **locked, never omitted**, because a door has to be visible before it opens.
+ *
+ * There are four and there will be four. A fifth tile is a decision the player has to
+ * make before they can play, and this game's pitch is that play is one tap from a feed.
+ */
+function campTiles(): string {
+  const locked: [string, string][] = [
+    ['LANTERN', 'STAGE 7'], ['SHRINE', 'STAGE 7'], ['RECORDS', 'SOON'],
+  ];
+  return '<div class="tiles">'
+    + '<div class="tile" data-action="enter-gear"><div class="tt">GEAR</div>'
+    + '<div class="tk">11 SLOTS</div></div>'
+    + locked.map(([name, tag]) => `<div class="tile locked"><div class="tt">${name}</div>`
+      + `<div class="tk">${tag}</div></div>`).join('')
+    + '</div>';
 }
 
 /** Community is still drawn LOCKED rather than omitted. The whole reason the camp is
@@ -128,6 +153,7 @@ export function campScreen(info: CampInfo): string {
     + '<div class="k">SHARDS</div></div></div>'
     + `<div class="doors">${dailyDoor(info)}${endlessDoorTile(info.endless)}`
     + `${lockedDoors()}</div>`
+    + campTiles()
     + '<div class="grow"></div>'
     // HOW TO PLAY is how the five beats stay reachable forever. They are offered once
     // on a first session and then live here — a tutorial you can only ever see by

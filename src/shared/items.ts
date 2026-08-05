@@ -58,6 +58,20 @@ export const slotFamily = (slot: GearSlot): BaseSlot =>
 export const fitsSlot = (item: Item, slot: GearSlot): boolean =>
   ITEM_BASES[item.base]?.slot === slotFamily(slot);
 
+/**
+ * **Where an item goes, DERIVED rather than chosen.** The base decides the family, an
+ * empty matching slot beats a full one, and rings fill left to right.
+ *
+ * One implementation, deliberately: the sim uses it to resolve `{k:'equip', i}` inside a
+ * verified choice list, and the gear screen uses it so a tap on the stash lands where
+ * the player was shown it would. Two copies of this rule would be a client that promises
+ * one slot and a server that fills another.
+ */
+export function slotForItem(gear: EquippedGear, item: Item): GearSlot | null {
+  const matching = GEAR_SLOTS.filter((slot) => fitsSlot(item, slot));
+  return matching.find((slot) => gear[slot] === undefined) ?? matching[0] ?? null;
+}
+
 export const SLOT_LABEL: Record<GearSlot, string> = {
   weapon: 'WEAPON', offhand: 'OFFHAND', head: 'HEAD', body: 'BODY', hands: 'HANDS',
   legs: 'LEGS', feet: 'FEET', ring1: 'RING I', ring2: 'RING II', amulet: 'AMULET',

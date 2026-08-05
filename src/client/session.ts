@@ -16,12 +16,13 @@
 //     be a real game with no server behind it. A rejected promise here is a blank
 //     screen in a feed.
 
-import type { RunChoice } from '../shared/sim';
+import type { GearSlot, RunChoice } from '../shared/sim';
 import { trpc } from './trpc';
 import type { BoardEntry } from './result';
 import type {
   EndlessRunHandle, EndlessState, EndlessSubmission, EndlessSummary,
 } from '../server/core/endless';
+import type { GearState } from '../server/core/hero';
 
 /** What the whole subreddit did with today's shaft. Rides along with `init` because
  *  the descent screen needs it mid-run and cannot wait for a round trip. */
@@ -201,6 +202,53 @@ export async function settleEndless(
     return result.ok ? { summary: result.summary } : { error: result.error };
   } catch {
     return { error: 'The run could not be handed in.' };
+  }
+}
+
+// ---- gear (Stage 6b) ---------------------------------------------------------------
+//
+// Four wrappers, and the direction of travel is the same as everywhere else here: an
+// **item id and a slot name** go up, and the whole gear state comes down. There is no
+// parameter through which a stat, an affix or a shard amount could be supplied — the
+// server computes every one of them from the stash it is already holding.
+
+/** What screen 04 shows. Null when there is no server, which the screen says out loud
+ *  rather than rendering an empty stash as if it were a fact. */
+export async function loadGearState(): Promise<GearState | null> {
+  try {
+    return await trpc.hero.gear.query();
+  } catch {
+    return null;
+  }
+}
+
+const gearResult = (
+  result: { ok: true } & GearState | { ok: false; error: string },
+): GearState | { error: string } => (result.ok ? result : { error: result.error });
+
+export async function equipGear(
+  itemId: string, slot: GearSlot,
+): Promise<GearState | { error: string }> {
+  try {
+    return gearResult(await trpc.hero.equip.mutate({ itemId, slot }));
+  } catch {
+    return { error: 'Your delver could not be reached.' };
+  }
+}
+
+export async function unequipGear(slot: GearSlot): Promise<GearState | { error: string }> {
+  try {
+    return gearResult(await trpc.hero.unequip.mutate({ slot }));
+  } catch {
+    return { error: 'Your delver could not be reached.' };
+  }
+}
+
+export async function salvageGear(itemId: string): Promise<GearState | { error: string }> {
+  try {
+    return gearResult(await trpc.hero.salvage.mutate({ itemId }));
+  } catch {
+    return { error: 'Your delver could not be reached.' };
   }
 }
 

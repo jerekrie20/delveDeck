@@ -41,6 +41,7 @@ import {
   applyEndlessChoice, endlessAction, endlessActive, endlessDoor, endlessScreen,
   endlessShardTotal, leaveEndless, loadEndless,
 } from './endless';
+import { gearAction, gearActive, gearScreen, gearShardTotal, leaveGear } from './gear';
 import { boonScreen, descentScreen } from './interlude';
 import { mountScreen } from './mount';
 import { replayTransport } from './replay';
@@ -300,7 +301,7 @@ function screenFor(result: RunResult): string {
       // for the whole length of a run, and showing the wrong one would mean a total
       // that counts up mid-delve and then snaps back on submit. The Endless reads the
       // same hero and moves the same total, so its number wins once it has one.
-      shards: endlessShardTotal() ?? session.init?.shards ?? 0,
+      shards: gearShardTotal() ?? endlessShardTotal() ?? session.init?.shards ?? 0,
       endless: endlessDoor(),
     });
   }
@@ -338,6 +339,7 @@ function render(): void {
     if (coached !== null) { mountScreen(app!, coached); return; }
     tutorialChoices = null;
   }
+  if (gearActive()) { mountScreen(app!, gearScreen()); return; }
   if (endlessActive()) {
     // The pending selections stay HERE — they are not facts about a run, they belong to
     // whichever screen is asking, and both modes ask the same two screens.
@@ -370,6 +372,7 @@ function goToCamp(): void {
   if (replayChoices) leaveReplay();
   tutorialChoices = null;
   leaveEndless();
+  leaveGear();
   screen = 'camp';
   endDescent();
 }
@@ -427,9 +430,10 @@ app.addEventListener('click', (event) => {
     pendingUltimate = 0;
     pendingBoon = null;
   }
+  if (gearAction(action, index, render)) return;
   // Before `runAction`, because the two modes share `skip-descent` and the Endless
   // drives its own descent overlay off its own run.
-  if (endlessAction(action, session.init?.day ?? localDay, render)) return;
+  if (endlessAction(action, session.init?.day ?? localDay, render, index)) return;
   if (runAction(action, index)) return;
   if (replayAction(action, index, found)) return;
   if (shareAction(action, shareTextForOwnRun, render)) return;

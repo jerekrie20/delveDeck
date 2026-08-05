@@ -130,6 +130,11 @@ function need<T extends Element>(selector: string): T {
 function currentScreen(): string {
   const root = app();
   const has = (s: string): boolean => !!root.querySelector(s);
+  // Before `camp`: the gear screen is reached FROM the camp and has no `.camphead` of
+  // its own, but it does stand on the same surface palette, so anything looser than a
+  // marker unique to it would report the wrong screen — which is the exact failure
+  // `measureAt` was written for.
+  if (has('.gstats')) return 'gear';
   if (has('.camphead')) return 'camp';
   if (has('[data-action="pick-ult"]')) return 'loadout';
   if (has('[data-action="skip-descent"]')) return 'descent';
@@ -313,11 +318,18 @@ function campWorstCase(): ScreenReport {
  *
  * `escaped` is the right channel for this because it is never allowlistable.
  */
-function measureAt(expected: string, label: string): ScreenReport {
+function measureAt(expected: string, label: string, needs?: string): ScreenReport {
   const at = currentScreen();
   const escaped = at === expected
     ? []
     : [`the gate expected the ${expected} screen and the app was on ${at}`];
+  // `needs` is the same idea one level in: the right screen in the wrong STATE is a
+  // screen whose new block was never measured. The haul pane only exists on a run that
+  // actually dropped something, so without this the gate would report a clean fork on
+  // the day nothing fell and nobody would know the block had gone unchecked.
+  if (needs && !app().querySelector(needs)) {
+    escaped.push(`the ${label} screen was reached without ${needs} on it`);
+  }
   return measure(label, escaped);
 }
 
@@ -353,16 +365,23 @@ async function endlessLeg(screens: ScreenReport[]): Promise<void> {
   takeBarAndDescend();
   await wait(700);
 
-  // Leg 1 surfaces at the first fork; leg 2 refuses every fork until the dark takes it.
+  // Leg 1 surfaces once it is carrying something; leg 2 refuses every fork until the
+  // dark takes it. **Surfacing at the FIRST fork is not good enough any more**: at 6b
+  // the receipt itemises a haul, and a receipt with nothing on it does not measure the
+  // block that was added to it.
   let banking = true;
   let sawFork = false;
   let sawDeep = false;
+  const carrying = (): boolean => !!app().querySelector('.haulpane');
   for (let step = 0; step < 900; step++) {
     const at = currentScreen();
     if (at === 'receipt') {
       await wait(700);
-      screens.push(measureAt('receipt',
-        banking ? 'endless receipt (surfaced)' : 'endless receipt (death)'));
+      screens.push(measureAt(
+        'receipt',
+        banking ? 'endless receipt (surfaced with a haul)' : 'endless receipt (death)',
+        banking ? '.haullist' : undefined,
+      ));
       if (!banking) break;
       banking = false;
       tap('[data-action="endless-again"]');
@@ -372,10 +391,10 @@ async function endlessLeg(screens: ScreenReport[]): Promise<void> {
       continue;
     }
     if (at === 'fork') {
-      if (!sawFork) {
+      if (!sawFork && carrying()) {
         sawFork = true;
         await wait(700);
-        screens.push(measureAt('fork', 'fork'));
+        screens.push(measureAt('fork', 'fork (carrying a haul)', '.haulpane'));
         // Out to the camp and back in. **From the FORK, not from the loadout** — the
         // loadout stands on the surface palette with no depth, so it carries no rail
         // and no way back, which is how the first version of this measured the loadout
@@ -389,7 +408,10 @@ async function endlessLeg(screens: ScreenReport[]): Promise<void> {
         tap('[data-action="endless-resume"]');
         await wait(500);
       }
-      tap(banking ? '[data-action="surface"]' : '[data-action="fork-descend"]');
+      // Wear one before surfacing, so `haulWorn` is exercised too — the receipt marks a
+      // worn item WORN and a death strikes it through all the same.
+      tap('[data-action="haul-equip"][data-index="0"]');
+      tap(banking && sawFork ? '[data-action="surface"]' : '[data-action="fork-descend"]');
       await wait(400);
     } else if (at === 'descent') {
       // A descent past depth 1 is the one that reads "DEPTH n" with no floor to count
@@ -410,6 +432,40 @@ async function endlessLeg(screens: ScreenReport[]): Promise<void> {
   tap('[data-action="camp"]');
   await wait(600);
   screens.push(measureAt('camp', 'camp (endless door open)'));
+}
+
+/**
+ * Screen 04 — the eleven slots and the stash.
+ *
+ * **It is measured with items in it, not empty**, which is the whole reason the screen
+ * has an offline stash: an empty list has no layout, so a gate that only ever saw one
+ * would pass while a long affix line printed through a rarity label. The preview stash
+ * is deliberately deep-rolled — epics and legendaries carry five affixes, which is the
+ * longest string this screen can ever be asked to fit.
+ *
+ * It also *plays*: wear one, take it off, scrap one, and measure after each — because
+ * the rows that move are the rows whose neighbours change.
+ */
+async function gearLeg(screens: ScreenReport[]): Promise<void> {
+  tap('[data-action="enter-gear"]');
+  await wait(700);
+  screens.push(measureAt('gear', 'gear (stash full of deep rolls)'));
+
+  tap('[data-action="gear-equip"][data-index="0"]');
+  await wait(300);
+  tap('[data-action="gear-equip"][data-index="0"]');
+  await wait(300);
+  screens.push(measureAt('gear', 'gear (two slots filled)'));
+
+  tap('[data-action="gear-salvage"][data-index="0"]');
+  await wait(300);
+  tap('[data-action="gear-unequip"][data-index="0"]');
+  await wait(300);
+  screens.push(measureAt('gear', 'gear (after a scrap and a take-off)'));
+
+  tap('[data-action="camp"]');
+  await wait(600);
+  screens.push(measureAt('camp', 'camp (tiles open)'));
 }
 
 /** The three-slot bar this leg always takes. Its own function because a second run
@@ -471,6 +527,7 @@ export async function run(): Promise<GateResult> {
     shardsText: document.querySelector('.shards')?.textContent?.trim() ?? 'MISSING',
   });
 
+  await gearLeg(screens);
   await endlessLeg(screens);
 
   const failed = screens.filter(

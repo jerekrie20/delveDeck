@@ -31,12 +31,13 @@
 // than only type-checked.
 
 import {
-  issuedKitForDay, seedForDay, simulateEndless, TUNING,
-  type ForkView, type IssuedKit, type RunChoice, type RunResult,
+  affixText, itemName, issuedKitForDay, seedForDay, simulateEndless, TUNING,
+  type ForkView, type IssuedKit, type Item, type RunChoice, type RunResult,
 } from '../shared/sim';
 import type { EndlessSummary } from '../server/core/endless';
 import { loadoutScreen } from './camp';
 import { combatScreen } from './combat';
+import { rarityClass } from './gear';
 import { boonScreen, descentScreen } from './interlude';
 import { loadEndlessState, settleEndless, startEndless, stepEndless } from './session';
 import { escapeHtml, fillPercent, inShell } from './shell';
@@ -325,7 +326,12 @@ function offlineSummary(): EndlessSummary {
 /** Endless-only taps. Returns false for everything else, so `main.ts`'s dispatch falls
  *  through to the shared run actions — which is how the loadout, the ability bar and
  *  the boon stay one implementation across both modes. */
-export function endlessAction(action: string, day: string, rerender: () => void): boolean {
+export function endlessAction(
+  action: string,
+  day: string,
+  rerender: () => void,
+  index = 0,
+): boolean {
   switch (action) {
     case 'enter-endless': openEndless(day, rerender); return true;
     case 'endless-resume': resumeStored(rerender); return true;
@@ -339,6 +345,9 @@ export function endlessAction(action: string, day: string, rerender: () => void)
     case 'surface': applyEndlessChoice({ k: 'surface' }, rerender); return true;
     case 'fork-descend': applyEndlessChoice({ k: 'descend' }, rerender); return true;
     case 'skip-descent': descentDepth = null; rerender(); return true;
+    // Wear something found this run. It is a CHOICE, so it goes through the same door
+    // every other tap does and the server replays it — and wearing it does not bank it.
+    case 'haul-equip': applyEndlessChoice({ k: 'equip', i: index }, rerender); return true;
     default: return false;
   }
 }
@@ -362,7 +371,7 @@ export function endlessScreen(pending: EndlessPending): string {
   if (view.phase === 'loadout') return loadoutScreen(view, pending.bar, pending.ultimate);
   if (view.phase === 'fork') return forkScreen(view);
   if (view.phase === 'boon') return boonScreen(view, pending.boon);
-  return combatScreen(view, result.log.at(-1) ?? '', { live: true });
+  return combatScreen(view, result.log.at(-1) ?? '', { live: true, haul: true });
 }
 
 /**
@@ -454,24 +463,85 @@ export function forkScreen(view: ForkView): string {
     ? ` The shaft <b>unlights one slot</b> of your lantern &mdash; ${view.nextLit} of `
       + `${TUNING.foresight} left.`
     : '';
+  const carrying = view.haul.length > 0
+    ? ` and <b>${view.haul.length} ${view.haul.length === 1 ? 'item' : 'items'}</b>`
+    : '';
   const body = banner() + '<div class="fork">'
     + '<div class="forkhead"><div class="k">DEPTH REACHED</div>'
     + `<div class="d">${view.depth}</div>`
-    + `<div class="s"><b>${view.shards} shards</b> carried, unbanked.<br>`
+    + `<div class="s"><b>${view.shards} shards</b>${carrying} carried, unbanked.<br>`
     + `Your record is <b>D${Math.max(best, view.depth)}</b>.</div></div>`
+    + haulPane(view)
     + '<div class="optn safe" data-action="surface"><div class="ot">&#9650; SURFACE</div>'
-    + `<div class="od">Bank <b>${view.shards} shards</b> and walk out. `
+    + `<div class="od">Bank <b>${view.shards} shards</b>${carrying} and walk out. `
     + 'The run ends here and counts.</div></div>'
     + '<div class="optn risk" data-action="fork-descend">'
     + `<div class="ot">&#9660; DESCEND TO ${view.depth + 1}</div>`
     + `<div class="od">Enemies gain <b>+${view.nextHpPct}% HP</b>.${dark} You go down `
-    + `with <b>${view.hp}/${view.maxHp} HP</b>, and every unbanked shard dies with you.`
+    + `with <b>${view.hp}/${view.maxHp} HP</b>, and everything unbanked dies with you`
+    + `${view.haul.length > 0 ? ' &mdash; including what you are wearing out of it' : ''}.`
     + `</div><div class="riskbar">${pips}</div></div></div>`
     + '<div class="act"><button class="btn cool" data-action="surface">SURFACE'
     + `<span class="sub">BANK ${view.shards}</span></button>`
     + '<button class="btn danger" data-action="fork-descend">DESCEND'
     + `<span class="sub">${view.shards} AT RISK</span></button></div>`;
   return inShell({ shell: 'abyss', depth: view.depth }, body);
+}
+
+/**
+ * The haul, at the one screen where it is a decision.
+ *
+ * **You may put something on here and it does not save it.** That is the sentence the
+ * whole mode turns on, so it is printed rather than implied: a great drop is supposed to
+ * make the next fork *harder*, because now you have something to lose.
+ */
+function haulPane(view: ForkView): string {
+  if (view.haul.length === 0) return '';
+  const rows = view.haul.map((item, i) => {
+    const worn = view.haulWorn[i] === true;
+    return `<div class="haulrow ${rarityClass(item)}"${worn ? '' : ` data-action="haul-equip" data-index="${i}"`}>`
+      + `<span class="n">${escapeHtml(itemName(item))}</span>`
+      + `<span class="d">${escapeHtml(affixSummary(item))}</span>`
+      + `<span class="w">${worn ? 'WORN' : 'WEAR'}</span></div>`;
+  }).join('');
+  return '<div class="haulpane"><div class="hk">FOUND THIS RUN &middot; '
+    + 'UNBANKED, WORN OR NOT</div>'
+    + `<div class="haullist">${rows}</div></div>`;
+}
+
+const affixSummary = (item: Item): string =>
+  item.affixes.map((affix) => affixText(affix)).filter(Boolean).join(' · ').replace(/&minus;/g, '−');
+
+/**
+ * The haul, itemised — **and it is the same list on both faces of the receipt.**
+ *
+ * `GAME_DESIGN.md` § The second cliff calls THE LOSS the beat that decides whether
+ * players stay, and what makes it a receipt rather than a scold is that it is specific:
+ * not *"you lost your haul"* but *"you lost the Rare Coat you found at 14 and were
+ * wearing."* A death strikes every row through, including the worn ones, because wearing
+ * one never saved it — and saying so here is cheaper than a player discovering it.
+ *
+ * **The mockup's *"gear is always kept"* is overridden and does not appear**
+ * (`MODES.md` § The haul).
+ */
+function itemReceipt(receipt: EndlessSummary, died: boolean): string {
+  if (receipt.items.length === 0) return '';
+  const rows = receipt.items.map((item, i) => {
+    const worn = receipt.itemsWorn[i] === true;
+    return `<div class="haulrow ${rarityClass(item)}${died ? ' gone' : ''}">`
+      + `<span class="n">${escapeHtml(itemName(item))}</span>`
+      + `<span class="d">${escapeHtml(affixSummary(item))}</span>`
+      + `<span class="w">${worn ? 'WORN' : `D${item.depth}`}</span></div>`;
+  }).join('');
+  const scrapped = receipt.overflowed > 0
+    ? `<div class="dnote">${receipt.overflowed} would not fit your stash and `
+      + `<b>scrapped for ${receipt.overflowShards} shards</b>.</div>`
+    : '';
+  return `<div class="${died ? 'lost' : 'kept'}">`
+    + `<div class="k">${receipt.items.length} `
+    + `${receipt.items.length === 1 ? 'ITEM' : 'ITEMS'} `
+    + `${died ? 'LOST &mdash; WORN OR NOT' : 'BANKED TO YOUR STASH'}</div>`
+    + `<div class="haullist">${rows}</div>${scrapped}</div>`;
 }
 
 /**
@@ -498,6 +568,7 @@ function outcomeScreen(receipt: EndlessSummary): string {
       + '<div class="k">SHARDS LOST &mdash; NEVER BANKED</div></div>'
     : `<div class="kept"><div class="v">&plus;${unbanked ? receipt.haul : receipt.banked}</div>`
       + `<div class="k">SHARDS ${unbanked ? 'SURFACED &mdash; NOT BANKED' : 'BANKED'}</div></div>`;
+  const items = itemReceipt(receipt, died);
   const again = died
     ? `SURFACE AT ${Math.max(1, receipt.cleared)} NEXT TIME?`
     : 'THE SHAFT IS STILL THERE';
@@ -511,6 +582,7 @@ function outcomeScreen(receipt: EndlessSummary): string {
     + `<div><div class="eyebrow">${died ? 'THE LANTERN WENT OUT AT' : 'YOU CAME BACK UP FROM'}`
     + `</div><div class="big${died ? '' : ' out'}">DEPTH ${receipt.depth}</div></div>`
     + burned
+    + items
     + `<div class="kept"><div class="v">D${receipt.best} `
     + `&middot; ${receipt.newRecord ? 'NEW' : 'KEPT'}</div>`
     + '<div class="k">DEPTH RECORD</div></div>'

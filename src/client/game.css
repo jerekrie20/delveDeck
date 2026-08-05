@@ -202,6 +202,25 @@
 .a-tempo { --archetype-accent: #6fc28a; }
 .a-control { --archetype-accent: #c96a6a; }
 
+/* ── rarity accents (Stage 6b) ───────────────────────────────────────────────
+   Gear DOES have a rarity, so a gear plate keys on it — the mockup's own recipe, one
+   layer down. Two of the six tiers the mockup tokenised are gone (`starter` was never
+   a rarity) and two are new: `epic` and `legendary`, which GEAR.md says need colours
+   and which cost exactly these two lines rather than an art task.
+
+   **Colour is never the only channel here**, so this is not the share grid's problem
+   wearing a different hat: every gear row prints the tier's WORD beside the plate
+   ("RARE · FOUND AT DEPTH 12"), which is the second channel rule 10 asks for.
+
+   Mirrored in `art.ts` and enforced by `tests/art.test.ts`, exactly like the archetype
+   set above — two copies of a palette drift silently. */
+
+.r-common { --rarity-accent: #8b93a5; }
+.r-uncommon { --rarity-accent: #5fd39a; }
+.r-rare { --rarity-accent: #4f9ae0; }
+.r-epic { --rarity-accent: #b57ae8; }
+.r-legendary { --rarity-accent: #ffa53c; }
+
 /* ── strata: shells raised so nothing is pure black ─────────────────────────── */
 
 .d-surface { --stratum: #ffbc6a; --stratum-soft: rgb(255 188 106 / 22%); --shell: #241a13; --shell2: #181109; --vig: 0.42; --chill: 0; }
@@ -1572,8 +1591,10 @@ body {
   background: linear-gradient(180deg, transparent, var(--shell2) 34%);
 }
 
+/* A row's accent is its RARITY when it has one and its ARCHETYPE otherwise — abilities
+   have no rarity and gear has no archetype, so the two never contend. */
 .rowitem {
-  --accent: var(--archetype-accent, #5c6577);
+  --accent: var(--rarity-accent, var(--archetype-accent, #5c6577));
   display: flex;
   gap: 9px;
   align-items: center;
@@ -2297,6 +2318,199 @@ body {
 .dnote b {
   color: #fff;
 }
+
+/* ═══ gear · screen 04 (Stage 6b) ══════════════════════════════════════════════
+   Eleven slots and a stash, drawn out of the pieces the loadout screen already has:
+   `.pane` + `.rowitem` + the code-drawn plate. Zero new art, which is ART.md rule 2 and
+   the reason screen 04 can claim "ship a hundred items without an artist". */
+
+.tiles {
+  position: relative;
+  z-index: 12;
+  margin-top: 9px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.tile {
+  padding: 9px 6px;
+  text-align: center;
+  cursor: pointer;
+  background: linear-gradient(180deg, #232833, #171b23);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 10%), inset 0 0 0 1px #000;
+}
+
+.tile:active { transform: translateY(2px); }
+
+.tile .tt {
+  font: 400 var(--px-2)/1 var(--px);
+  letter-spacing: 0.14em;
+  color: #ffbc6a;
+}
+
+.tile .tk {
+  font: 400 var(--px-1)/1 var(--px);
+  letter-spacing: 0.1em;
+  color: var(--dim);
+  margin-top: 6px;
+}
+
+/* Disabled is never invisible: it desaturates and hatches and keeps readable text, and
+   it says WHY. Same treatment the Community door takes. */
+.tile.locked {
+  cursor: default;
+  filter: saturate(0.25) brightness(0.8);
+  background-image:
+    repeating-linear-gradient(135deg, rgb(0 0 0 / 22%) 0 5px, transparent 5px 10px),
+    linear-gradient(180deg, #232833, #171b23);
+}
+
+.tile.locked .tt { color: var(--dim); }
+
+.gstats {
+  position: relative;
+  z-index: 12;
+  margin-top: 9px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.gstat {
+  padding: 9px 4px;
+  text-align: center;
+  background: linear-gradient(180deg, #20252f, #161a22);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 9%), inset 0 0 0 1px #000;
+}
+
+.gstat .v {
+  font: 400 var(--px-7)/1 var(--px);
+  color: var(--ink);
+}
+
+.gstat .k {
+  font: 400 var(--px-1)/1 var(--px);
+  letter-spacing: 0.1em;
+  color: var(--dim);
+  margin-top: 6px;
+}
+
+.gstat .d {
+  font: 400 var(--px-1)/1 var(--px);
+  color: var(--faint);
+  margin-top: 5px;
+}
+
+.gstat .d.up { color: var(--ok); }
+.gstat .d.down { color: var(--atk); }
+
+/* An empty slot is a slot, not a gap. It keeps its label so the eleven read as a body
+   with holes in it rather than as a short list. */
+.rowitem.empty {
+  cursor: default;
+  filter: saturate(0.2) brightness(0.82);
+}
+
+.rowitem.empty .gn { color: var(--faint); }
+
+.gwear {
+  font: 400 var(--px-1)/1 var(--px);
+  letter-spacing: 0.1em;
+  color: var(--ok);
+}
+
+.gwear span {
+  display: block;
+  color: var(--dim);
+  margin-top: 5px;
+}
+
+.gsalv {
+  font: 400 var(--px-1)/1 var(--px);
+  letter-spacing: 0.1em;
+  color: var(--shard);
+  margin-top: 8px;
+  padding: 5px 6px;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgb(168 146 236 / 45%);
+}
+
+.gdelta {
+  font-size: var(--ui-1);
+  color: var(--atk);
+  margin-top: 7px;
+}
+
+.gdelta.up { color: var(--ok); }
+
+/* The haul strip: what this run is carrying and would lose, on the screen where the
+   fight that risks it is happening. `SCREENS.md` asks for it there rather than only at
+   the fork, where it is already too late to have played differently. */
+.haulstrip {
+  position: relative;
+  z-index: 12;
+  margin-top: 8px;
+  padding: 7px 10px;
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font: 400 var(--px-1)/1 var(--px);
+  letter-spacing: 0.12em;
+  color: var(--dim);
+  background: linear-gradient(120deg, #241c2e, #14101a);
+  box-shadow: inset 0 0 0 1px rgb(168 146 236 / 35%);
+}
+
+.haulstrip b { color: var(--shard); }
+
+/* The haul at the fork: the one screen where putting something on is a decision, and
+   the one screen where it is worth saying that putting it on does not save it. */
+.haulpane {
+  position: relative;
+  z-index: 12;
+  margin-top: 9px;
+  padding: 9px 10px;
+  background: linear-gradient(180deg, #20252f, #161a22);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 10%), inset 0 0 0 1px #000;
+}
+
+.haulpane .hk {
+  font: 400 var(--px-1)/1 var(--px);
+  letter-spacing: 0.14em;
+  color: var(--dim);
+}
+
+/* The receipt's itemised haul. Struck through on a death — the same treatment the shard
+   line takes, because wearing a drop never saved it either. */
+.haullist {
+  margin-top: 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.haulrow {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 6px 9px;
+  font-size: var(--ui-1);
+  color: var(--ink2);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--rarity-accent, #5c6577) 18%, #191d26), #161a22);
+  box-shadow: inset 2px 0 0 var(--rarity-accent, #5c6577);
+}
+
+.haulrow .n { color: var(--rarity-accent, var(--ink)); }
+.haulrow .w {
+  margin-left: auto;
+  font: 400 var(--px-1)/1 var(--px);
+  letter-spacing: 0.1em;
+  color: var(--dim);
+}
+
+.haulrow.gone .n,
+.haulrow.gone .d { text-decoration: line-through; }
 
 /* The unsaved / offline strip. Amber rather than red: nothing is wrong with the run,
    it simply is not being written down — and it keeps full readable contrast, because

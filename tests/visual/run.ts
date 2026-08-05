@@ -189,7 +189,13 @@ async function main(): Promise<void> {
   });
   await server.listen();
   const port = server.config.server.port ?? 5173;
-  const url = `http://localhost:${port}/src/client/index.html`;
+  // **A PINNED DAY, so the gate plays the same shaft every time.** Without it the seed
+  // is today's, which means the enemies, the issued nine and — from Stage 6b — whether
+  // an offline run finds anything all change overnight. A layout gate that measures a
+  // different screen on Tuesday is a gate whose green is worth nothing on Wednesday,
+  // and the haul pane in particular only exists on a run that actually dropped
+  // something. This day is one that does; see `gearLeg`/`endlessLeg` in `gate.ts`.
+  const url = `http://localhost:${port}/src/client/index.html?day=2026-08-06`;
 
   const browser = await chromium.launch();
   let failed = 0;

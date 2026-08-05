@@ -24,6 +24,7 @@
 // an inherited strip offline if one is ever needed again.
 
 import { ABILITIES, type Archetype } from '../shared/abilities';
+import type { Rarity } from '../shared/items';
 
 /** Enemy id → static portrait (128px square), displayed centred at 64 in a code-drawn
  *  plate. 128 shown at 100 would be fractional scaling, and fractional scaling with
@@ -92,6 +93,26 @@ export const ARCHETYPE_ACCENT: Record<Archetype, string> = {
   counter: '#9b7fd4',
   tempo: '#6fc28a',
   control: '#c96a6a',
+};
+
+/**
+ * Rarity → the accent its code-drawn gear plate is stroked in.
+ *
+ * **Abilities have no rarity and gear has no archetype**, so the two palettes never
+ * contend for the same plate — `.rowitem` prefers `--rarity-accent` and falls back to
+ * `--archetype-accent`, which is why one row shape serves both screens.
+ *
+ * `epic` and `legendary` are the two GEAR.md says need new colours; here they are, and
+ * they cost two lines rather than an art task, which is the entire claim screen 04
+ * makes. These MIRROR the `--rarity-accent` values in `game.css` and
+ * `tests/art.test.ts` fails if the two drift apart.
+ */
+export const RARITY_ACCENT: Record<Rarity, string> = {
+  common: '#8b93a5',
+  uncommon: '#5fd39a',
+  rare: '#4f9ae0',
+  epic: '#b57ae8',
+  legendary: '#ffa53c',
 };
 
 /** Ability id → the two-letter glyph on its tile (ART.md: *"rarity-tinted gradient +

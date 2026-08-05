@@ -15,12 +15,13 @@ import { assert, check, describe } from './helpers';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  ABILITY_GLYPH, ARCHETYPE_ACCENT, BACKDROP_ART, ENEMY_ART, HERO_ART, backdropArt, boonGlyph,
+  ABILITY_GLYPH, ARCHETYPE_ACCENT, BACKDROP_ART, ENEMY_ART, HERO_ART, RARITY_ACCENT,
+  backdropArt, boonGlyph,
 } from '../src/client/art';
 import { ABILITIES, ARCHETYPES } from '../src/shared/abilities';
 import { BOON_LIST } from '../src/shared/boons';
 import { ENEMIES } from '../src/shared/enemies';
-import { enemyForDepth, TUNING } from '../src/shared/sim';
+import { enemyForDepth, itemName, RARITIES, RARITY_LABEL, TUNING } from '../src/shared/sim';
 
 describe('art');
 
@@ -202,6 +203,54 @@ await check('THE PALETTE DOES NOT DRIFT — art.ts and game.css agree, archetype
       `${archetype}: game.css says ${declared.get(archetype)}, art.ts says ${ARCHETYPE_ACCENT[archetype]}`,
     );
   }
+});
+
+await check('every rarity has a plate accent, and the six are distinct', () => {
+  // Gear DOES have a rarity, so a gear plate keys on it — the mockup's own recipe one
+  // layer down. `epic` and `legendary` are the two GEAR.md says need new colours, and
+  // this is what makes "a two-line CSS change, not an art task" a claim with a check.
+  assert.equal(Object.keys(RARITY_ACCENT).length, RARITIES.length);
+  for (const rarity of RARITIES) {
+    assert.match(RARITY_ACCENT[rarity], /^#[0-9a-f]{6}$/i, `${rarity} needs a hex accent`);
+  }
+  assert.equal(new Set(Object.values(RARITY_ACCENT)).size, RARITIES.length, 'two tiers share');
+});
+
+await check('THE RARITY PALETTE DOES NOT DRIFT — art.ts and game.css agree', () => {
+  // Same reasoning as the archetype guard above, and the same failure mode: nothing
+  // about a wrong colour fails at runtime, it just quietly stops meaning anything.
+  const css = readFileSync(GAME_CSS, 'utf8');
+  const declared = new Map<string, string>();
+  const pattern = /\.r-([a-z]+)\s*\{\s*--rarity-accent:\s*(#[0-9a-f]{6})\s*;?\s*\}/gi;
+  for (const match of css.matchAll(pattern)) {
+    declared.set(match[1]!.toLowerCase(), match[2]!.toLowerCase());
+  }
+  assert.equal(declared.size, RARITIES.length, `game.css declares ${declared.size} tiers`);
+  for (const rarity of RARITIES) {
+    assert.equal(
+      declared.get(rarity), RARITY_ACCENT[rarity].toLowerCase(),
+      `${rarity}: game.css says ${declared.get(rarity)}, art.ts says ${RARITY_ACCENT[rarity]}`,
+    );
+  }
+});
+
+await check('RARITY IS NEVER THE ONLY CHANNEL — the tier’s word rides beside the plate', () => {
+  // Rule 10 in gear's clothing. Four of the five accents are hues a red-green-deficient
+  // reader has to work at, and this is the screen a player makes build decisions on —
+  // so the tier is spelled out on every row, and `RARITY_LABEL` is what spells it.
+  for (const rarity of RARITIES) {
+    assert.ok(RARITY_LABEL[rarity].length > 3, `${rarity} needs a printable word`);
+  }
+  const item = { id: 'x', base: 'axe', rarity: 'epic' as const, depth: 9, budget: 30, affixes: [] };
+  assert.ok(itemName(item).startsWith(RARITY_LABEL.epic), 'and the name carries it too');
+});
+
+await check('NO GEAR SPRITES AT THIS STAGE — the plate is code-drawn', () => {
+  // Owner answer 7, and `ART.md` § When they arrive. Generating ~40 base sprites against
+  // base types and slot names a first play session is entitled to change is how you
+  // generate 40 images twice. A sprite is cheap to add to a plate that exists.
+  const gearImages = allArtPaths.filter((path) => /gear|item|weapon|armou?r/i.test(path));
+  assert.deepEqual(gearImages, [], 'gear ships with no sprites until Stage 7');
 });
 
 await check('the archetype accent is the ONLY place a tile colour is written', () => {

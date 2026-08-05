@@ -248,6 +248,20 @@ export interface CombatChrome {
    *  the veils below are this file's job because it is the only thing that knows
    *  where a region begins. */
   focus?: CombatFocus;
+  /** ENDLESS only: draw the haul strip. `SCREENS.md` asks for what you stand to lose to
+   *  be visible on the screen where the fight that risks it is happening, not only at
+   *  the fork — by the fork it is already too late to have played differently. The Daily
+   *  never sets it, because nothing there is unbanked. */
+  haul?: boolean;
+}
+
+/** What this run is carrying and would lose. Both numbers come straight off the view —
+ *  the sim counts them, the screen does not. */
+function haulStrip(view: CombatView): string {
+  const items = view.haulItems === 1 ? '1 item' : `${view.haulItems} items`;
+  return '<div class="haulstrip"><span>AT RISK</span>'
+    + `<span><b>${view.haulShards}</b> SHARDS</span>`
+    + `${view.haulItems > 0 ? `<span><b>${items.toUpperCase()}</b></span>` : ''}</div>`;
 }
 
 export function combatScreen(view: CombatView, log: string, chrome: CombatChrome): string {
@@ -260,6 +274,7 @@ export function combatScreen(view: CombatView, log: string, chrome: CombatChrome
   const litPlinth = focus !== undefined && focus.on !== 'threat';
   const body = (focus === undefined ? '' : VEIL)
     + (chrome.banner ?? '')
+    + (chrome.haul === true ? haulStrip(view) : '')
     + stage(view, focus)
     + `<div class="plinth${litPlinth ? ' lit' : ''}">${heroBand(view)}${resourceRow(view)}`
     + `<div class="log"><span>&#9662;</span><em>${escapeHtml(log)}</em></div>`

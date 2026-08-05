@@ -19,9 +19,7 @@
 import { difficultyAt, litSlotsAt } from './encounter';
 import { gearedKit } from './kit';
 import { dropForDepth } from './loot';
-import {
-  GEAR_SLOTS, fitsSlot, type EquippedGear, type GearSlot, type Item,
-} from './items';
+import { slotForItem, type EquippedGear, type Item } from './items';
 import type { ForkView, IssuedKit, SimState } from './simTypes';
 
 /** A copy the caller gets no handle on — the view and the result both hand these out,
@@ -63,7 +61,7 @@ export function equipFromHaul(state: SimState, issued: IssuedKit, index: number)
   if (!Number.isInteger(index) || index < 0 || index >= state.haul.length) return false;
   if (state.haulWorn[index]) return false;
   const item = state.haul[index]!;
-  const slot = slotFor(state.kit.gear, item);
+  const slot = slotForItem(state.kit.gear, item);
   if (!slot) return false;
 
   const displaced = state.kit.gear[slot];
@@ -78,11 +76,6 @@ export function equipFromHaul(state: SimState, issued: IssuedKit, index: number)
   state.hero.hp = Math.min(state.hero.hp, state.hero.maxHp);
   state.log.push(`equipped ${item.rarity} ${item.base} (${slot})`);
   return true;
-}
-
-function slotFor(gear: EquippedGear, item: Item): GearSlot | null {
-  const matching = GEAR_SLOTS.filter((slot) => fitsSlot(item, slot));
-  return matching.find((slot) => gear[slot] === undefined) ?? matching[0] ?? null;
 }
 
 /**
