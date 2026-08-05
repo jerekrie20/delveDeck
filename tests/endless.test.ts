@@ -470,6 +470,7 @@ function sent(seed: number, choices: readonly RunChoice[], runId = 'run-1') {
 function fakeFork(depth: number, lit: number, nextLit: number): ForkView {
   return {
     phase: 'fork', depth, hp: 30, maxHp: TUNING.startingHp, shards: 40,
+    haul: [], haulWorn: [],
     nextHpPct: Math.round(TUNING.rampPerDepth * 100), lit, nextLit,
   };
 }

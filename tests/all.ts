@@ -26,5 +26,8 @@ await import('./hero.test');
 // wall that keeps all three away from the Daily. It fails when the fork changes and
 // nothing else does, which is exactly why it is not part of `sim.test`.
 await import('./endless.test');
+// `items` owns the GEAR MODEL — the rows, the roll, the budget gate and the fold.
+// `endless` owns what a haul COSTS you; this owns what is in one.
+await import('./items.test');
 
 summary();

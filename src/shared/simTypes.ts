@@ -13,6 +13,7 @@
 import type { Archetype, StatusApplication, StatusId } from './abilities';
 import type { AbilityMod } from './boons';
 import type { Intent, Stratum } from './enemies';
+import type { EquippedGear, Item, Rarity } from './items';
 
 // ---- choices -------------------------------------------------------------------
 
@@ -23,6 +24,12 @@ import type { Intent, Stratum } from './enemies';
  * `use` is the CONSUMABLE / ENCOUNTER seam. Nothing generates one until Stage 6, and
  * it is here anyway because a choice variant cannot be retrofitted into a verified
  * replay list without breaking every stored run. It is the one that gets missed.
+ *
+ * `equip` arrived at Stage 6b with the thing it is about: **you may wear something you
+ * found this run, and wearing it does not save it.** `i` indexes the HAUL — the items
+ * found so far, in order — not the stash and not a catalog, because the haul is the only
+ * list both sides derive from `{seed, choices}` alone. Legal between depths only, for
+ * the same reason `use` is.
  */
 export type RunChoice =
   | { k: 'load'; bar: number[]; ult: number }
@@ -32,6 +39,7 @@ export type RunChoice =
   | { k: 'boon'; i: number }
   | { k: 'skip' }
   | { k: 'use'; i: number }
+  | { k: 'equip'; i: number }
   | { k: 'descend' }
   | { k: 'surface' };
 
@@ -76,6 +84,28 @@ export interface IssuedKit {
   /** The two displayed offensive stats, as flat adders. 0 in the Daily. */
   attack: number;
   block: number;
+
+  // ---- gear (Stage 6b) — Endless only, and empty in the Daily forever ------------
+
+  /**
+   * What the delver is WEARING, and the source the four fields above are folded from
+   * (`kit.ts`). It is here rather than only pre-folded because a run may equip from its
+   * own haul mid-depth-boundary, and re-folding needs the set, not the total.
+   *
+   * The Daily's is `EMPTY_GEAR` and there is no argument to `simulateRun` through which
+   * anything else could arrive — the same trick the two-argument signature plays.
+   */
+  gear: EquippedGear;
+  /** Extra depths of light before the shaft strains a threat slot dark. 0 in the Daily,
+   *  where every strain depth is already past the floor. */
+  lanternReach: number;
+  /** How many slots stay lit however deep it gets. `TUNING.lanternMinLit` unless a
+   *  lantern raised it. */
+  lanternFloor: number;
+  /** The deepest rarity this delver's DEPTH RECORD has opened (`GEAR.md` § Rarity and
+   *  affix tiers are gated on depth record). Resolved once at run start and carried
+   *  here, so nothing mid-run can move it and the Daily never reads it at all. */
+  dropCeiling: Rarity;
 }
 
 // ---- what the player is looking at ---------------------------------------------
@@ -150,6 +180,12 @@ export interface CombatView {
   energy: number;
   heroStatuses: StatusRow[];
   enemyStatuses: StatusRow[];
+  /** What this run is carrying and would lose. `SCREENS.md` asks for a haul strip on
+   *  the combat screen so the stake is visible while the fight that risks it is being
+   *  fought — not only at the fork, where it is already too late to have played
+   *  differently. Both are 0 in the Daily, where nothing is unbanked. */
+  haulShards: number;
+  haulItems: number;
 }
 
 export interface BoonView {
@@ -179,6 +215,16 @@ export interface ForkView {
   maxHp: number;
   /** The unbanked haul. Surfacing keeps it; dying takes all of it. */
   shards: number;
+  /**
+   * The item half of the haul, in the order it was found — and `{k:'equip', i}` indexes
+   * THIS. Everything in it is at risk, **including anything already worn out of it**:
+   * wearing a drop does not save it, which is what turns a great drop into a harder fork
+   * rather than an easier one (`GEAR.md` § The haul).
+   */
+  haul: Item[];
+  /** Which of `haul` are currently worn. Parallel by index, so the screen can strike
+   *  through what a descent would cost without re-deriving anything. */
+  haulWorn: boolean[];
   /** What descending costs, as a whole-percent step in enemy HP from this depth to the
    *  next. `TUNING.rampPerDepth` inside the knee, and honestly smaller past it. */
   nextHpPct: number;
@@ -226,6 +272,14 @@ export interface RunResult {
   /** SEAM: the economy. Already computed; emitting it costs nothing and retrofitting
    *  it is a run-format change. */
   shards: number;
+  /** The item half of the haul, in the order found. Surfacing banks it to the stash;
+   *  death burns all of it. **Always empty in the Daily** — `runDepths` only rolls a
+   *  drop in `endless` mode, and `ECONOMY.md`'s rule that must never bend is that
+   *  nothing findable makes a Daily run easier. */
+  haul: Item[];
+  /** Which of `haul` the run was wearing when it ended. The death screen itemises them
+   *  the same as the rest: worn does not mean banked. */
+  haulWorn: boolean[];
   /** SEAM: the Codex. Enemy ids met, in order of first meeting. */
   seen: string[];
   /** SEAM: deeds and titles. */
@@ -248,7 +302,17 @@ export interface Hero {
 
 export interface SimState {
   hero: Hero;
+  /** The kit **as currently worn** — `Run.kit` folded over `gear`. Equipping from the
+   *  haul re-folds it from the issued kit, which is why the two are different fields
+   *  and why the issued one is never written to. */
   kit: IssuedKit;
+  /** Items found this run, in order. `{k:'equip', i}` indexes it, and every one of them
+   *  burns on death whether or not it is being worn. */
+  haul: Item[];
+  /** Parallel to `haul`: which of them are being worn right now, so the receipt can say
+   *  which of the lost items were in use at the time. A parallel array rather than a
+   *  `Set` because this layer is plain data all the way down (CODING_BIBLE §1.9). */
+  haulWorn: boolean[];
   bar: string[];
   ultimate: string;
   cds: number[];

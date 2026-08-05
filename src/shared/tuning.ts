@@ -122,6 +122,58 @@ export const TUNING = {
   // ---- share-grid bands (fractions of max HP at the end of a depth) ------------
   bandFull: 0.7,
   bandHurt: 0.4,
+
+  // ---- gear — ENDLESS ONLY, and structurally so (Stage 6b) ----------------------
+  //
+  // `GEAR.md` owns the SHAPE (`rarity × slot base × depth-scaled budget + affixes`);
+  // every number in it lives here, where the probe can move it.
+  //
+  // **None of this can reach the Daily**, and again not because a flag says so:
+  // `issuedKitForDay` builds a kit with no gear in it, `runDepths` only rolls a drop in
+  // `endless` mode, and `simulateRun` still takes two arguments. Gear enters through
+  // `IssuedKit.gear`, which the Daily's kit leaves empty forever.
+  items: {
+    /** Budget at depth 0 for a `common`. Everything else is a multiple of it. */
+    budgetBase: 10,
+    /** How much a depth adds, linearly — so a rare from 40 genuinely beats a rare from
+     *  12, which is the sentence the whole endgame rests on (`GEAR.md`). */
+    budgetPerDepth: 0.06,
+    /** Rarity IS the budget, not a tier bolted on top of one. */
+    rarityBudget: { common: 1, uncommon: 1.5, rare: 2.1, epic: 2.9, legendary: 3.8 },
+    /** …and it decides the affix count, per `GEAR.md`'s tier table. */
+    rarityAffixes: { common: 1, uncommon: 2, rare: 3, epic: 4, legendary: 5 },
+    /** Draw weights at depth 1, and how much each depth shifts them upward. A deep run
+     *  should feel like it is paying better, not merely paying bigger. */
+    rarityWeight: { common: 60, uncommon: 26, rare: 10, epic: 3, legendary: 1 },
+    rarityWeightPerDepth: { common: -1.2, uncommon: 0, rare: 0.7, epic: 0.35, legendary: 0.15 },
+    // The implicit's share of the budget is NOT here: it lives in `items.ts` as
+    // `IMPLICIT_SHARE`, because moving it changes what an implicit *is* rather than how
+    // hard the game is. Named here so nobody adds a second copy.
+
+    /** Chance a cleared depth drops something at all. */
+    dropChancePct: 35,
+    /** Every Nth depth drops for certain, at a rarity floor — `MODES.md` § Milestones.
+     *  The reason to push past a comfortable number. */
+    milestoneEvery: 10,
+    milestoneFloor: 'rare',
+
+    /** **Depth-record gates, not level gates** — this is the endgame (`GEAR.md` §
+     *  Rarity and affix tiers are gated on depth record). The chase is *"get deeper to
+     *  find better, so you can get deeper still"*, which is why there is no paragon
+     *  track and why one was declined. */
+    epicAtRecord: 20,
+    legendaryAtRecord: 35,
+
+    /** Salvage pays a share of the budget the item was rolled against, so a deep drop
+     *  is worth more as scrap too. The faucet that feeds reroll and ascend
+     *  (`ECONOMY.md` § Salvage). */
+    salvageShare: 0.6,
+
+    /** The stash **grows**, it does not sit at a cap (`GEAR.md`, override #4). Levels
+     *  arrive with classes, so today every delver is level 1 and holds the base. */
+    stashBase: 24,
+    stashPerLevel: 2,
+  },
 } as const;
 
 /**

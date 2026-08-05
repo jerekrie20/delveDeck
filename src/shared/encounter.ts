@@ -55,13 +55,27 @@ export const damageRampAt = (depth: number, rampScale = 1): number =>
  * **The Daily cannot reach it**, and not by a mode check: every strain depth is past
  * the Daily's twelve, so `litSlotsAt(3, depth)` is 3 for every depth the Daily has.
  * Unreachable beats forbidden — see `TUNING.lanternStrainDepths`.
+ *
+ * `reach` and `floor` are what a **lantern** buys (Stage 6b, `kit.ts`): reach pushes
+ * every strain depth deeper, and floor raises the number of slots the deep can never
+ * take. Both default to "no lantern", which is what keeps every existing caller — the
+ * Daily's, the tests', the probe's — reading exactly what it read before.
+ *
+ * **Neither of them can add a fourth slot.** Three is a structural constant and the
+ * Daily already renders all three for free, so a lantern that granted *foresight* would
+ * be selling back something nobody pays for. What it sells is how long you keep it.
  */
-export function litSlotsAt(base: number, depth: number): number {
+export function litSlotsAt(
+  base: number,
+  depth: number,
+  reach = 0,
+  floor: number = TUNING.lanternMinLit,
+): number {
   let lit = base;
   for (const strainAt of TUNING.lanternStrainDepths) {
-    if (depth >= strainAt) lit--;
+    if (depth >= strainAt + Math.max(0, reach)) lit--;
   }
-  return Math.max(TUNING.lanternMinLit, Math.min(base, lit));
+  return Math.max(Math.min(base, floor), Math.min(base, lit));
 }
 
 // ---- populating a depth --------------------------------------------------------

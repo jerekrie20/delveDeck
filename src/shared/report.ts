@@ -56,7 +56,9 @@ export function combatView(
   // Only the LIT slots. A dark slot is information the player does not have, so it is
   // information the view does not carry — the alternative is shipping the number and
   // asking the renderer not to draw it, which is a secret kept in the DOM.
-  const lit = litSlotsAt(state.kit.foresight, depth);
+  const lit = litSlotsAt(
+    state.kit.foresight, depth, state.kit.lanternReach, state.kit.lanternFloor,
+  );
   for (let ahead = 0; ahead < lit; ahead++) {
     const intent = cycle[(enc.cycle + ahead) % cycle.length]!;
     // Weaken is spent by the next ATTACK, which may not be the NOW slot — a block or
@@ -105,6 +107,8 @@ export function combatView(
     energy: state.energy,
     heroStatuses: state.heroStatuses.map((s) => ({ ...s })),
     enemyStatuses: enc.statuses.map((s) => ({ ...s })),
+    haulShards: state.shards,
+    haulItems: state.haul.length,
   };
 }
 
@@ -127,6 +131,12 @@ export function finish(
     ultimate: state.ultimate === '' ? null : state.ultimate,
     boons: [...state.boons],
     shards: outcome === 'invalid' ? 0 : state.shards,
+    // Deep-copied for the same reason the view is: the caller must get no handle on the
+    // sim's own arrays, or rendering a result could mutate the run that produced it.
+    haul: outcome === 'invalid'
+      ? []
+      : state.haul.map((item) => ({ ...item, affixes: item.affixes.map((a) => ({ ...a })) })),
+    haulWorn: outcome === 'invalid' ? [] : [...state.haulWorn],
     seen: [...state.seen],
     facts: { ...state.facts, castsByArchetype: { ...state.facts.castsByArchetype } },
     depthMarks: [...depthMarks],

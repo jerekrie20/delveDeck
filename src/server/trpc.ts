@@ -13,8 +13,8 @@ import { postRunComment } from './core/comment';
 import { bankRunShards, readShardTotal } from './core/hero';
 import { consumeRateLimit, RATE_LIMITS } from './core/rateLimit';
 import {
-  MAX_ENDLESS_CHOICES, MAX_RUN_ID_LENGTH, newRunSeed, readEndlessState, settleEndlessRun,
-  startEndlessRun, stepEndlessRun,
+  MAX_ENDLESS_CHOICES, MAX_ENDLESS_DEPTH, MAX_RUN_ID_LENGTH, newRunSeed, readEndlessState,
+  settleEndlessRun, startEndlessRun, stepEndlessRun,
 } from './core/endless';
 
 /**
@@ -48,6 +48,11 @@ const runChoiceSchema = z.discriminatedUnion('k', [
   // refuses every `use`, but the variant is accepted at the schema so a Stage 6
   // Endless run does not need a run-format change.
   z.object({ k: z.literal('use'), i: z.number().int().min(0).max(15) }),
+  // Wear something found this run. `i` indexes the HAUL, which is bounded by how many
+  // depths a run may persist — one drop per depth at most, so the cap is derived from
+  // `MAX_ENDLESS_DEPTH` rather than guessed. The Daily emits none: it rolls no drops,
+  // so its haul is empty and the sim refuses every index.
+  z.object({ k: z.literal('equip'), i: z.number().int().min(0).max(MAX_ENDLESS_DEPTH - 1) }),
   z.object({ k: z.literal('descend') }),
   z.object({ k: z.literal('surface') }),
 ]);

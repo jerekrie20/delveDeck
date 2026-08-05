@@ -41,16 +41,17 @@ import { ABILITIES, type Ability } from './abilities';
 import { isBossDepth, stratumForDepth, type Intent, type Stratum } from './enemies';
 import { TUNING } from './tuning';
 import { boonOffers, issuedKitForDay } from './daily';
+import { equipFromHaul, forkView, takeDrop } from './haul';
+import { gearedKit } from './kit';
 import {
-  activeIntents, buildEncounter, damageRampAt, difficultyAt, litSlotsAt, traitMagnitude,
-  type Encounter,
+  activeIntents, buildEncounter, damageRampAt, traitMagnitude, type Encounter,
 } from './encounter';
 import {
   castAbility, consumeStun, effectiveAbility, incomingToHp, resolveIntent,
   statusMagnitude, tickStatuses,
 } from './combat';
 import type {
-  DepthBand, ForkView, IssuedKit, RunChoice, RunOutcome, RunResult, RunView, SimState,
+  DepthBand, IssuedKit, RunChoice, RunOutcome, RunResult, RunView, SimState,
 } from './simTypes';
 import { bandFor, combatView, emptyFacts, finish } from './report';
 
@@ -68,6 +69,11 @@ type Mode = 'daily' | 'endless';
  */
 interface Run {
   readonly seed: number;
+  /**
+   * The **issued** kit, never written to. `state.kit` is this one folded over whatever
+   * is currently worn, and equipping from the haul re-folds it from here — folding a
+   * folded kit would count its gear twice (`kit.ts` rule 1).
+   */
   readonly kit: IssuedKit;
   readonly mode: Mode;
   readonly choices: readonly RunChoice[];
@@ -100,9 +106,10 @@ const halt = (outcome: RunOutcome, view?: RunView): Step =>
 const nextChoice = (run: Run): RunChoice | undefined => run.choices[run.index++];
 
 /** The equipped row with kit mods and boons folded over a COPY. Read fresh on every
- *  cast, because taking a boon mid-run changes what the bar does from that point. */
+ *  cast, because taking a boon — or putting on something you just found — changes what
+ *  the bar does from that point. Reads `state.kit`, which is the WORN one. */
 const equipped = (run: Run, id: string): Ability =>
-  effectiveAbility(ABILITIES[id]!, run.kit.mods, run.state.boons);
+  effectiveAbility(ABILITIES[id]!, run.state.kit.mods, run.state.boons);
 
 /**
  * DAILY. **Two arguments, forever.** No account state can reach this — everything the
@@ -132,6 +139,10 @@ function runDepths(
   choices: readonly RunChoice[],
   mode: Mode,
 ): RunResult {
+  // Folded once here so a run that walked in wearing something starts on its real max
+  // HP. In the Daily the gear is empty and this is the identity, which is what keeps
+  // `simulateRun` byte-identical to what it was before gear existed.
+  const worn = gearedKit(kit, kit.gear, kit.dropCeiling);
   const run: Run = {
     seed,
     kit,
@@ -139,8 +150,10 @@ function runDepths(
     choices,
     index: 0,
     state: {
-      hero: { hp: kit.maxHp, maxHp: kit.maxHp, block: 0 },
-      kit,
+      hero: { hp: worn.maxHp, maxHp: worn.maxHp, block: 0 },
+      kit: worn,
+      haul: [],
+      haulWorn: [],
       bar: [],
       ultimate: '',
       cds: [],
@@ -174,6 +187,7 @@ function runDepths(
     run.cleared++;
     run.state.shards += TUNING.shardsPerDepth;
     if (enc.template.bossOf) run.state.facts.bossesFelled++;
+    if (mode === 'endless') takeDrop(run.state, seed, depth);
     markBand(run, depth, bandFor(run.state.hero));
     run.state.log.push(`cleared depth ${depth}`);
 
@@ -233,7 +247,7 @@ function readLoadout(run: Run): Step {
 function beginDepth(run: Run, depth: number): Encounter {
   const { state } = run;
   run.depthMarks.push(run.index);
-  const enc = buildEncounter(run.seed, depth, run.kit.rampScale);
+  const enc = buildEncounter(run.seed, depth, state.kit.rampScale);
   if (!state.seen.includes(enc.template.id)) state.seen.push(enc.template.id);
   state.facts.deepestDepth = depth;
   state.heroStatuses = [];
@@ -247,9 +261,9 @@ function beginDepth(run: Run, depth: number): Encounter {
 
 /** Turns until the enemy dies, the player dies, or the dark catches up. */
 function fightDepth(run: Run, enc: Encounter, depth: number): Step {
-  const { state, kit } = run;
+  const { state } = run;
   // HP compounds; damage trails it. See `TUNING.damageRampShare`.
-  const damageRamp = damageRampAt(depth, kit.rampScale);
+  const damageRamp = damageRampAt(depth, state.kit.rampScale);
   const stratum = stratumForDepth(depth);
 
   for (let turn = 0; enc.hp > 0 && state.hero.hp > 0; turn++) {
@@ -264,7 +278,7 @@ function fightDepth(run: Run, enc: Encounter, depth: number): Step {
     // Start of the player's turn, in this exact order. Block is a decision about THIS
     // turn, never a stockpile — the mockup's own tutorial copy says so.
     state.hero.block = 0;
-    state.energy = kit.maxEnergy;
+    state.energy = state.kit.maxEnergy;
     for (let i = 0; i < state.cds.length; i++) state.cds[i] = Math.max(0, state.cds[i]! - 1);
     const regen = statusMagnitude(state.heroStatuses, 'regen');
     if (regen > 0) state.hero.hp = Math.min(state.hero.maxHp, state.hero.hp + regen);
@@ -290,7 +304,7 @@ function playerTurn(
   damageRamp: number,
   turn: number,
 ): Step {
-  const { state, kit } = run;
+  const { state } = run;
   for (;;) {
     const choice = nextChoice(run);
     if (!choice) {
@@ -302,7 +316,7 @@ function playerTurn(
       // Rage-gated, never cooldown-gated. Requires full rage, spends all of it. The
       // cast itself then earns its +1 back like any other damaging cast — that is the
       // rage rule applied literally, not an exception for ultimates.
-      if (state.rage < kit.maxRage) return INVALID;
+      if (state.rage < state.kit.maxRage) return INVALID;
       const ult = equipped(run, state.ultimate);
       state.rage = 0;
       state.facts.ultimatesFired++;
@@ -366,7 +380,7 @@ function enemyTurn(run: Run, enc: Encounter, damageRamp: number): void {
 
 /** One telegraphed attack landing on the hero, through block, ethereal and thorns. */
 function resolveAttack(run: Run, enc: Encounter, intent: Intent, damageRamp: number): void {
-  const { state, kit } = run;
+  const { state } = run;
   const total = resolveIntent(
     intent, damageRamp, enc.buff, statusMagnitude(enc.statuses, 'weaken'),
   );
@@ -385,7 +399,7 @@ function resolveAttack(run: Run, enc: Encounter, intent: Intent, damageRamp: num
     // +1 rage when an attack lands on HP. Fully blocked means no rage — TAKING THE HIT
     // IS HOW YOU CHARGE, which is the tension the ultimate is built on. Once per
     // attack, not per hit, exactly like a cast.
-    state.rage = Math.min(kit.maxRage, state.rage + 1);
+    state.rage = Math.min(state.kit.maxRage, state.rage + 1);
     const thorns = statusMagnitude(state.heroStatuses, 'thorns');
     if (thorns > 0) {
       enc.hp -= thorns;
@@ -432,44 +446,33 @@ function boonStep(run: Run, depth: number): Step {
 
 /** Surface and bank, or descend and risk it. Endless only. */
 function forkStep(run: Run, depth: number): Step {
-  const { state, kit } = run;
+  const { state } = run;
   for (;;) {
     const choice = nextChoice(run);
     if (!choice) {
-      return halt('outOfChoices', forkView(run, depth));
+      return halt('outOfChoices', forkView(state, depth));
     }
     // The consumable seam. Legal only BETWEEN depths — mid-fight healing breaks the
     // telegraph maths the whole threat track rests on. Nothing generates a consumable
-    // until Stage 6, so `kit.consumables` is empty and every `use` is refused today;
-    // the VARIANT exists because a choice variant cannot be retrofitted into a
-    // verified list without breaking every stored run.
+    // until Stage 6b's camp shop, so `kit.consumables` is empty and every `use` is
+    // refused today; the VARIANT exists because a choice variant cannot be retrofitted
+    // into a verified list without breaking every stored run.
     if (choice.k === 'use') {
       if (!Number.isInteger(choice.i) || choice.i < 0
-        || choice.i >= kit.consumables.length) return INVALID;
+        || choice.i >= state.kit.consumables.length) return INVALID;
       state.facts.consumablesUsed++;
+      continue;
+    }
+    // Between depths for the same reason: swapping armour mid-telegraph would change
+    // the number the track already promised.
+    if (choice.k === 'equip') {
+      if (!equipFromHaul(state, run.kit, choice.i)) return INVALID;
       continue;
     }
     if (choice.k === 'surface') return halt('surfaced');
     if (choice.k === 'descend') return GO;
     return INVALID;
   }
-}
-
-/** What one more depth costs, priced from the same curve that will charge for it. */
-function forkView(run: Run, depth: number): ForkView {
-  const { state, kit } = run;
-  const here = difficultyAt(depth, kit.rampScale);
-  const next = difficultyAt(depth + 1, kit.rampScale);
-  return {
-    phase: 'fork',
-    depth,
-    hp: state.hero.hp,
-    maxHp: state.hero.maxHp,
-    shards: state.shards,
-    nextHpPct: Math.round((next / here - 1) * 100),
-    lit: litSlotsAt(kit.foresight, depth),
-    nextLit: litSlotsAt(kit.foresight, depth + 1),
-  };
 }
 
 function markBand(run: Run, depth: number, band: DepthBand): void {
@@ -505,6 +508,16 @@ export { dayKey, depthRng, issuedKitForDay, issuedPoolForDay, seedForDay } from 
 export { damageRampAt, difficultyAt, enemyForDepth, litSlotsAt } from './encounter';
 export { effectiveAbility, resolveIntent } from './combat';
 export { scoreRun } from './report';
+// Gear (Stage 6b). The server derives a kit from a stored snapshot, the client draws a
+// plate and previews a swap, and both do it through these — one implementation, so what
+// the gear screen promises is what the sim delivers.
+export {
+  AFFIXES, EMPTY_GEAR, GEAR_SLOTS, RARITIES, RARITY_LABEL, SLOT_LABEL, affixText, fitsSlot,
+  itemMods, itemName, itemStats, rarityRank, slotFamily,
+} from './items';
+export type { Affix, EquippedGear, GearSlot, GearStats, Item, Rarity } from './items';
+export { gearMods, gearStats, gearedKit, wornItems } from './kit';
+export { budgetFor, ceilingForRecord, dropForDepth, rollItem, salvageValue } from './loot';
 // The client colours a screen by the stratum it is standing in, including the two —
 // boon and descent — that sit BETWEEN depths and so have no `CombatView` to read it
 // off. Depth → stratum is the same banding the roster and the share grid use, so it

@@ -14,6 +14,7 @@ import {
   SHARED_EQUIPPABLE, SHARED_ULTIMATES, type Ability, type Archetype,
 } from './abilities';
 import { BOON_LIST } from './boons';
+import { EMPTY_GEAR } from './items';
 import { TUNING } from './tuning';
 import type { DailyModifier, IssuedKit } from './simTypes';
 
@@ -106,7 +107,14 @@ export function issuedPoolForDay(seed: number): { abilities: string[]; ultimates
   return { abilities, ultimates };
 }
 
-/** The Daily's hero, from the seed alone. */
+/**
+ * The Daily's hero, from the seed alone.
+ *
+ * It is also the **base** the Endless folds gear over (`kit.ts`), which is why the gear
+ * fields below are written out rather than omitted: an issued kit is a kit with nothing
+ * worn, not a kit that has never heard of gear. The Endless's own `kitForRun` starts
+ * here and adds the run's stored snapshot on top.
+ */
 export function issuedKitForDay(seed: number, modifier: DailyModifier = 'none'): IssuedKit {
   const { abilities, ultimates } = issuedPoolForDay(seed);
   return {
@@ -123,6 +131,12 @@ export function issuedKitForDay(seed: number, modifier: DailyModifier = 'none'):
     consumables: [],
     attack: 0,
     block: 0,
+    // Nothing worn, no reach to lose, the floor the tuning already sets, and a ceiling
+    // nothing in this mode ever reads — `runDepths` rolls no drop outside `endless`.
+    gear: EMPTY_GEAR,
+    lanternReach: 0,
+    lanternFloor: TUNING.lanternMinLit,
+    dropCeiling: 'common',
     ...DAILY_MODIFIERS[modifier],
   };
 }
