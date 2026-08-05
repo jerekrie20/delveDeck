@@ -45,6 +45,25 @@ export function difficultyAt(depth: number, rampScale = 1): number {
 export const damageRampAt = (depth: number, rampScale = 1): number =>
   1 + (difficultyAt(depth, rampScale) - 1) * TUNING.damageRampShare;
 
+/**
+ * How many threat slots are lit at `depth`, given a lantern that lights `base`.
+ *
+ * The second axis of depth, and the one that is not a number going up: past
+ * `TUNING.lanternStrainDepths` the track goes dark from the FAR END inward, so what
+ * you lose is foresight rather than THEN — you always still see NOW.
+ *
+ * **The Daily cannot reach it**, and not by a mode check: every strain depth is past
+ * the Daily's twelve, so `litSlotsAt(3, depth)` is 3 for every depth the Daily has.
+ * Unreachable beats forbidden — see `TUNING.lanternStrainDepths`.
+ */
+export function litSlotsAt(base: number, depth: number): number {
+  let lit = base;
+  for (const strainAt of TUNING.lanternStrainDepths) {
+    if (depth >= strainAt) lit--;
+  }
+  return Math.max(TUNING.lanternMinLit, Math.min(base, lit));
+}
+
 // ---- populating a depth --------------------------------------------------------
 
 /** Materialised for one encounter: a COPY, already lifted for a wanderer, so nothing

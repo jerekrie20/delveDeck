@@ -22,10 +22,14 @@
 //   3. bar size is a real trade (is a 3-slot bar simply dominant?)
 //   4. the composition template holds on EVERY seed — one unplayable day is a lost
 //      day for an entire subreddit and there is no way to reroll it
+//
+// **Gate 5 arrived with Stage 6a and it measures the other mode**: the FORK RATIO,
+// surfaces ÷ deaths, targeting 60/40 toward surfacing. Same standing as headroom, same
+// failure mode — it fails silently and in both directions. See the foot of this file.
 
 import {
-  TUNING, issuedKitForDay, issuedPoolForDay, seedForDay, simulateRun,
-  type CombatView, type RunChoice, type RunResult,
+  TUNING, issuedKitForDay, issuedPoolForDay, seedForDay, simulateEndless, simulateRun,
+  type CombatView, type ForkView, type IssuedKit, type RunChoice, type RunResult,
 } from '../src/shared/sim';
 import { ABILITIES } from '../src/shared/abilities';
 
@@ -437,3 +441,154 @@ console.log(aliveButLowFailures === 0
 console.log(absorbFailures === 0
   ? '  ✓ the day\'s basic block fully absorbs depth 1\'s opening attack, on every seed'
   : `  ✗ ${absorbFailures} seeds where the block did not cover the opening attack`);
+
+// ---- GATE 5 · the fork ratio — Stage 6a ------------------------------------------
+//
+// The Endless's gate, and it is the same KIND of thing as skill headroom: the one
+// number that tells you whether the mode is a game or a slot machine
+// (`GAME_DESIGN.md` § The Stage 6 gate). Target: **60/40 toward surfacing**.
+//
+// **A fork ratio is meaningless without a population**, and that is the whole trick
+// here. A single policy reports whatever it was told to do — "always descend" is 0%
+// surfaces and proves nothing about the tuning. So the probe sweeps a band of risk
+// appetites, from a player who surfaces the moment they are scratched to one who
+// barely ever does, and pools the outcomes. The ratio then belongs to the TUNING,
+// which is the only thing a tuning instrument is allowed to measure.
+
+const FORK_SEEDS = 6;
+const FORK_TARGET = 0.6;
+const FORK_TOLERANCE = 0.1;
+/** Nerve: descend while HP ≥ this fraction of max. Spread across plausible players
+ *  rather than centred on one, because the tail behaviour is what the fork is for. */
+const NERVES = [0.85, 0.7, 0.6, 0.5, 0.4, 0.25, 0.15];
+/** A depth no run should reach. It exists so a lucky line terminates, and every time
+ *  it BINDS it is reported — a cap that silently converts a death into a surface would
+ *  quietly flatter this exact gate. */
+const FORK_DEPTH_CAP = 80;
+
+/** Greedy play, with the fork answered by `decide`. Reuses `greedyTurn` — the fight is
+ *  not what is being measured here, the decision after it is. */
+function endlessGreedy(
+  seed: number,
+  kit: IssuedKit,
+  loadout: Loadout,
+  decide: (view: ForkView) => 'descend' | 'surface',
+): RunChoice[] {
+  const choices: RunChoice[] = [{ k: 'load', bar: loadout.bar, ult: loadout.ult }];
+
+  for (let step = 0; step < 6000; step++) {
+    const result = simulateEndless(seed, choices, kit);
+    if (result.outcome !== 'outOfChoices' || !result.view) break;
+    const view = result.view;
+    if (view.phase === 'loadout') break;
+    if (view.phase === 'boon') { choices.push({ k: 'boon', i: 0 }); continue; }
+    if (view.phase === 'fork') { choices.push({ k: decide(view) }); continue; }
+    if (!pushEndlessTurn(seed, kit, choices, greedyTurn(view), result.cleared)) break;
+  }
+  return choices;
+}
+
+/**
+ * Append a turn, cut at the killing blow — and the Endless makes this MANDATORY.
+ *
+ * In the Daily a batch that overruns its enemy spills into the next depth's combat,
+ * where the leftovers are still legal moves. In the Endless it spills onto the FORK,
+ * where a `cast` is illegal, so an untrimmed batch does not play badly — it INVALIDATES
+ * the run, and a probe measuring invalid runs measures nothing.
+ */
+function pushEndlessTurn(
+  seed: number,
+  kit: IssuedKit,
+  choices: RunChoice[],
+  batch: readonly RunChoice[],
+  clearedBefore: number,
+): boolean {
+  const full = simulateEndless(seed, [...choices, ...batch], kit);
+  if (full.outcome !== 'invalid' && full.cleared === clearedBefore) {
+    choices.push(...batch);
+    return true;
+  }
+  for (let n = 1; n <= batch.length; n++) {
+    const prefix = batch.slice(0, n);
+    const trial = simulateEndless(seed, [...choices, ...prefix], kit);
+    if (trial.outcome === 'invalid') break;
+    if (trial.cleared > clearedBefore || trial.outcome !== 'outOfChoices') {
+      choices.push(...prefix);
+      return true;
+    }
+  }
+  return false;
+}
+
+console.log(`\nGATE 5 — THE FORK RATIO · ${NERVES.length} risk appetites × ` +
+  `${FORK_SEEDS} shafts\n`);
+console.log('  nerve   surfaced   died   mean depth   deepest');
+
+let surfaced = 0;
+let died = 0;
+let capped = 0;
+const allDepths: number[] = [];
+
+for (const level of NERVES) {
+  let rowSurfaced = 0;
+  let rowDied = 0;
+  const depths: number[] = [];
+
+  for (let i = 0; i < FORK_SEEDS; i++) {
+    const seed = seedForDay(`2026-09-${pad(i + 1, 2).replace(' ', '0')}`);
+    const kit = issuedKitForDay(seed);
+    // The median loadout, so the fork is measured against a normal build rather than
+    // an optimised one — the same reason the FLOOR is greedy-on-median.
+    const sorted = sweepLoadouts(seed);
+    const loadout = sorted[Math.floor(sorted.length / 2)]!.loadout;
+
+    const run = simulateEndless(seed, endlessGreedy(seed, kit, loadout, (view) => {
+      if (view.depth >= FORK_DEPTH_CAP) { capped++; return 'surface'; }
+      return view.hp >= view.maxHp * level ? 'descend' : 'surface';
+    }), kit);
+
+    depths.push(run.cleared);
+    if (run.outcome === 'surfaced') rowSurfaced++;
+    else if (run.outcome === 'died') rowDied++;
+  }
+
+  surfaced += rowSurfaced;
+  died += rowDied;
+  allDepths.push(...depths);
+  console.log(`  ${level.toFixed(2)}    ${pad(rowSurfaced, 5)}    ${pad(rowDied, 5)}   ` +
+    `${pad(mean(depths).toFixed(1), 8)}   ${pad(Math.max(...depths), 7)}`);
+}
+
+const forkTotal = surfaced + died;
+const forkRatio = forkTotal === 0 ? 0 : surfaced / forkTotal;
+console.log(`\n  pooled: ${surfaced} surfaced / ${died} died ` +
+  `= ${(forkRatio * 100).toFixed(0)}/${(100 - forkRatio * 100).toFixed(0)} ` +
+  `(target ${FORK_TARGET * 100}/${100 - FORK_TARGET * 100} ±${FORK_TOLERANCE * 100})`);
+console.log(`  mean depth reached ${mean(allDepths).toFixed(1)}, ` +
+  `deepest ${Math.max(...allDepths)}`);
+// Reported unconditionally, because a number a gate collects but never judges is a
+// number nobody reads — and this one converts deaths into surfaces if it ever binds.
+console.log(`  depth cap (${FORK_DEPTH_CAP}) bound on ${capped} runs` +
+  `${capped > 0 ? '  ← THE RATIO ABOVE IS FLATTERED; RAISE THE CAP' : ''}`);
+
+// WHERE the ratio was measured, not just what it was.
+//
+// The population here is greedy-on-median — the FLOOR policy, deliberately, for the
+// same reason the headroom floor is — and it dies at about the same depth in both
+// modes because it is the same shaft. So this ratio describes forks taken in shallow
+// water, where the haul at stake is small and the decision is cheap. The forks the
+// mode is actually built on are the deep ones, and reaching those needs either gear
+// (Stage 6b) or a policy that thinks. Stated rather than implied, because a ratio
+// measured over depths 1-7 and reported as "the fork ratio" is a number that reads as
+// more than it is.
+const deepest = Math.max(...allDepths);
+console.log(`  measured over depths 1-${deepest} (greedy @ median loadout — the FLOOR)`);
+if (deepest < TUNING.lanternStrainDepths[0]!) {
+  console.log(`  ⚠ no run reached the first lantern strain (depth ` +
+    `${TUNING.lanternStrainDepths[0]}), so the strain is UNMEASURED here`);
+}
+console.log(Math.abs(forkRatio - FORK_TARGET) <= FORK_TOLERANCE
+  ? '  ✓ the fork is a decision — the loss is real and the mode is not punishing you'
+  : forkRatio > FORK_TARGET
+    ? '  ✗ TOO GENEROUS — hauls always bank, so the fork is not a decision'
+    : '  ✗ TOO HARSH — players will bounce off the first big loss');

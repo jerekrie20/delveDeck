@@ -74,6 +74,28 @@ export const TUNING = {
    *  the tutorial's "the day's block fully absorbs the opening attack" exact. */
   damageRampShare: 0.35,
 
+  // ---- the lantern strains — ENDLESS ONLY, and structurally so -------------------
+  //
+  // The best difficulty lever in the game, because it removes INFORMATION rather than
+  // adding numbers, and information is what skill is made of (`MODES.md`). A depth
+  // counter that only multiplies HP is a treadmill; a threat track going dark is a
+  // different puzzle.
+  //
+  // **It cannot reach the Daily, and not because a flag says so.** The strain is keyed
+  // on DEPTH, and every depth here is past `depths: 12` — the Daily's hard floor. The
+  // Daily always renders all three slots by construction, with no mode check to get
+  // wrong. That is the same trick `simulateRun`'s two arguments play: make the wrong
+  // thing unreachable rather than forbidden.
+  //
+  /** Depths at which one more threat slot goes dark, low to high. The first sits four
+   *  past the Daily's floor so the Endless opens on familiar ground — the first few
+   *  depths past twelve should feel like more of the game, not a new one. */
+  lanternStrainDepths: [16, 28],
+  /** NOW is never dark. Zero lit slots is not a hard telegraph, it is the absence of
+   *  one, and the entire game claims to be solvable by reasoning about what is coming.
+   *  A run that can no longer see NOW is a coin flip wearing the game's clothes. */
+  lanternMinLit: 1,
+
   /** Enemy HP is jittered per day so a memorised line doesn't transfer. */
   hpJitterPct: 12,
   /** Draw weights for a depth's cast. Wanderers are rare enough to be a surprise and

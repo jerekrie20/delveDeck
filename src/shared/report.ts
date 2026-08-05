@@ -11,7 +11,7 @@
 // could mutate the simulation by rendering it.
 
 import { TUNING } from './tuning';
-import { activeIntents, type Encounter } from './encounter';
+import { activeIntents, litSlotsAt, type Encounter } from './encounter';
 import { incomingToHp, resolveIntent, statusMagnitude } from './combat';
 import type { Intent, Stratum } from './enemies';
 import type {
@@ -53,7 +53,11 @@ export function combatView(
   const weaken = statusMagnitude(enc.statuses, 'weaken');
   const threat: Intent[] = [];
   let spent = false;
-  for (let ahead = 0; ahead < TUNING.foresight; ahead++) {
+  // Only the LIT slots. A dark slot is information the player does not have, so it is
+  // information the view does not carry — the alternative is shipping the number and
+  // asking the renderer not to draw it, which is a secret kept in the DOM.
+  const lit = litSlotsAt(state.kit.foresight, depth);
+  for (let ahead = 0; ahead < lit; ahead++) {
     const intent = cycle[(enc.cycle + ahead) % cycle.length]!;
     // Weaken is spent by the next ATTACK, which may not be the NOW slot — a block or
     // buff beat passes it along untouched. Showing it on the wrong slot would be a
@@ -85,7 +89,7 @@ export function combatView(
     enemyBuff: enc.buff,
     enemyTags: [...(enc.template.tags ?? [])],
     threat,
-    foresight: state.kit.foresight,
+    foresight: lit,
     incoming,
     lethal,
     bar: [...state.bar],

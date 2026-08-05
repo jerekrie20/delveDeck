@@ -22,5 +22,9 @@ await import('./tutorial.test');
 // the migration that reads it back, and the compare-and-set loop. It is separate from
 // `server.test` because it fails when the stored shape changes and nothing else does.
 await import('./hero.test');
+// `endless` owns the SECOND MODE — the fork, the lantern strain, the haul, and the
+// wall that keeps all three away from the Daily. It fails when the fork changes and
+// nothing else does, which is exactly why it is not part of `sim.test`.
+await import('./endless.test');
 
 summary();

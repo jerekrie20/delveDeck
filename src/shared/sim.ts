@@ -42,14 +42,15 @@ import { isBossDepth, stratumForDepth, type Intent, type Stratum } from './enemi
 import { TUNING } from './tuning';
 import { boonOffers, issuedKitForDay } from './daily';
 import {
-  activeIntents, buildEncounter, damageRampAt, traitMagnitude, type Encounter,
+  activeIntents, buildEncounter, damageRampAt, difficultyAt, litSlotsAt, traitMagnitude,
+  type Encounter,
 } from './encounter';
 import {
   castAbility, consumeStun, effectiveAbility, incomingToHp, resolveIntent,
   statusMagnitude, tickStatuses,
 } from './combat';
 import type {
-  DepthBand, IssuedKit, RunChoice, RunOutcome, RunResult, RunView, SimState,
+  DepthBand, ForkView, IssuedKit, RunChoice, RunOutcome, RunResult, RunView, SimState,
 } from './simTypes';
 import { bandFor, combatView, emptyFacts, finish } from './report';
 
@@ -435,10 +436,7 @@ function forkStep(run: Run, depth: number): Step {
   for (;;) {
     const choice = nextChoice(run);
     if (!choice) {
-      return halt('outOfChoices', {
-        phase: 'fork', depth,
-        hp: state.hero.hp, maxHp: state.hero.maxHp, shards: state.shards,
-      });
+      return halt('outOfChoices', forkView(run, depth));
     }
     // The consumable seam. Legal only BETWEEN depths — mid-fight healing breaks the
     // telegraph maths the whole threat track rests on. Nothing generates a consumable
@@ -455,6 +453,23 @@ function forkStep(run: Run, depth: number): Step {
     if (choice.k === 'descend') return GO;
     return INVALID;
   }
+}
+
+/** What one more depth costs, priced from the same curve that will charge for it. */
+function forkView(run: Run, depth: number): ForkView {
+  const { state, kit } = run;
+  const here = difficultyAt(depth, kit.rampScale);
+  const next = difficultyAt(depth + 1, kit.rampScale);
+  return {
+    phase: 'fork',
+    depth,
+    hp: state.hero.hp,
+    maxHp: state.hero.maxHp,
+    shards: state.shards,
+    nextHpPct: Math.round((next / here - 1) * 100),
+    lit: litSlotsAt(kit.foresight, depth),
+    nextLit: litSlotsAt(kit.foresight, depth + 1),
+  };
 }
 
 function markBand(run: Run, depth: number, band: DepthBand): void {
@@ -487,7 +502,7 @@ function settle(run: Run, step: Step): RunResult {
 
 export { TUNING, MAX_RUN_CHOICES } from './tuning';
 export { dayKey, depthRng, issuedKitForDay, issuedPoolForDay, seedForDay } from './daily';
-export { damageRampAt, difficultyAt, enemyForDepth } from './encounter';
+export { damageRampAt, difficultyAt, enemyForDepth, litSlotsAt } from './encounter';
 export { effectiveAbility, resolveIntent } from './combat';
 export { scoreRun } from './report';
 // The client colours a screen by the stratum it is standing in, including the two —

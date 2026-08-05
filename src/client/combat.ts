@@ -55,9 +55,13 @@ const GLYPH: Record<IntentKind, string> = {
 
 function threatTrack(view: CombatView, focus?: CombatFocus): string {
   const coached = focus?.on === 'threat';
-  const slots = view.threat.map((intent, i) => {
+  // The track is always three slots wide, as the mockup draws it; `view.threat` carries
+  // only the LIT ones, so the dark tail is what the view stops at rather than something
+  // it hands over and asks us not to draw.
+  const slots = Array.from({ length: TUNING.foresight }, (_, i) => {
     const position = WHEN[i]!.toLowerCase();
-    if (i >= view.foresight) {
+    const intent = view.threat[i];
+    if (!intent) {
       return `<div class="ts ${position} unlit"><div class="when">${WHEN[i]}</div>`
         + `<div class="lk">? ? ?</div><div class="why">LANTERN T${i + 1}</div></div>`;
     }

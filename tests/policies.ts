@@ -8,7 +8,8 @@
 
 import { ABILITIES } from '../src/shared/abilities';
 import {
-  issuedKitForDay, simulateRun, TUNING, type CombatView, type RunChoice,
+  issuedKitForDay, simulateEndless, simulateRun, TUNING,
+  type CombatView, type ForkView, type IssuedKit, type RunChoice, type RunResult,
 } from '../src/shared/sim';
 
 /** The first legal bar of the day: the leftmost `size` of the issued nine, and the
@@ -74,6 +75,112 @@ export function greedyChoices(seed: number, load: RunChoice = firstLoadout()): R
     choices.push(...batch.slice(0, taken));
   }
   return choices;
+}
+
+/** What a policy does when the shaft asks. Returning `'stop'` leaves the run sitting
+ *  at the fork, which is what a resume test needs and a finished run never is. */
+export type ForkCall = (view: ForkView) => 'descend' | 'surface' | 'stop';
+
+/**
+ * Play the Endless greedily, deciding every fork with `decide`.
+ *
+ * The fork is the only interesting difference from `greedyChoices`, and it is also
+ * what makes the trimming below load-bearing rather than tidy — see `pushEndlessTurn`.
+ */
+export function endlessChoices(
+  seed: number,
+  kit: IssuedKit,
+  decide: ForkCall,
+  load: RunChoice = firstLoadout(),
+): RunChoice[] {
+  const choices: RunChoice[] = [load];
+
+  for (let step = 0; step < 6000; step++) {
+    const result = simulateEndless(seed, choices, kit);
+    if (result.outcome !== 'outOfChoices' || !result.view) break;
+    const view = result.view;
+    if (view.phase === 'loadout') break;
+    if (view.phase === 'boon') { choices.push({ k: 'boon', i: 0 }); continue; }
+    if (view.phase === 'fork') {
+      const call = decide(view);
+      if (call === 'stop') break;
+      choices.push({ k: call });
+      continue;
+    }
+    if (!pushEndlessTurn(seed, kit, choices, greedyTurn(view), result.cleared)) break;
+  }
+  return choices;
+}
+
+/**
+ * Append a turn's choices, cut at the killing blow. Returns false if nothing legal
+ * could be appended.
+ *
+ * **This is where the Endless differs from the Daily and it is not cosmetic.** A
+ * greedy batch is computed against one enemy; if it kills mid-batch, the leftovers in
+ * the Daily land in the next depth's combat and are legal. In the Endless they land on
+ * the FORK, where a `cast` is illegal — so an untrimmed batch does not merely play
+ * badly, it invalidates the run. The Daily's own policy has the same latent hole and
+ * has never been able to hit it.
+ */
+function pushEndlessTurn(
+  seed: number,
+  kit: IssuedKit,
+  choices: RunChoice[],
+  batch: readonly RunChoice[],
+  clearedBefore: number,
+): boolean {
+  const full = simulateEndless(seed, [...choices, ...batch], kit);
+  if (full.outcome !== 'invalid' && full.cleared === clearedBefore) {
+    choices.push(...batch);
+    return true;
+  }
+  for (let n = 1; n <= batch.length; n++) {
+    const prefix = batch.slice(0, n);
+    const trial = simulateEndless(seed, [...choices, ...prefix], kit);
+    if (trial.outcome === 'invalid') break;
+    if (trial.cleared > clearedBefore || trial.outcome !== 'outOfChoices') {
+      choices.push(...prefix);
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Risk appetite as one number: descend while HP is at or above `nerve` × max.
+ *
+ * **This is the whole reason the fork ratio is measurable.** A single fixed policy
+ * reports whatever it was told to do, so the probe sweeps a population of nerves and
+ * pools the outcomes — the ratio then belongs to the TUNING rather than to the policy.
+ * `stop` bounds the run, because the Endless has no floor and a lucky line is
+ * otherwise an infinite loop rather than a long one.
+ */
+export const nerve = (level: number, stop = 60): ForkCall => (view) =>
+  view.depth >= stop ? 'surface'
+    : view.hp >= view.maxHp * level ? 'descend'
+      : 'surface';
+
+/** Play one Endless run to its end at the given nerve. */
+export const endlessRun = (
+  seed: number, kit: IssuedKit, level: number, stop = 60,
+): RunResult => {
+  const decide = nerve(level, stop);
+  return simulateEndless(seed, endlessChoices(seed, kit, decide), kit);
+};
+
+/** Play greedily up to the fork at `depth`, and stop ON it — so the caller gets both
+ *  the view and the choice list that reached it. */
+export function endlessAtFork(
+  seed: number, kit: IssuedKit, depth: number,
+): { choices: RunChoice[]; view: ForkView } | undefined {
+  let found: ForkView | undefined;
+  const choices = endlessChoices(seed, kit, (view) => {
+    if (view.depth < depth) return 'descend';
+    found = view;
+    return 'stop';
+  });
+  return found ? { choices, view: found } : undefined;
 }
 
 /** Every choice greedy would make from this combat view, through to `end`. */

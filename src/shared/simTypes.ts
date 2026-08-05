@@ -110,11 +110,17 @@ export interface CombatView {
    *  itself is post-buff and stays literally true either way. */
   enemyBuff: number;
   enemyTags: string[];
-  /** NOW / NEXT / THEN — **always length 3**, post-ramp, post-buff, post-weaken, and
-   *  reading from the boss's CURRENT cycle so a phase change is visible before you
-   *  end your turn. The telegraph cannot lie. */
+  /** NOW / NEXT / THEN — the **LIT** slots only, so `threat.length === foresight`.
+   *  Post-ramp, post-buff, post-weaken, and reading from the boss's CURRENT cycle so a
+   *  phase change is visible before you end your turn. The telegraph cannot lie.
+   *
+   *  Length 3 in the Daily, always, because the Daily never reaches a strain depth.
+   *  Deeper in the Endless it shortens — and it shortens rather than carrying values
+   *  the renderer is trusted to hide, because a number in the view is a number the
+   *  player can read. */
   threat: Intent[];
-  /** How many of the three slots are lit. `TUNING.foresight` in the Daily, always. */
+  /** How many of the track's `TUNING.foresight` slots are lit. `TUNING.foresight` in
+   *  the Daily, always; the lantern strains in the Endless. */
   foresight: number;
   /** What NOW actually costs you in HP after block and the enemy's traits — 0 on a
    *  block or buff beat, and 0 when you are fully guarded.
@@ -157,12 +163,30 @@ export interface BoonView {
   boons: string[];
 }
 
+/**
+ * Surface and bank, or descend and risk it. Screen 13, and the mode's whole decision.
+ *
+ * Everything the screen needs to state the price of one more depth is reported HERE,
+ * for the same reason `CombatView.incoming` is: the obvious formula is a combat rule,
+ * and a client that computes it is a second state machine drifting from the first.
+ * The mockup prints a flat `+8%`, which is true up to the ramp knee and a lie past it.
+ */
 export interface ForkView {
   phase: 'fork';
+  /** The depth just cleared. */
   depth: number;
   hp: number;
   maxHp: number;
+  /** The unbanked haul. Surfacing keeps it; dying takes all of it. */
   shards: number;
+  /** What descending costs, as a whole-percent step in enemy HP from this depth to the
+   *  next. `TUNING.rampPerDepth` inside the knee, and honestly smaller past it. */
+  nextHpPct: number;
+  /** Threat slots lit right now, and after descending. When they differ, the descent
+   *  is the one that takes the lantern — which is a bigger price than the percentage
+   *  and has to read that way on screen. */
+  lit: number;
+  nextLit: number;
 }
 
 export type RunView = LoadoutView | CombatView | BoonView | ForkView;
