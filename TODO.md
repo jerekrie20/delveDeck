@@ -878,16 +878,29 @@ is issued, identical to the Daily's, and the haul is shards only — so 6a touch
 account state beyond the `shards` field that already ships, and the fork ratio becomes
 measurable *before* there is a gear model resting on it.
 
-- [ ] `simulateEndless(seed, choices, kit)` — **a third argument on a DIFFERENT
+- [x] `simulateEndless(seed, choices, kit)` — **a third argument on a DIFFERENT
       function.** `simulateRun.length === 2` still holds and the test still passes.
       At 6a the kit passed in is `issuedKitForDay(seed)` — the same one the Daily gets
       — so the third argument is exercised and *proven* by a real caller before gear
       ever fills it. That ordering is the point: the seam ships loaded, not empty.
+      **Stage 1 had already left this seam, along with `forkStep`, the `surfaced`
+      outcome and an abyss roster that answers past depth 12.**
+- [x] **The lantern strains** — `litSlotsAt(base, depth)`, dark from the far end
+      inward past `TUNING.lanternStrainDepths`, never below `lanternMinLit`. **It
+      cannot reach the Daily by construction, not by a flag**: every strain depth is
+      past the Daily's twelve. The view carries only the LIT slots — a number in the
+      view is a number the player can read out of the DOM.
+- [x] **The fork prices itself.** `ForkView` reports the real per-depth HP step and
+      both lit counts. The mockup's flat `+8%` is true inside the ramp knee and a lie
+      past it; `CombatView.incoming` exists to close the same trap.
 - [ ] **Server-side kit derivation** — the client sends `{runId, seed, choices}` and
       never the kit, from the first commit. At 6a the derivation is trivial (issued),
       which is exactly why it is cheap to get the *shape* right now.
-- [ ] Fork screen (13): surface banks shards, descend costs +8% enemy HP and
-      unlights one lantern slot
+  - [ ] The **run's own seed**, server-generated at start and stored with the run. The
+        client echoes it and the server **checks it against the stored run** — a client
+        that picks its own seed is a client that rerolls the shaft until it is nice.
+- [ ] Fork screen (13): surface banks shards, descend costs the reported HP step and,
+      at a strain depth, the lantern
 - [ ] **The haul, shards only.** Death takes the unbanked shard haul; depth record, XP,
       story and deeds are **kept**. The item half of the haul lands with 6b — the rule
       does not change, the thing it applies to does.
@@ -913,20 +926,28 @@ measurable *before* there is a gear model resting on it.
       *day + user* under `claimOnce`. 6a is the stage that introduces a mode with
       unlimited attempts, i.e. the first one where a `runId` exists. The rate limiter
       itself landed at Stage 5.
-- [ ] **The probe reports a fork ratio**, and the gate is **60/40 toward surfacing**
-      (owner answer 2, `GAME_DESIGN.md` § The Stage 6 gate). Measured, not asserted —
-      the same standing as Stage 1's skill headroom. Tune with `TUNING`; the haul
-      asymmetry is not the knob.
+- [x] **The probe reports a fork ratio** — GATE 5, and the target is **60/40 toward
+      surfacing** (owner answer 2, `GAME_DESIGN.md` § The Stage 6 gate). Measured, not
+      asserted, the same standing as Stage 1's skill headroom. **Reads 67/33, inside
+      the ±10 tolerance.** A ratio needs a POPULATION to mean anything — one fixed
+      policy reports whatever it was told to do — so it sweeps seven risk appetites and
+      pools them, which is what makes the number belong to the tuning.
+  - [ ] **It is measured shallow, and the probe says so.** Greedy-on-median dies around
+        depth 7 in *both* modes, because it is the same shaft — so today's ratio
+        describes cheap forks with a small haul at stake, and **no run reaches the
+        first lantern strain at depth 16.** Re-read this gate once 6b's gear pushes
+        runs deep enough to pay a real price; the strain depths may want to move, and
+        that is a tuning edit informed by data rather than a guess made now.
 
 ### GATE — the fork has to be a decision
 
-- [ ] Probe reports a fork ratio near 60/40
+- [x] Probe reports a fork ratio near 60/40 — **67/33**
 - [ ] A run survives a closed tab, resumed with the kit re-derived from the run's
       start state
 - [ ] Death takes the whole unbanked haul and keeps the depth record
-- [ ] `simulateRun.length === 2` holds; the Daily is byte-identical — floor 6.6/12,
+- [x] `simulateRun.length === 2` holds; the Daily is byte-identical — floor 6.6/12,
       ceiling 11.6/12, gap 5.0
-- [ ] `npm run test:visual` green, `KNOWN_FINDINGS` still empty
+- [x] `npm run test:visual` green, `KNOWN_FINDINGS` still empty
 
 ## Stage 6b — gear, classes + progression ▸ **once 6a proves the loop is fun**
 
