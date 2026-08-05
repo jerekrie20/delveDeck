@@ -850,21 +850,100 @@ no account state may reach, and the cheapest way to keep that true is for the Da
 own module to have no way to reach an account at all. The banking happens in `trpc.ts`,
 on the far side of the claim `submitRun` had to win.
 
-## Stage 6 — Endless + progression
+## Seven owner answers, taken before Stage 6
 
-- [ ] `simulateEndless` + **server-side kit derivation** — the client sends
-      `{runId, seed, choices}` and never the kit
+Answered 2026-08-04, all at the recommendation. Each is folded into the doc that owns
+it; recorded here so the stage list doesn't re-open them.
+
+| # | Question | Answer | Owning doc |
+|---|---|---|---|
+| 1 | Whole Endless, or the fork first? | **Split it — 6a the fork, 6b gear + classes** | this file, below |
+| 2 | How much can the Endless hurt? | **Fork ratio 60/40 toward surfacing**, and it is the probe gate | `GAME_DESIGN.md` § The Stage 6 gate |
+| 3 | Can a run be abandoned freely? | **Strict — one run, abandoning is a death, no expiry** | `MODES.md` § A run survives everything |
+| 4 | Streak on a missed day? | **Reset to zero, beside a lifetime "days played" that never resets** | `GAME_DESIGN.md` § Accounts |
+| 5 | Endless board: ladder or feed? | **Ranked by depth, as specced** — build-first row, weekly reset | `MODES.md` § The Endless board |
+| 6 | `main.ts` is at 327/400 | **Split by mode → `endless.ts`**, never an exemption, never a `state.ts` | this file, below |
+| 7 | Gear art now? | **No sprites at Stage 6** — code-drawn plates; the ~40 base sprites are Stage 7 | `ART.md` § When they arrive |
+
+## Stage 6a — the fork ▸ **the Endless, with no gear**
+
+**The whole risk/reward loop, playable end to end, and nothing else.** Stage 6 as
+originally written was roughly six stages in a trench coat — sim entry point, gear,
+classes, fork, haul, board, resume — and built in one pass nothing is playable until
+almost all of it is done, with the probe unable to measure any of it in the meantime.
+Every stage so far shipped something playable; this one does too.
+
+The seam is the one the design already has: **the fork does not need gear.** The kit
+is issued, identical to the Daily's, and the haul is shards only — so 6a touches no
+account state beyond the `shards` field that already ships, and the fork ratio becomes
+measurable *before* there is a gear model resting on it.
+
+- [ ] `simulateEndless(seed, choices, kit)` — **a third argument on a DIFFERENT
+      function.** `simulateRun.length === 2` still holds and the test still passes.
+      At 6a the kit passed in is `issuedKitForDay(seed)` — the same one the Daily gets
+      — so the third argument is exercised and *proven* by a real caller before gear
+      ever fills it. That ordering is the point: the seam ships loaded, not empty.
+- [ ] **Server-side kit derivation** — the client sends `{runId, seed, choices}` and
+      never the kit, from the first commit. At 6a the derivation is trivial (issued),
+      which is exactly why it is cheap to get the *shape* right now.
 - [ ] Fork screen (13): surface banks shards, descend costs +8% enemy HP and
       unlights one lantern slot
-- [ ] **The haul.** Items found this run are unbanked exactly like shards. Death takes
-      the whole haul — including anything equipped from it mid-run. Equipped kit,
-      depth record, XP, story and deeds are **kept**. Overrides the mockup's "gear is
-      always kept"; the asymmetry is the fork's whole design.
-- [ ] Death screen (14): the haul struck through, item by item
+- [ ] **The haul, shards only.** Death takes the unbanked shard haul; depth record, XP,
+      story and deeds are **kept**. The item half of the haul lands with 6b — the rule
+      does not change, the thing it applies to does.
+- [ ] Death screen (14): the haul struck through — at 6a that is the shard line
+- [ ] **Server-side run resume.** An Endless run is 20–40 minutes on a phone in a feed
+      iframe. Persist `{seed, choices}` **at every fork** — the choice list is already
+      the save file — so a closed tab, a device switch or lost signal resumes at the
+      last fork. **The haul must only ever be lost to a decision, never an accident.**
+  - [ ] One run in progress at a time; starting a new one abandons the old, and
+        abandoning counts as a death. **No expiry** — a stale run waits indefinitely
+        (owner answer 3; reasoning in `MODES.md`)
+  - [ ] Resuming re-derives the kit **server-side** from the run's start state, not
+        from current gear, or the choice list stops replaying
+- [ ] **`src/client/endless.ts` — the split, decided (owner answer 6).** `main.ts` is
+      327 code lines against a 400 limit and the fork, the death screen and the resume
+      prompt do not fit. `main.ts` keeps boot, routing and the shared click dispatch;
+      `endless.ts` owns the fork/haul/resume state the way `sharing.ts` owns the
+      comment flow — because the Endless is *about* something, which is the only
+      legitimate reason to make a file. **Not a `state.ts`** (a pile with a filename,
+      `CODING_BIBLE` §1.9) and **not an eslint exemption**.
+- [ ] **`runDedupe.ts` (68) ported here**, deferred from Stage 5 with its reasoning: it
+      is keyed on a client-stamped `runId`, and the Daily's idempotency key is already
+      *day + user* under `claimOnce`. 6a is the stage that introduces a mode with
+      unlimited attempts, i.e. the first one where a `runId` exists. The rate limiter
+      itself landed at Stage 5.
+- [ ] **The probe reports a fork ratio**, and the gate is **60/40 toward surfacing**
+      (owner answer 2, `GAME_DESIGN.md` § The Stage 6 gate). Measured, not asserted —
+      the same standing as Stage 1's skill headroom. Tune with `TUNING`; the haul
+      asymmetry is not the knob.
+
+### GATE — the fork has to be a decision
+
+- [ ] Probe reports a fork ratio near 60/40
+- [ ] A run survives a closed tab, resumed with the kit re-derived from the run's
+      start state
+- [ ] Death takes the whole unbanked haul and keeps the depth record
+- [ ] `simulateRun.length === 2` holds; the Daily is byte-identical — floor 6.6/12,
+      ceiling 11.6/12, gap 5.0
+- [ ] `npm run test:visual` green, `KNOWN_FINDINGS` still empty
+
+## Stage 6b — gear, classes + progression ▸ **once 6a proves the loop is fun**
+
+- [ ] **The haul, complete.** Items found this run are unbanked exactly like shards.
+      Death takes the whole haul — including anything equipped from it mid-run. Equipped
+      kit, depth record, XP, story and deeds are **kept**. Overrides the mockup's "gear
+      is always kept"; the asymmetry is the fork's whole design.
+- [ ] Death screen (14): the haul struck through, **item by item**
 - [ ] Gear (04): **11 slots** (weapon · offhand · head · body · hands · legs · feet ·
       2 rings · amulet · **lantern**), plus the relic. Affixes as `kit.mods`,
       code-drawn rarity plates, **6 rarity tiers** — `epic` and `legendary` need two
       new colour tokens, which is a two-line CSS change, not an art task.
+  - [ ] **No gear sprites at this stage** (owner answer 7). Gear ships as a code-drawn
+        rarity plate, the item name and its affixes — the same degrade path 22 of the
+        30 roster rows already take. The ~40 base sprites are **Stage 7**, after the
+        gear model has been played; generating them against an unplayed model is how
+        you generate 40 images twice (`ART.md` § When they arrive).
 - [ ] **The lantern is a gear slot, not a shard purchase** — a found object granting
       foresight, depth of light, warmth and the flame cosmetic
 - [ ] Salvage + reroll + ascend — server-side, deterministic. Without them the stash
@@ -880,28 +959,20 @@ on the far side of the claim `submitRun` had to win.
       choice list**. Mid-fight healing breaks the telegraph maths.
 - [ ] What deepens with depth (`MODES.md`): scaling · **the lantern strains** ·
       traits arrive and stack · the cast shifts to the abyss + wanderers
-- [ ] **The Endless board** — weekly, resets with the community shaft; ranked by
-      depth; the row shows **`u/username`, class, level, bar size, ultimate** so it
-      reads as a build-sharing feed rather than a second score ladder. Plus one
-      permanent all-time "deepest ever" line. Needs run dedupe + per-user rate limits,
-      since Endless attempts are unlimited.
-  - [ ] **Port `runDedupe.ts` (68) here**, deferred from Stage 5 with its reasoning:
-        it is keyed on a client-stamped `runId`, and the Daily's idempotency key is
-        already *day + user* under `claimOnce`. This is the stage that introduces a
-        mode with unlimited attempts, i.e. the first one where a `runId` exists.
-        The rate limiter itself landed at Stage 5.
+- [ ] **The Endless board** — weekly, resets with the community shaft; **ranked by
+      depth** (owner answer 5, confirmed as specced); the row shows **`u/username`,
+      class, level, bar size, ultimate** so it reads as a build-sharing feed rather
+      than a second score ladder. Plus one permanent all-time "deepest ever" line.
+      Run dedupe lands at 6a; the per-user rate limiter landed at Stage 5.
+  - [ ] **It belongs to 6b, not 6a, and that is deliberate.** The row *is* the build —
+        class, level, ultimate — and at 6a there is no build to show, only a depth. A
+        depth-only Endless board would be a second score ladder, which is the exact
+        thing `MODES.md` argues the board must not be. 6a ships the loop without one.
 - [ ] **Records / calendar / streak (17)**, moved from Stage 5. Per-day history fills
-      the hero's already-shipped empty `records` key. Streak belongs to the Daily
-      only; whether a missed day resets or decays it is still undecided
-      (`GAME_DESIGN.md` § Accounts) and is a retention call, not a mechanical one.
-- [ ] **Server-side run resume.** An Endless run is 20–40 minutes on a phone in a feed
-      iframe. Persist `{seed, choices}` **at every fork** — the choice list is already
-      the save file — so a closed tab, a device switch or lost signal resumes at the
-      last fork. **The haul must only ever be lost to a decision, never an accident.**
-  - [ ] One run in progress at a time; starting a new one abandons the old, and
-        abandoning counts as a death
-  - [ ] Resuming re-derives the kit **server-side** from the run's start state, not
-        from current gear, or the choice list stops replaying
+      the hero's already-shipped empty `records` key. Streak belongs to the Daily only.
+      **A missed day resets it to zero** (owner answer 4), and it ships beside a
+      lifetime **days played** total that never resets — two numbers, one of which can
+      never hurt you (`GAME_DESIGN.md` § Accounts).
 - [ ] **No delver name.** The delver is `u/you` (`IDENTITY.md`) — the hero has no
       `name` field, there is no naming screen, no filter, no rename, no report flow.
       The board already renders `u/{username}`.

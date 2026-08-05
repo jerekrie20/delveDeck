@@ -84,6 +84,11 @@ from a client. Full detail in [GAME_DESIGN.md](GAME_DESIGN.md).
 The retention hook, and it belongs to the Daily alone — **the Endless cannot protect
 a streak**. Per-subreddit, like everything else on the hero.
 
+**A missed day resets it to zero — decided 2026-08-04**, and it ships beside a
+lifetime **days played** total that never resets. Reasoning in
+[GAME_DESIGN.md](GAME_DESIGN.md) § Accounts: two numbers, one of which can never hurt
+you.
+
 ### What the Daily gives the meta
 
 A little XP and deed progress. **Never shards, never gear.** The moment the Daily
@@ -192,6 +197,14 @@ Two rules that fall out of it:
   resumes after you changed gear in the camp uses the kit it *started* with, or the
   choice list stops being replayable.
 
+**A stale run never expires — decided 2026-08-04.** The alternative was an expiry that
+quietly banks whatever an untouched run was holding after N days, and it was rejected
+because there is no N to pick: short is a free-haul exploit (start a run, find a
+legendary, walk away, collect it), long is a non-feature nobody ever reaches. The rule
+stays *strict* — a run waits for you indefinitely, and the only way to lose the haul is
+to decide to. Revisit once there is data on how often runs actually go stale; until
+then this is one fewer scheduler job and zero exploit surface.
+
 ### Milestones — every 10 depths
 
 The reason to push past a comfortable number. Each milestone gives:
@@ -225,6 +238,13 @@ thing.
 
 That split is what stops anyone asking which is "the" leaderboard: they answer
 different questions, and neither answer substitutes for the other.
+
+**Ranked by depth — confirmed 2026-08-04, so it does not get re-argued.** The standing
+objection is that ranking by depth *is* a score ladder whatever the row shows, and the
+Daily already owns the one-comparable-number job; the alternative was an unranked
+"recent notable runs" feed with no position. It was rejected: an unranked feed is a
+thing people look at once. The **row** is what carries the build-sharing intent; the
+**ranking** is what gets anyone to read it, and the weekly reset is what keeps it fair.
 
 **Two design choices do most of the work here:**
 

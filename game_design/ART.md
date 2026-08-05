@@ -107,6 +107,19 @@ player will screenshot on purpose. It is worth it **only while the rule holds**.
 Generation follows the recipe and the checklist below like everything else, and
 `tests/art.test.ts` enforces squareness on these exactly as it does on portraits.
 
+### When they arrive: Stage 7, never with the gear model — decided 2026-08-04
+
+**Gear ships with no sprites at all.** The rarity plate, the item name and its affixes,
+all code-drawn — deliberately austere, and exactly the degrade path 22 of the 30 roster
+rows already take today. It is proven, it is free, and it is what a shipped screen
+looks like the week gear lands.
+
+The ~40 base sprites come at **Stage 7**, after the gear model has actually been
+played. Generating them alongside it would mean generating them against base types,
+slot names and rarity bands that a first play session is entitled to change — which is
+the way to generate 40 images twice. **A sprite is cheap to add to a plate that exists
+and expensive to have made for a plate that got renamed.**
+
 ## The budget — there is no count cap
 
 An earlier draft of this doc set a hard cap of 12 portraits. **That number was

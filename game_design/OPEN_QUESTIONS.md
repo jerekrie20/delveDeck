@@ -17,17 +17,22 @@ ability pool · classes are Endless-only · v1 scale of 24 abilities / 24 templa
 6 bosses / 3 classes) plus the **docs-own-shape, code-owns-numbers** rule, which
 made every "what should this number be?" question a code question instead.
 
-**Six decisions are still owed by the owner.** Each now lives in the doc that owns
-it, not here:
+**Six decisions were owed by the owner.** Each lives in the doc that owns it, not here:
 
 | Decision | Lives in |
 |---|---|
 | The game's name — four are live, one is in shipped code | `GAME_DESIGN.md` § Naming → resolved in Phase B (**C4**) |
 | Undo: ship disabled, or cut the button | `GAME_DESIGN.md` § Open questions |
 | The midnight boundary — carry the played day, grace window, or refuse a late start | `GAME_DESIGN.md` § Open questions → the *bug* is **C10** below |
-| Streak: reset to zero or decay on a missed day | `GAME_DESIGN.md` § Accounts |
+| ~~Streak: reset to zero or decay on a missed day~~ **ANSWERED 2026-08-04: reset to zero, beside a lifetime "days played" total that never resets** | `GAME_DESIGN.md` § Accounts |
 | Bar-size floor: is 3 legal, or clamp to 4–5 | `GAME_DESIGN.md` § Open questions — Stage 1's probe informs it |
 | What replaces the splash when the card art is deleted | `TODO.md` § Stage 2 |
+
+Seven more were answered on **2026-08-04**, all at the recommendation, ahead of Stage
+6; they are recorded in `NEXT_SESSION.md` Part 1 and folded into their owning docs —
+the Stage 6 split (`TODO.md`), the fork-ratio target (`GAME_DESIGN.md` § The Stage 6
+gate), stale runs (`MODES.md`), the streak (above), the Endless board's ranking
+(`MODES.md`), the `main.ts` split (`TODO.md`), and when gear sprites arrive (`ART.md`).
 
 ---
 

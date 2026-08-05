@@ -39,7 +39,7 @@ on — *"is one more depth worth it?"* — and it is the one part that can be wr
 way no amount of gear fixes. Shipping it alone means finding that out in a week rather
 than in two months.
 
-**Answer:**
+**Answer: split it, 6a first.** (2026-08-04) Folded into `TODO.md` § Stage 6a / 6b.
 
 ---
 
@@ -63,7 +63,8 @@ already calls it *"the one to watch"*.
 gate the same way skill headroom was Stage 1's. It keeps the loss real without making
 the mode feel like it is punishing you for playing it.
 
-**Answer:**
+**Answer: 60/40 surfacing, and it is the Stage 6 probe gate.** (2026-08-04) Folded
+into `GAME_DESIGN.md` § The Stage 6 gate and § Success metrics.
 
 ---
 
@@ -83,7 +84,8 @@ how often runs actually go stale. An expiry that banks a haul is a free-haul exp
 N is short and a non-feature if N is long, and there is no way to pick N without
 knowing how people play.
 
-**Answer:**
+**Answer: keep it strict, no expiry.** (2026-08-04) Folded into `MODES.md` § A run
+survives everything except a decision.
 
 ---
 
@@ -105,7 +107,9 @@ breaking it is a retention decision, not a mechanical one.
 means a long-time player never actually loses their history. Two numbers, one of which
 can never hurt you.
 
-**Answer:**
+**Answer: reset to zero, plus a lifetime "days played" total.** (2026-08-04) Folded
+into `GAME_DESIGN.md` § Accounts and `MODES.md` § The streak; the row is struck from
+`OPEN_QUESTIONS.md`.
 
 ---
 
@@ -126,7 +130,8 @@ Daily already owns the "one comparable number" job.
 an unranked feed with no position is a feature people look at once. The build-first
 *row* is what carries the design's intent; the ranking is what gets them to look.
 
-**Answer:**
+**Answer: ranked by depth, as specced.** (2026-08-04) `MODES.md` § The Endless board
+already says so; recorded there as settled so it does not get re-argued.
 
 ---
 
@@ -148,7 +153,7 @@ it came out because the comment flow is *about* something, not because `main.ts`
 long. The Endless is about something too. A `state.ts` is a pile with a filename,
 which is exactly what `CODING_BIBLE` §1.9 forbids.
 
-**Answer:**
+**Answer: split by mode — `endless.ts`.** (2026-08-04) Folded into `TODO.md` § Stage 6a.
 
 ---
 
@@ -170,7 +175,8 @@ and that path is proven.
 30 enemies ship without a portrait today. Generating 40 images against a gear model
 that has never been played is the way to generate 40 images twice.
 
-**Answer:**
+**Answer: no sprites at Stage 6 — plates only.** (2026-08-04) Folded into `ART.md`
+§ Gear sprites and `TODO.md` § Stage 6b / Stage 7.
 
 ---
 

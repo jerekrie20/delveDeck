@@ -145,7 +145,7 @@ the *door* is closed.
 |---|---|
 | Relic slot (04) | Defer past Endless. "Relics drop below depth 18" — there is no depth 18 until Stage 6. |
 | The Thing at Sixty (16) | Defer. Ship the shaft alone. |
-| Records / calendar / streak (17) | **Stage 6**, decided at Stage 5. Needs per-day history; Stage 5 ships the empty `records` key so it lands as a fill, not a migration. |
+| Records / calendar / streak (17) | **Stage 6b**, decided at Stage 5. Needs per-day history; Stage 5 ships the empty `records` key so it lands as a fill, not a migration. The screen shows **two** numbers: the streak, which a missed day resets to zero, and a lifetime **days played** total that never does (`GAME_DESIGN.md` § Accounts, decided 2026-08-04). |
 | Stash "12 items" (04) | **Grows with level**, not a fixed cap. Eleven slots need room; salvage makes overflow income. |
 | Uniques and sets (04) | Backlog. The procedural model ships first; named items are rows added later, which is what the model is for. |
 | Elite enemy variants | Cut. A fourth axis of variance on top of pool, cast and jitter makes two players' "same shaft" harder to reason about. |

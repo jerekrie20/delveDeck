@@ -715,6 +715,28 @@ rather than in what you happened to draw mid-fight. Headroom now comes from:
   there is no way to reroll it.
 - If greedy full-clears: **widen cooldowns and cut numbers before adding systems.**
 
+### The Stage 6 gate — the fork ratio, measured the same way
+
+The Daily's gate is skill headroom. **The Endless's gate is the fork ratio —
+surfaces ÷ deaths — and the target is 60/40 toward surfacing** (decided 2026-08-04).
+
+It is the same kind of gate for the same reason: the fork is the one part of the mode
+that can be wrong in a way no amount of gear fixes, and *"is one more depth worth it?"*
+fails silently in both directions.
+
+| Ratio | What the mode becomes |
+|---|---|
+| ≈50/50 | Every fork is a real decision, and losing a haul is common enough to sting. Harsh — some players bounce off the first big loss and never start a second run. |
+| **≈60/40 surfacing** | **The target.** The loss stays real; the mode is not punishing you for playing it. |
+| ≈70/30 surfacing | Generous. Hauls mostly get banked and *"one more depth"* is a thrill rather than a gamble — but the fork has stopped being a decision. |
+
+`scratchpad/probe.ts` reports it, against a policy that pushes until the expected
+value of one more depth turns negative. **It is measured, not asserted**, and a change
+to Endless scaling, the lantern strain or the haul rules is not done until the probe
+has been re-run. Tune with `TUNING` — per-depth enemy HP growth and how fast the
+lantern strains — before touching the haul rules; the haul asymmetry is load-bearing
+(see [MODES.md](MODES.md) § The haul) and it is the wrong knob.
+
 ---
 
 ## Accounts — decided, because it is unfixable later
@@ -757,8 +779,22 @@ a migration step table from day one, never dropping unknown fields, never
 downgrading, never throwing.
 
 **Streak belongs to the Daily only** — the Endless can't protect one — and is
-therefore also per-sub. Whether a missed day resets it to zero or decays it is
-**undecided**, and it is a retention decision rather than a mechanical one.
+therefore also per-sub.
+
+**A missed day resets the streak to zero — decided 2026-08-04.** Two alternatives were
+live: *decay* (drop by a few rather than to nothing) and *one freeze* (a missed day
+forgiven automatically every N days). Both were rejected for the same reason — neither
+can be explained in one line on a screen, and a streak you cannot state the rule for is
+not a hook, it is a number that occasionally surprises you.
+
+**The mitigation is a second number, not a softer first one.** The hero also carries a
+lifetime **days played** total that never resets, and the two ship side by side. The
+streak stays honest and sharp — brutal, legible, what a daily game is — while the total
+means a long-time player never actually loses their history to one bad Tuesday. Two
+numbers, one of which can never hurt you.
+
+Both are Daily-only fields on the hero, written on the same submit path, and neither
+one is ever an input to anything: like shards, they are outputs.
 
 ### The Devvit Redis rule
 
@@ -825,7 +861,7 @@ a coincidence. The design should commit to what it is trying to move:
 | Is the shaft tuned? | Distribution of depths reached — a healthy Daily has a **spread**, not a spike at 12 or at 3 |
 | Is the loadout a real decision? | Variance in bar composition across the top of the board |
 | Does the Endless retain? | Runs per player per week, and how deep records move over a month |
-| Is the fork working? | **Ratio of surfaces to deaths.** All surfaces = no tension. All deaths = the haul is too punishing. |
+| Is the fork working? | **Ratio of surfaces to deaths — target 60/40 surfacing.** All surfaces = no tension. All deaths = the haul is too punishing. It is Stage 6's probe gate; see § The Stage 6 gate. |
 | Does the community bond? | Share of active players contributing metres in a week |
 | Is onboarding working? | Drop-off between first Daily and first Endless run |
 
