@@ -123,7 +123,10 @@ function need<T extends Element>(selector: string): T {
 }
 
 /** Which screen is up, asked of the DOM rather than tracked — the client re-derives
- *  itself from the sim on every render, so there is no state here worth trusting. */
+ *  itself from the sim on every render, so there is no state here worth trusting.
+ *
+ *  Order matters: the fork and the receipt are checked before `combat`, because the
+ *  Endless leg walks through both and the fork carries no `[data-action="end"]`. */
 function currentScreen(): string {
   const root = app();
   const has = (s: string): boolean => !!root.querySelector(s);
@@ -131,6 +134,9 @@ function currentScreen(): string {
   if (has('[data-action="pick-ult"]')) return 'loadout';
   if (has('[data-action="skip-descent"]')) return 'descent';
   if (has('[data-action="confirm-boon"]')) return 'boon';
+  if (has('[data-action="fork-descend"]')) return 'fork';
+  if (has('[data-action="endless-resume"]')) return 'resume';
+  if (has('.deathwrap')) return 'receipt';
   if (has('[data-action="end"]')) return 'combat';
   return 'result';
 }
@@ -252,7 +258,10 @@ export function measure(at: string, escaped: string[] = []): ScreenReport {
       }
     }
   });
-  const primary = app().querySelector('.btn.go, [data-action="end"]');
+  // The fork has neither a `.go` nor an End turn — its two arms are `cool` and
+  // `danger` — and "the primary action is above the fold" is exactly the question
+  // screen 13 needs answered, since it is the one screen that is nothing but a choice.
+  const primary = app().querySelector('.btn.go, .btn.danger, .btn.cool, [data-action="end"]');
   const shell = document.querySelector('.app');
   return {
     at, real, occluded, unmeasurable, escaped,
@@ -291,6 +300,124 @@ function campWorstCase(): ScreenReport {
     headOverflow, shardsInsideHead: inside,
     nameEllipsised: name.scrollWidth > name.clientWidth,
   };
+}
+
+/**
+ * Measure a screen, and **fail if it is not the screen that was asked for.**
+ *
+ * The first version of the Endless leg tapped CAMP from the loadout — which has no way
+ * back to the camp, because it has no depth and therefore no rail — so it never left,
+ * and the gate cheerfully reported a "resume prompt" that was the loadout wearing a
+ * label. A gate that names a screen it did not reach is worse than one that skips it:
+ * it says the screen passed.
+ *
+ * `escaped` is the right channel for this because it is never allowlistable.
+ */
+function measureAt(expected: string, label: string): ScreenReport {
+  const at = currentScreen();
+  const escaped = at === expected
+    ? []
+    : [`the gate expected the ${expected} screen and the app was on ${at}`];
+  return measure(label, escaped);
+}
+
+/** Cast everything castable, then end the turn. Stronger than the daily leg's
+ *  every-other-tap play on purpose: the Endless leg has to CLEAR a depth to reach a
+ *  fork, and a screen the gate cannot get to is a screen the gate does not check. */
+function playGreedyTurn(): void {
+  for (let guard = 0; guard < 8; guard++) {
+    const castable = document.querySelector<HTMLElement>(
+      '[data-action="cast"]:not([disabled]):not(.dis)',
+    );
+    if (!castable) break;
+    castable.click();
+  }
+  tap('[data-action="end"]');
+}
+
+/**
+ * Screens 13 and 14 — the fork, the deep descent, and both faces of the receipt.
+ *
+ * With no server behind the preview the run is OFFLINE: real, playable, unsaved and
+ * unbanked, and it says so on every screen it owns. That fallback is what makes this
+ * leg possible at all, and it is why the mode ships with one.
+ *
+ * Two runs, because the receipt has two faces and only one of them is the screen the
+ * design says decides whether players stay: the first surfaces at the second fork, the
+ * second descends at every fork until the dark takes it.
+ */
+async function endlessLeg(screens: ScreenReport[]): Promise<void> {
+  tap('[data-action="enter-endless"]');
+  await wait(700);
+  screens.push(measureAt('loadout', 'endless loadout'));
+  takeBarAndDescend();
+  await wait(700);
+
+  // Leg 1 surfaces at the first fork; leg 2 refuses every fork until the dark takes it.
+  let banking = true;
+  let sawFork = false;
+  let sawDeep = false;
+  for (let step = 0; step < 900; step++) {
+    const at = currentScreen();
+    if (at === 'receipt') {
+      await wait(700);
+      screens.push(measureAt('receipt',
+        banking ? 'endless receipt (surfaced)' : 'endless receipt (death)'));
+      if (!banking) break;
+      banking = false;
+      tap('[data-action="endless-again"]');
+      await wait(900);
+      takeBarAndDescend();
+      await wait(700);
+      continue;
+    }
+    if (at === 'fork') {
+      if (!sawFork) {
+        sawFork = true;
+        await wait(700);
+        screens.push(measureAt('fork', 'fork'));
+        // Out to the camp and back in. **From the FORK, not from the loadout** — the
+        // loadout stands on the surface palette with no depth, so it carries no rail
+        // and no way back, which is how the first version of this measured the loadout
+        // and called it the resume prompt. A run in progress always meets the prompt,
+        // and it is the screen that states "abandoning is a death".
+        tap('[data-action="camp"]');
+        await wait(500);
+        tap('[data-action="enter-endless"]');
+        await wait(500);
+        screens.push(measureAt('resume', 'resume prompt'));
+        tap('[data-action="endless-resume"]');
+        await wait(500);
+      }
+      tap(banking ? '[data-action="surface"]' : '[data-action="fork-descend"]');
+      await wait(400);
+    } else if (at === 'descent') {
+      // A descent past depth 1 is the one that reads "DEPTH n" with no floor to count
+      // toward — the copy the Endless needed its own form of.
+      if (!sawDeep && sawFork) {
+        sawDeep = true;
+        await wait(700);
+        screens.push(measureAt('descent', 'endless descent'));
+      }
+      tap('[data-action="skip-descent"]');
+    } else if (at === 'boon') {
+      tap('[data-action="pick-boon"][data-index="0"]');
+      tap('[data-action="confirm-boon"]');
+    } else if (at === 'combat') playGreedyTurn();
+    else break;
+    await wait(60);
+  }
+  tap('[data-action="camp"]');
+  await wait(600);
+  screens.push(measureAt('camp', 'camp (endless door open)'));
+}
+
+/** The three-slot bar this leg always takes. Its own function because a second run
+ *  starts from the same loadout screen and has to make the same choices. */
+function takeBarAndDescend(): void {
+  for (const i of [0, 1, 2]) tap(`[data-action="pick"][data-index="${i}"]`);
+  tap('[data-action="pick-ult"][data-index="0"]');
+  tap('[data-action="descend"]');
 }
 
 /** Play a whole daily, sampling every screen once, after its entrance settles. */
@@ -343,6 +470,8 @@ export async function run(): Promise<GateResult> {
     ...measure('camp (after the run)'),
     shardsText: document.querySelector('.shards')?.textContent?.trim() ?? 'MISSING',
   });
+
+  await endlessLeg(screens);
 
   const failed = screens.filter(
     (s) => s.real.length || s.under9.length || s.hOverflow > 0 || s.escaped.length,

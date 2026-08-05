@@ -5,11 +5,17 @@ import type { Context } from './context';
 import { context, reddit } from '@devvit/web/server';
 import { dayKey, seedForDay, MAX_RUN_CHOICES, TUNING } from '../shared/sim';
 import { submitRun, getBoard, getRun, hasSubmitted, isSubmittableDay } from './core/run';
-import { redisHeroClient, redisRateLimitClient, redisRunStore } from './core/runStore';
+import {
+  redisEndlessDedupeClient, redisHeroClient, redisRateLimitClient, redisRunStore,
+} from './core/runStore';
 import { readDayStats } from './core/stats';
 import { postRunComment } from './core/comment';
 import { bankRunShards, readShardTotal } from './core/hero';
 import { consumeRateLimit, RATE_LIMITS } from './core/rateLimit';
+import {
+  MAX_ENDLESS_CHOICES, MAX_RUN_ID_LENGTH, newRunSeed, readEndlessState, settleEndlessRun,
+  startEndlessRun, stepEndlessRun,
+} from './core/endless';
 
 /**
  * Initialization of tRPC backend
@@ -61,6 +67,21 @@ const submitInput = z.object({
 });
 
 /**
+ * What an Endless client is allowed to say. **Note what is not in it: the kit, the
+ * score, the depth and — after `start` — the seed's origin.** The kit is derived
+ * server-side from the stored run, the seed is generated at start and merely echoed
+ * here so the server can CHECK it, and every number comes back out of a replay.
+ *
+ * `runId` reaches a Redis key, so it is bounded and alphabet-checked rather than
+ * trusted; the client stamps it so a retried settle can replay its own award.
+ */
+const endlessSubmission = z.object({
+  runId: z.string().min(1).max(MAX_RUN_ID_LENGTH).regex(/^[A-Za-z0-9_-]+$/),
+  seed: z.number().int().min(0).max(0xffff_ffff),
+  choices: z.array(runChoiceSchema).min(1).max(MAX_ENDLESS_CHOICES),
+});
+
+/**
  * The delver's key is `context.userId` — the Reddit account's `t2`, never the
  * username. A username can change; a hero cannot follow it without a migration nobody
  * would notice was needed until somebody's shards vanished. The board still ranks by
@@ -68,6 +89,21 @@ const submitInput = z.object({
  */
 function currentUserId(): string | undefined {
   return context.userId;
+}
+
+/** Every Endless route is rate-limited and account-keyed, so the three of them share
+ *  one door. Resolves to the user id, or the refusal to hand straight back. */
+async function endlessCaller(
+  nowMs: number,
+): Promise<{ ok: true; userId: string } | { ok: false; error: string }> {
+  const userId = currentUserId();
+  if (!userId) return { ok: false, error: 'You must be logged in to delve.' };
+  const allowed = await consumeRateLimit(
+    redisRateLimitClient, 'endless', userId,
+    RATE_LIMITS.endless.limit, RATE_LIMITS.endless.windowSeconds, nowMs,
+  );
+  if (!allowed) return { ok: false, error: 'Too many attempts — give it a moment.' };
+  return { ok: true, userId };
 }
 
 export const appRouter = t.router({
@@ -185,6 +221,56 @@ export const appRouter = t.router({
           Date.now(),
         );
       }),
+  }),
+
+  // ---- the Endless (Stage 6a) ----------------------------------------------------
+  //
+  // Four routes and one shape: `{runId, seed, choices}` up, everything else down. The
+  // kit travels downward only — `core/endless.ts` derives it from the stored run, so
+  // there is no parameter here through which gear, a kit or a score could be supplied.
+  endless: t.router({
+    /** What the camp shows: the run to resume, the depth record, the shard total.
+     *  A pure read — asking whether there is a run to come back to must not create a
+     *  hero for somebody who has never delved. */
+    state: publicProcedure.query(async () => {
+      const userId = currentUserId();
+      if (!userId) return { run: null, best: 0, shards: 0 };
+      return await readEndlessState(redisHeroClient, userId, Date.now());
+    }),
+
+    /** Open a shaft. **The seed is generated HERE**, never sent. Starting a second run
+     *  abandons the first, and abandoning is a death (owner answer 3). */
+    start: publicProcedure
+      .input(z.object({
+        runId: z.string().min(1).max(MAX_RUN_ID_LENGTH).regex(/^[A-Za-z0-9_-]+$/),
+      }))
+      .mutation(async ({ input }) => {
+        const now = Date.now();
+        const caller = await endlessCaller(now);
+        if (!caller.ok) return { ok: false as const, error: caller.error };
+        return await startEndlessRun(
+          redisHeroClient, caller.userId, input.runId, newRunSeed(), now,
+        );
+      }),
+
+    /** Save the run at a checkpoint — the loadout, or a fork answered with `descend`.
+     *  This is the whole of "the haul is only ever lost to a decision". */
+    step: publicProcedure.input(endlessSubmission).mutation(async ({ input }) => {
+      const now = Date.now();
+      const caller = await endlessCaller(now);
+      if (!caller.ok) return { ok: false as const, error: caller.error };
+      return await stepEndlessRun(redisHeroClient, caller.userId, now, input);
+    }),
+
+    /** End it. Surfacing banks the haul; dying burns it and keeps the record. */
+    settle: publicProcedure.input(endlessSubmission).mutation(async ({ input }) => {
+      const now = Date.now();
+      const caller = await endlessCaller(now);
+      if (!caller.ok) return { ok: false as const, error: caller.error };
+      return await settleEndlessRun(
+        redisHeroClient, redisEndlessDedupeClient, caller.userId, now, input,
+      );
+    }),
   }),
 
   board: t.router({

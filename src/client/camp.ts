@@ -17,6 +17,7 @@
 import { ABILITIES } from '../shared/abilities';
 import { TUNING, type LoadoutView } from '../shared/sim';
 import { abilityClass, abilityGlyph, HERO_ART } from './art';
+import type { EndlessDoor } from './endless';
 import { escapeHtml, fillPercent, inShell } from './shell';
 
 /** How the Daily door reads right now. */
@@ -38,6 +39,8 @@ export interface CampInfo {
    *  traffic first (`ECONOMY.md` § Balance posture). 0 under `npm run preview`, where
    *  there is no account behind the screen. */
   shards: number;
+  /** The Endless door's state: a run to resume, its unbanked haul, the depth record. */
+  endless: EndlessDoor;
 }
 
 /** The reset hour is a copy problem and the design says so: 00:00 UTC is 8pm Eastern,
@@ -69,17 +72,38 @@ function dailyDoor(info: CampInfo): string {
     + `${fillPercent(info.cleared, TUNING.depths)}%"></div></div></div></div>`;
 }
 
-/** Endless and Community are drawn LOCKED rather than omitted. The whole reason the
- *  camp is the landing screen is that a player who only ever sees a combat screen
- *  reads the product as a four-minute puzzle and never learns the rest exists — so
- *  the doors have to be visible before they open. Disabled is not invisible: each one
- *  desaturates, hatches, and keeps its text at readable contrast. */
+/**
+ * The Endless door, open from Stage 6a.
+ *
+ * **It says "issued kit" and not "your gear", because at 6a that is the truth** — gear
+ * and classes are 6b, and a door promising a build the mode does not have yet is the
+ * one lie the camp cannot afford: this is the screen that tells a player what the game
+ * is. The copy changes when the thing it describes does.
+ *
+ * A run in progress leads with the haul, because the haul is what makes coming back
+ * urgent — and because it is what abandoning would cost.
+ */
+function endlessDoorTile(door: EndlessDoor): string {
+  const badge = door.running
+    ? `D${door.depth} &middot; ${door.haul}`
+    : door.best > 0 ? `BEST D${door.best}` : 'NOT RUN';
+  const line = door.running
+    ? `You are <b>${door.depth} deep</b> with <b>${door.haul} shards</b> unbanked. `
+      + '&rsaquo; RESUME'
+    : 'No floor. <b>Issued kit for now &mdash; gear is next.</b> Shards bank only when '
+      + 'you surface. &rsaquo; DESCEND';
+  return '<div class="door endless" data-action="enter-endless">'
+    + `<div class="badge">${badge}</div><div class="dt">THE ENDLESS DELVE</div>`
+    + `<div class="dd">${line}</div></div>`;
+}
+
+/** Community is still drawn LOCKED rather than omitted. The whole reason the camp is
+ *  the landing screen is that a player who only ever sees a combat screen reads the
+ *  product as a four-minute puzzle and never learns the rest exists — so a door has to
+ *  be visible before it opens. Disabled is not invisible: it desaturates, hatches, and
+ *  keeps its text at readable contrast. */
 function lockedDoors(): string {
-  return '<div class="door endless locked"><div class="badge">LOCKED</div>'
-    + '<div class="dt">THE ENDLESS DELVE</div>'
-    + '<div class="dd">No floor. <b>Your gear, your build.</b> Bank shards by surfacing '
-    + '&mdash; or keep going. Not open yet.</div></div>'
-    + '<div class="door community locked"><div class="badge">LOCKED</div>'
+  return '<div class="door community locked"><div class="badge">LOCKED</div>'
     + '<div class="dt">THE COMMUNITY DELVE</div>'
     + '<div class="dd">Every depth anyone reaches digs the sub one metre deeper. '
     + 'Not open yet.</div></div>';
@@ -102,7 +126,8 @@ export function campScreen(info: CampInfo): string {
     + `<div class="chnext">${untilNextDelve(info.msToReset)}</div></div>`
     + `<div class="shards"><div class="v">${shardCount(info.shards)}</div>`
     + '<div class="k">SHARDS</div></div></div>'
-    + `<div class="doors">${dailyDoor(info)}${lockedDoors()}</div>`
+    + `<div class="doors">${dailyDoor(info)}${endlessDoorTile(info.endless)}`
+    + `${lockedDoors()}</div>`
     + '<div class="grow"></div>'
     // HOW TO PLAY is how the five beats stay reachable forever. They are offered once
     // on a first session and then live here — a tutorial you can only ever see by

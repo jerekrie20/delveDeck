@@ -37,6 +37,10 @@ import {
 } from '../shared/sim';
 import { campScreen, loadoutScreen, type DailyState } from './camp';
 import { combatScreen } from './combat';
+import {
+  applyEndlessChoice, endlessAction, endlessActive, endlessDoor, endlessScreen,
+  endlessShardTotal, leaveEndless, loadEndless,
+} from './endless';
 import { boonScreen, descentScreen } from './interlude';
 import { mountScreen } from './mount';
 import { replayTransport } from './replay';
@@ -97,6 +101,10 @@ let tutorialRead = false;
 function applyChoice(choice: RunChoice): void {
   if (replayChoices) return;
   if (tutorialChoices) { applyTutorialChoice(choice); return; }
+  // The Endless keeps its own list, its own seed and its own kit — `endless.ts` owns
+  // all three. Routing here rather than at each button is what lets the loadout, the
+  // ability bar and the boon be one screen apiece across both modes.
+  if (endlessActive()) { applyEndlessChoice(choice, render); return; }
   const attempted = [...choices, choice];
   if (simulateRun(seed, attempted).outcome === 'invalid') return;
   choices = attempted;
@@ -290,8 +298,10 @@ function screenFor(result: RunResult): string {
       // From the SERVER's hero, never from the run in hand. `result.shards` is what
       // this run would pay if it were banked; the camp shows what has been. They differ
       // for the whole length of a run, and showing the wrong one would mean a total
-      // that counts up mid-delve and then snaps back on submit.
-      shards: session.init?.shards ?? 0,
+      // that counts up mid-delve and then snaps back on submit. The Endless reads the
+      // same hero and moves the same total, so its number wins once it has one.
+      shards: endlessShardTotal() ?? session.init?.shards ?? 0,
+      endless: endlessDoor(),
     });
   }
   if (descentDepth !== null) {
@@ -328,6 +338,14 @@ function render(): void {
     if (coached !== null) { mountScreen(app!, coached); return; }
     tutorialChoices = null;
   }
+  if (endlessActive()) {
+    // The pending selections stay HERE — they are not facts about a run, they belong to
+    // whichever screen is asking, and both modes ask the same two screens.
+    mountScreen(app!, endlessScreen({
+      bar: pendingBar, ultimate: pendingUltimate, boon: pendingBoon,
+    }));
+    return;
+  }
   mountScreen(app!, screenFor(simulateRun(seed, choices)));
 }
 
@@ -346,9 +364,12 @@ function commitBoon(): void {
   applyChoice(choice);
 }
 
+/** Leaving the Endless PARKS it — the run is on the server and the door will say
+ *  RESUME. Only START OVER abandons, and only after saying that abandoning is a death. */
 function goToCamp(): void {
   if (replayChoices) leaveReplay();
   tutorialChoices = null;
+  leaveEndless();
   screen = 'camp';
   endDescent();
 }
@@ -399,6 +420,16 @@ app.addEventListener('click', (event) => {
   const action = found.dataset['action']!;
   const index = Number(found.dataset['index'] ?? 0);
 
+  // Opening, resuming or restarting an Endless run puts a DIFFERENT day's pool on the
+  // loadout screen, so the selections made against the old one cannot survive it.
+  if (action === 'enter-endless' || action.startsWith('endless-')) {
+    pendingBar = [];
+    pendingUltimate = 0;
+    pendingBoon = null;
+  }
+  // Before `runAction`, because the two modes share `skip-descent` and the Endless
+  // drives its own descent overlay off its own run.
+  if (endlessAction(action, session.init?.day ?? localDay, render)) return;
   if (runAction(action, index)) return;
   if (replayAction(action, index, found)) return;
   if (shareAction(action, shareTextForOwnRun, render)) return;
@@ -450,6 +481,10 @@ async function boot(): Promise<void> {
 
   const init = await loadInit();
   if (init) seed = init.seed;
+  // Read the Endless state at boot so the camp's door is right on the FIRST frame —
+  // "there is a run waiting for you" arriving a beat late reads as a glitch, and this
+  // is the landing screen. A failure here is an offline session, never an error.
+  await loadEndless();
 
   // Already played today: this may be a fresh page load (Reddit reopened the post)
   // rather than the session that submitted, so `choices` starts empty and would

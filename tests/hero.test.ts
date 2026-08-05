@@ -19,12 +19,16 @@ import { assert, check, describe } from './helpers';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  migrateStoredHero, newStoredHero, STORED_HERO_VERSION, type StoredHero,
+  migrateStoredHero, newStoredHero, STORED_HERO_VERSION,
+  type StoredEndlessRun, type StoredHero,
 } from '../src/server/core/heroSchema';
 import {
   HeroConflictError, heroKey, readHero, updateHero,
 } from '../src/server/core/heroStore';
-import { bankRunShards, bankShards, readShardTotal } from '../src/server/core/hero';
+import {
+  bankRunShards, bankShards, beginEndlessRun, endEndlessRun, readShardTotal,
+  saveEndlessProgress,
+} from '../src/server/core/hero';
 import { consumeRateLimit, RATE_LIMITS } from '../src/server/core/rateLimit';
 import { FakeRedis } from './fakes/redis';
 import { simulateRun, seedForDay } from '../src/shared/sim';
@@ -36,16 +40,18 @@ const USER = 't2_abc123';
 
 // ---- the shape ------------------------------------------------------------------
 
-await check('v1 ships EVERY key the design calls for, even where it is empty', () => {
+await check('a fresh hero ships EVERY key the design calls for, even where it is empty', () => {
   // Adding a key later is a migration; shipping an empty one is free. The keys are
   // named literally rather than derived from the object, because deriving them from
-  // the thing under test would assert nothing at all.
+  // the thing under test would assert nothing at all. `run` joined the list at v2,
+  // when there was finally a run to put in it.
   const hero = newStoredHero(NOW);
-  for (const key of ['records', 'unlocked', 'deeds', 'talents', 'codex', 'camp']) {
-    assert.ok(key in hero, `v1 is missing the empty key '${key}' — adding it later is a migration`);
+  for (const key of ['records', 'unlocked', 'deeds', 'talents', 'codex', 'camp', 'run']) {
+    assert.ok(key in hero, `the empty key '${key}' is missing — adding it later is a migration`);
   }
   assert.equal(hero.v, STORED_HERO_VERSION);
-  assert.equal(hero.shards, 0, 'the only meaningful field at v1 starts at zero');
+  assert.equal(hero.shards, 0, 'the currency starts at zero');
+  assert.equal(hero.run, null, 'and nobody is mid-delve on a brand-new delver');
 });
 
 await check('there is NO name field, and that is a decision', () => {
@@ -133,6 +139,35 @@ await check('a non-numeric shard total migrates to 0 rather than to NaN', () => 
   assert.equal(migrateStoredHero({ shards: Number.NaN }, NOW).shards, 0);
 });
 
+await check('MIGRATION FIXTURE — a v1 hero gains `run: null` and loses nothing', () => {
+  // Stage 6a's step, from a fixture rather than a round-trip. **A v1 hero has never
+  // held a run, so `null` is not a guess** — that is why this migration is one line and
+  // cannot be wrong: it names a key whose only possible historical value is "there
+  // wasn't one".
+  const fixture: Record<string, unknown> = {
+    v: 1, shards: 900, records: { endlessBest: 4 }, unlocked: ['a'], deeds: [],
+    talents: {}, codex: {}, camp: {}, createdAt: 1, updatedAt: 2,
+  };
+
+  const hero = migrateStoredHero(fixture, NOW);
+
+  assert.equal(hero.v, STORED_HERO_VERSION);
+  assert.equal(hero.run, null, 'v2 adds the in-progress Endless run, empty');
+  assert.equal(hero.shards, 900, 'and takes nothing away on the way past');
+  assert.equal(hero.records['endlessBest'], 4);
+  assert.deepEqual(hero.unlocked, ['a']);
+  assert.equal(hero.createdAt, 1, 'an existing timestamp is not restamped');
+});
+
+await check('a run that is already on a blob is never back-filled over', () => {
+  // Back-filling means filling what is MISSING. A writer that put a run there was
+  // writing something this reader has no business second-guessing — the same rule that
+  // keeps an unknown field alive, applied to a known one.
+  const run = { version: 1, runId: 'r', seed: 5, choices: [], startedAt: 1, updatedAt: 1 };
+  const migrated = migrateStoredHero({ v: 1, shards: 0, run }, NOW);
+  assert.deepEqual(migrated.run, run);
+});
+
 await check('the migration table has NO GAPS up to the current version', () => {
   // This is what makes `migrateStoredHero`'s missing-step `break` unreachable rather
   // than merely untested — and it is the check that fails the day somebody bumps
@@ -169,6 +204,59 @@ await check('bankShards refuses a negative or non-finite amount', () => {
     assert.equal(bankShards(bad)(hero), 100, `${bad} must not move the total`);
   }
 });
+
+await check('THE ENDLESS MUTATORS ARE PURE TOO — a replay never pays twice', () => {
+  // Stage 6a put three more mutators through the same loop, and the contract does not
+  // get weaker because the thing being written is bigger. `endEndlessRun` is the one
+  // that would hurt: it moves a currency AND clears the run, so a mutator carrying its
+  // own state would either double-bank or lose a haul on a conflict replay.
+  const mutate = endEndlessRun('run-1', 40, 6);
+  const a = newStoredHero(NOW);
+  const b = newStoredHero(NOW);
+  a.run = storedRunFixture('run-1');
+  b.run = storedRunFixture('run-1');
+  b.shards = 1000;
+  b.records['endlessBest'] = 9;
+
+  assert.equal(mutate(a)?.shardTotal, 40);
+  assert.equal(mutate(a)?.shardTotal, undefined, 'the run is gone, so a second call awards nothing');
+  assert.equal(mutate(b)?.shardTotal, 1040, 'and nothing carried over from the first hero');
+  assert.equal(mutate(b)?.best, undefined);
+  assert.equal(a.shards, 40, 'the first hero was not touched again');
+  assert.equal(b.records['endlessBest'], 9, 'a shallower run never lowers the record');
+});
+
+await check('beginEndlessRun keeps the abandoned run’s record and banks nothing', () => {
+  const hero = newStoredHero(NOW);
+  hero.run = storedRunFixture('old');
+  const fresh = storedRunFixture('new');
+
+  const abandoned = beginEndlessRun(fresh, () => 11)(hero);
+
+  assert.equal(abandoned, 11);
+  assert.equal(hero.run.runId, 'new', 'one run at a time');
+  assert.equal(hero.shards, 0, 'abandoning is a DEATH — it banks nothing');
+  assert.equal(hero.records['endlessBest'], 11, 'and it keeps the depth record');
+});
+
+await check('saveEndlessProgress refuses a rewind even inside the transaction', () => {
+  // `core/endless.ts` already checked this against the blob it read; a compare-and-set
+  // conflict replays the mutator against a FRESHER one, and the fresher one may have
+  // gone further. Refusing here is what stops the retry writing the shorter list.
+  const hero = newStoredHero(NOW);
+  hero.run = { ...storedRunFixture('run-1'), choices: [{ k: 'end' }, { k: 'end' }] };
+
+  const short = saveEndlessProgress({ runId: 'run-1', seed: 5, choices: [{ k: 'end' }] }, NOW);
+  assert.equal(short(hero), false, 'a shorter list must not overwrite a longer one');
+  assert.equal(hero.run.choices.length, 2);
+
+  const other = saveEndlessProgress({ runId: 'nope', seed: 5, choices: [] }, NOW);
+  assert.equal(other(hero), false, 'and neither must a different run');
+});
+
+function storedRunFixture(runId: string): StoredEndlessRun {
+  return { version: 1, runId, seed: 5, choices: [], startedAt: NOW, updatedAt: NOW };
+}
 
 // ---- the CAS loop ----------------------------------------------------------------
 

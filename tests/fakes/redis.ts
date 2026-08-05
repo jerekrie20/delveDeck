@@ -43,6 +43,11 @@ export class FakeRedis {
   /** Every `expire()` call, recorded so a test can assert the TTL was set. */
   expireCalls: { key: string; seconds: number }[] = [];
 
+  /** Expirations passed to `set`. Recorded rather than enforced — nothing here has a
+   *  clock, and a key that vanished mid-test would be a source of flake rather than a
+   *  source of truth. A test that cares asserts on this. */
+  setExpirations = new Map<string, Date>();
+
   /** Test hook: runs at the START of every `exec()`, before the conflict check.
    *  Inject a competing write here to force a CAS retry deterministically, rather than
    *  hoping for a race that a single-threaded test can never actually have. */
@@ -63,8 +68,15 @@ export class FakeRedis {
     return this.strings.get(key);
   }
 
-  async set(key: string, value: string, options?: { nx?: boolean }): Promise<string> {
+  /** Both option shapes Devvit's own `set` takes, because both are used against it:
+   *  `nx` by the one-run-per-day claim and `expiration` by the settled-run summaries. */
+  async set(
+    key: string,
+    value: string,
+    options?: { nx?: boolean; expiration?: Date },
+  ): Promise<string> {
     if (options?.nx && this.strings.has(key)) return '';
+    if (options?.expiration) this.setExpirations.set(key, options.expiration);
     this.strings.set(key, value);
     this.bump(key);
     return 'OK';

@@ -38,6 +38,12 @@ export interface RateLimitRedisLike {
 export const RATE_LIMITS = {
   submit: { limit: 6, windowSeconds: 60 },
   comment: { limit: 6, windowSeconds: 60 },
+  /** The Endless, which is the opposite shape: unlimited attempts, and a checkpoint
+   *  every time a depth is answered. A fast run clears a depth in well under a minute
+   *  and a player who reloads a few times pays for those too, so this is sized to a
+   *  rate no human sustains rather than to a count anyone reaches — and every call
+   *  behind it replays the whole run, which is why there is a limit at all. */
+  endless: { limit: 30, windowSeconds: 60 },
 } as const;
 
 const rateLimitKey = (bucket: string, userId: string, window: number): string =>

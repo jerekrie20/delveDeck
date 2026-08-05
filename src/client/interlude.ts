@@ -77,9 +77,21 @@ function sharedSeedLine(depth: number, stats: DayStats | null): string | null {
  * it. And killing something should not instantly teleport you somewhere worse; the
  * beat between is where a delve gets to feel like a descent rather than a queue.
  */
-export function descentScreen(seed: number, depth: number, stats: DayStats | null): string {
+export function descentScreen(
+  seed: number,
+  depth: number,
+  stats: DayStats | null,
+  // The Endless has no floor and no shared seed, so the two lines that count toward one
+  // stop being true past twelve. It is a parameter rather than a `depth > TUNING.depths`
+  // test because at 6b a modifier could put an Endless run inside the Daily's range, and
+  // a screen that infers its own mode from a number is a screen that will infer wrong.
+  endless = false,
+): string {
   const stratum = stratumForDepth(depth);
-  const arriving = depth === 1 || depth === 5 || depth === 9;
+  // The depth you first stand in a band. The fourth is the ABYSS, one past the Daily's
+  // floor — the Daily can never reach it, and in the Endless it is the moment the mode
+  // is actually about, so it gets the same lore beat the other three do.
+  const arriving = depth === 1 || depth === 5 || depth === 9 || depth === TUNING.depths + 1;
   const waiting = enemyForDepth(seed, depth);
   const boss = isBossDepth(depth);
   const cleared = depth > 1
@@ -88,17 +100,23 @@ export function descentScreen(seed: number, depth: number, stats: DayStats | nul
   // The stratum's lore line wins on the depth you arrive in a band — it is shown once
   // per run and this is the once. Every other depth takes the community line if the
   // day has enough delvers behind it, and the honest fallback if it does not.
-  const shared = sharedSeedLine(depth, stats);
+  const shared = endless ? null : sharedSeedLine(depth, stats);
+  const floorLine = endless
+    ? 'Nothing below this is measured.'
+    : `<b>${TUNING.depths - depth + 1}</b> between you and the floor.`;
+  // The stratum's lore line belongs to BOTH modes — it is about the rock, not about
+  // the leaderboard. Only the two lines that count toward a floor or a shared seed are
+  // the Endless's to lose.
   const warning = arriving
     ? `<div class="warn">${escapeHtml(ARRIVAL[stratum] ?? '')}</div>`
     : shared
       ? `<div class="warn">${shared}<br>The air is colder here.</div>`
-      : '<div class="warn">The air is colder here. '
-        + `<b>${TUNING.depths - depth + 1}</b> between you and the floor.</div>`;
+      : `<div class="warn">The air is colder here. ${floorLine}</div>`;
   const foot = boss
     ? `&#9760; ${escapeHtml(waiting.name).toUpperCase()} HOLDS THIS FLOOR`
     : `${escapeHtml(waiting.name).toUpperCase()} WAITS BELOW`;
   const label = depth === 1 ? `ENTER ${STRATUM_TITLE[stratum] ?? 'THE SHAFT'}` : 'GO DOWN';
+  const counter = endless ? `DEPTH ${depth}` : `DEPTH ${depth} OF ${TUNING.depths}`;
   const body = '<div class="desc">'
     + fallingWalls()
     + `<div class="mid">${cleared}<div class="lbl">DESCENDING</div>`
@@ -107,7 +125,7 @@ export function descentScreen(seed: number, depth: number, stats: DayStats | nul
     + `<div class="foot${boss ? ' boss' : ''}">${foot}</div>`
     + `<div class="act"><button class="btn ${boss ? 'danger' : 'go'}" `
     + `data-action="skip-descent">${label}`
-    + `<span class="sub">DEPTH ${depth} OF ${TUNING.depths}</span></button></div>`
+    + `<span class="sub">${counter}</span></button></div>`
     + '</div>';
   return inShell({ shell: stratum, depth }, body);
 }

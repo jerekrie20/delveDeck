@@ -8,13 +8,19 @@
 
 import { expect } from 'vitest';
 import { test } from '../test';
-import { redisHeroClient, redisRateLimitClient, redisRunStore } from './runStore';
+import {
+  redisEndlessDedupeClient, redisHeroClient, redisRateLimitClient, redisRunStore,
+} from './runStore';
 import { getBoard, submitRun } from './run';
 import { readDayStats } from './stats';
 import { heroKey, readHero, updateHero } from './heroStore';
 import { bankRunShards, bankShards, readShardTotal } from './hero';
 import { consumeRateLimit } from './rateLimit';
 import { STORED_HERO_VERSION } from './heroSchema';
+import { findSettledRun, recordSettledRun, runDoneKey } from './runDedupe';
+import {
+  readEndlessState, replayEndless, settleEndlessRun, startEndlessRun, stepEndlessRun,
+} from './endless';
 import {
   depthReached, MAX_RUN_CHOICES, seedForDay, simulateRun, TUNING, type RunChoice,
 } from '../../shared/sim';
@@ -294,3 +300,120 @@ test('rate-limit windows rotate by time, so a limit is never permanent', async (
     await consumeRateLimit(redisRateLimitClient, 'submit', user, 1, 60, NOW + 60_000),
   ).toBe(true);
 });
+
+// ---- Stage 6a: the Endless run's Redis calls -------------------------------------
+//
+// Same division of labour as above. `tests/endless.test.ts` drives start / step /
+// settle through the in-memory fake, which proves the rules — the prefix check, the
+// checkpoint shapes, the haul. These prove the WRAPPER: that an in-progress run
+// survives a real round trip through `watch`/`multi`/`exec` as JSON, and that the
+// dedupe summary's `set` with an expiration is spoken correctly.
+//
+// And the same caveat: this mock never produces a WATCH conflict, so the CAS branch
+// under `startEndlessRun` is covered only by the fake. Both layers, always.
+
+const ENDLESS_SEED = 4242;
+
+test('an in-progress Endless run survives a real WATCH / MULTI / EXEC round trip', async () => {
+  const user = 't2_endless_roundtrip';
+
+  const started = await startEndlessRun(redisHeroClient, user, 'run-a', ENDLESS_SEED, NOW);
+  expect(started.ok).toBe(true);
+
+  // Read it back through the client, not off the returned object: the point is that the
+  // run actually committed to Redis, as JSON, on the hero blob.
+  const state = await readEndlessState(redisHeroClient, user, NOW);
+  expect(state.run?.runId).toBe('run-a');
+  expect(state.run?.seed).toBe(ENDLESS_SEED);
+  // The kit came back out of the STORED seed. Nothing sent one up and nothing stored
+  // one — this is `kitForRun` running against a blob that made a full round trip.
+  expect(state.run?.kit.pool).toHaveLength(TUNING.poolSize);
+
+  const raw = await redisRunStore.readRun(heroKey(user));
+  expect(raw).toBeTruthy();
+  expect(JSON.parse(raw ?? '{}').run.seed).toBe(ENDLESS_SEED);
+});
+
+test('a checkpoint is persisted, and a rewind of it is refused', async () => {
+  const user = 't2_endless_checkpoint';
+  await startEndlessRun(redisHeroClient, user, 'run-b', ENDLESS_SEED, NOW);
+  const load: RunChoice[] = [{ k: 'load', bar: [0, 1, 2], ult: 0 }];
+
+  expect((await stepEndlessRun(
+    redisHeroClient, user, NOW, { runId: 'run-b', seed: ENDLESS_SEED, choices: load },
+  )).ok).toBe(true);
+  expect((await readEndlessState(redisHeroClient, user, NOW)).run?.choices).toHaveLength(1);
+
+  // The seed check and the prefix check, against a blob that has been through Redis.
+  const wrongSeed = await stepEndlessRun(
+    redisHeroClient, user, NOW, { runId: 'run-b', seed: ENDLESS_SEED + 1, choices: load },
+  );
+  expect(wrongSeed.ok).toBe(false);
+  const rewind = await stepEndlessRun(
+    redisHeroClient, user, NOW, { runId: 'run-b', seed: ENDLESS_SEED, choices: [] },
+  );
+  expect(rewind.ok).toBe(false);
+});
+
+test('END TO END — surfacing banks onto the same hero the Daily writes', async () => {
+  // The two modes share one blob and one CAS loop, so this is the check that they are
+  // not two accounts wearing one key.
+  const user = 't2_endless_banker';
+  await bankRunShards(redisHeroClient, user, 500, NOW);
+  await startEndlessRun(redisHeroClient, user, 'run-c', ENDLESS_SEED, NOW);
+
+  const choices = playToFirstFork();
+  choices.push({ k: 'surface' });
+
+  const settled = await settleEndlessRun(
+    redisHeroClient, redisEndlessDedupeClient, user, NOW,
+    { runId: 'run-c', seed: ENDLESS_SEED, choices },
+  );
+  expect(settled.ok).toBe(true);
+  if (!settled.ok) return;
+  expect(settled.summary.outcome).toBe('surfaced');
+  expect(await readShardTotal(redisHeroClient, user, NOW)).toBe(500 + settled.summary.banked);
+  expect((await readEndlessState(redisHeroClient, user, NOW)).run).toBeNull();
+});
+
+test('the dedupe summary round-trips, so a retried settle replays its receipt', async () => {
+  // `set` with an `expiration` is the wrapper call here, and it is the one that has to
+  // be spoken correctly — a summary that never lands turns every duplicate back into
+  // "you have no run in progress", which is the bug this key exists to prevent.
+  const user = 't2_endless_dupe';
+  await recordSettledRun(redisEndlessDedupeClient, user, 'run-d', { banked: 70 }, NOW);
+
+  expect(await findSettledRun<{ banked: number }>(redisEndlessDedupeClient, user, 'run-d'))
+    .toEqual({ banked: 70 });
+  expect(await findSettledRun(redisEndlessDedupeClient, user, 'never-run')).toBeNull();
+  expect(await redisRunStore.readRun(runDoneKey(user, 'run-d'))).toContain('70');
+});
+
+/**
+ * Play to the first fork by ASKING THE SIM, never by counting turns.
+ *
+ * Every candidate is trialled and dropped if the run comes back `invalid`, which is the
+ * same door `main.ts` puts every tap through — so this stays a legal line when the
+ * shaft is retuned, and it needs to know nothing about what the day issued.
+ */
+function playToFirstFork(): RunChoice[] {
+  const choices: RunChoice[] = [{ k: 'load', bar: [0, 1, 2], ult: 0 }];
+  const legal = (candidate: RunChoice): boolean => {
+    if (replayEndless({ seed: ENDLESS_SEED }, [...choices, candidate]).outcome === 'invalid') {
+      return false;
+    }
+    choices.push(candidate);
+    return true;
+  };
+  for (let guard = 0; guard < 400; guard++) {
+    const result = replayEndless({ seed: ENDLESS_SEED }, choices);
+    const view = result.view;
+    if (result.outcome !== 'outOfChoices' || !view) break;
+    if (view.phase === 'fork') break;
+    if (view.phase === 'boon') { legal({ k: 'boon', i: 0 }); continue; }
+    if (view.phase !== 'combat') break;
+    if (!legal({ k: 'cast', i: 0 }) && !legal({ k: 'cast', i: 1 })
+      && !legal({ k: 'cast', i: 2 })) legal({ k: 'end' });
+  }
+  return choices;
+}

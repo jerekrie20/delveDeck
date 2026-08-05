@@ -94,7 +94,11 @@ function enemyPlate(view: CombatView): string {
 
 function stage(view: CombatView, focus?: CombatFocus): string {
   const lit = focus?.on === 'threat';
-  const below = Math.max(0, TUNING.depths - view.depth);
+  // The Daily counts down to a floor and the Endless has none, so past twelve this
+  // stops counting rather than printing `0 BELOW` forever. Both readings come off the
+  // view's own depth — there is no mode flag on this screen and there must not be one.
+  const remaining = TUNING.depths - view.depth;
+  const below = remaining > 0 ? `${remaining} BELOW` : remaining === 0 ? 'THE FLOOR' : 'NO FLOOR';
   const tags = [
     ...view.enemyTags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`),
     ...view.enemyStatuses.map(
@@ -105,7 +109,7 @@ function stage(view: CombatView, focus?: CombatFocus): string {
   return `<div class="stage${lit ? ' lit' : ''}">`
     + '<div class="bd"></div><div class="above"></div>' + motes()
     + `<div class="stagetop"><span class="depthtag">DEPTH ${view.depth} &middot; `
-    + `${view.stratum.toUpperCase()}</span><span class="eyebrow">${below} BELOW</span></div>`
+    + `${view.stratum.toUpperCase()}</span><span class="eyebrow">${below}</span></div>`
     + `<div class="foe">${enemyPlate(view)}<div class="fside">`
     + `<div class="fname">${escapeHtml(view.enemyName)}</div>`
     + `<div class="ftags">${tags}</div>`

@@ -14,9 +14,55 @@
 // than any bug a migration was written to fix. This is the first thing in the project
 // that outlives a day — every stage before it could be rewritten; a written key
 // cannot.
+//
+// It imports one type from `src/shared/` and nothing else. That is still pure: a
+// `RunChoice` is the plain data this blob stores, and naming it here rather than
+// widening the field to `unknown[]` is what makes the stored save file typed.
+
+import type { RunChoice } from '../../shared/sim';
 
 /** Current write version. See the header before bumping it. */
-export const STORED_HERO_VERSION = 1;
+export const STORED_HERO_VERSION = 2;
+
+/**
+ * The in-progress Endless run — `PROGRESSION.md`'s `run{ ... }` key, arriving at
+ * Stage 6a because that is the stage with a run to put in it.
+ *
+ * **It is the save file, and it already existed**: a run is `{seed, choices}` and the
+ * server replays exactly that to verify it. Nothing new is invented here.
+ *
+ * Three fields carry rules rather than data:
+ *
+ *  - **`seed` is SERVER-generated at start.** The client echoes it and the server
+ *    checks it against this blob. A client that picks its own seed rerolls the shaft
+ *    until it is nice.
+ *  - **`runId` is client-stamped**, and is the idempotency key for settling — a
+ *    network retry of "I surfaced" must replay its award, never make a second one.
+ *  - **`version` is the CHOICE-FORMAT version**, not the hero's. A run written against
+ *    an older `RunChoice` union does not error when replayed by a newer sim; it
+ *    produces a confidently wrong run. `core/endless.ts` owns that check, and this
+ *    file deliberately does not know what the number means.
+ *
+ * **`cleared`, `shards` and the kit are all absent and that is the rule, not an
+ * omission**: every one of them is derivable from `{seed, choices}`, and a stored copy
+ * of a derived value is a copy that will drift (`PROGRESSION.md` § The hero object).
+ */
+export interface StoredEndlessRun {
+  version: number;
+  runId: string;
+  seed: number;
+  choices: RunChoice[];
+  startedAt: number;
+  /** Last checkpoint. Never an expiry — a run waits indefinitely (owner answer 3);
+   *  this exists so a stale run can be *reported*, never collected. */
+  updatedAt: number;
+}
+
+/** `records` keys, named once so a typo cannot silently create a second record.
+ *  `endlessBest` is the deepest depth ever cleared, and death keeps it. */
+export const RECORD = {
+  endlessBest: 'endlessBest',
+} as const;
 
 /**
  * The per-subreddit delver (Redis `hero:{userId}`).
@@ -32,10 +78,14 @@ export const STORED_HERO_VERSION = 1;
  * answer.
  *
  * Note what is also absent and is NOT an oversight: `class`, `level`, `xp`, `gear`,
- * `stash`, `run`. Those are Endless state whose SHAPE is decided by Stage 6's kit
+ * `stash`. Those are Endless state whose SHAPE is decided by Stage 6b's kit
  * derivation. The "every key from day one" rule is about keys whose shape is settled
  * and whose contents are merely pending; guessing an empty `gear: {}` now would pin a
- * shape before the code that reads it exists. They arrive in the v1 → v2 step.
+ * shape before the code that reads it exists. They arrive in the v2 → v3 step.
+ *
+ * **`run` arrived at v2 and the four above deliberately did not** — that is the same
+ * rule applied twice, not an inconsistency. A run's shape is settled *because 6a
+ * writes one*; a gear slot's is not, because nothing reads gear yet.
  */
 export interface StoredHero {
   /** Schema version this blob was written at. */
@@ -59,6 +109,10 @@ export interface StoredHero {
   codex: Record<string, number>;
   /** Site, fire, placed objects. **Must never affect a number.** */
   camp: Record<string, string>;
+  /** The Endless run in progress, so it survives a closed tab (`MODES.md` § A run
+   *  survives everything except a decision). **One at a time** — starting a second
+   *  abandons this one, and abandoning is a death. */
+  run: StoredEndlessRun | null;
 }
 
 /** A brand-new delver. `nowMs` is injected so this is pure and replay-safe — it is
@@ -75,6 +129,7 @@ export function newStoredHero(nowMs: number): StoredHero {
     talents: {},
     codex: {},
     camp: {},
+    run: null,
   };
 }
 
@@ -107,9 +162,29 @@ const migrateV0toV1: MigrationStep = (blob, nowMs) => {
   return out;
 };
 
+/**
+ * v1 → v2. Stage 6a gave the Endless a run that outlives a tab, so the hero gained
+ * `run` — the only key this step adds.
+ *
+ * **A v1 hero has never held a run, so `null` is not a guess, it is the truth.** That
+ * is the whole reason this migration is one line and can never be wrong: it is not
+ * inferring past state, it is naming a key whose only possible historical value is
+ * "there wasn't one".
+ *
+ * A blob that somehow already carries a `run` keeps it, exactly like any other field —
+ * back-filling means filling what is MISSING, and a v1 writer that wrote one was
+ * writing something this reader should not be second-guessing.
+ */
+const migrateV1toV2: MigrationStep = (blob) => {
+  const out = { ...blob };
+  if (out['run'] === undefined) out['run'] = null;
+  return out;
+};
+
 /** Keyed by the version a step migrates FROM (vN → vN+1). */
 const MIGRATIONS: Record<number, MigrationStep> = {
   0: migrateV0toV1,
+  1: migrateV1toV2,
 };
 
 /**

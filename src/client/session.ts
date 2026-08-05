@@ -19,6 +19,9 @@
 import type { RunChoice } from '../shared/sim';
 import { trpc } from './trpc';
 import type { BoardEntry } from './result';
+import type {
+  EndlessRunHandle, EndlessState, EndlessSubmission, EndlessSummary,
+} from '../server/core/endless';
 
 /** What the whole subreddit did with today's shaft. Rides along with `init` because
  *  the descent screen needs it mid-run and cannot wait for a round trip. */
@@ -144,3 +147,64 @@ export async function loadReplay(
     return null;
   }
 }
+
+// ---- the Endless (Stage 6a) -------------------------------------------------------
+//
+// Four wrappers over four routes, and the direction of travel is the whole point:
+// `{runId, seed, choices}` goes UP, and the kit comes DOWN. There is no parameter here
+// through which a kit, a seed of the client's choosing, or a number could be supplied —
+// the server derives every one of them from the run it stored.
+//
+// Every one of them reports failure through its return value, like the rest of this
+// file — `endless.ts` then falls back to an OFFLINE run, which is the same contract the
+// Daily has under `npm run preview` (CODING_BIBLE §6). An offline run is real and
+// playable and cannot bank, and the screens say so rather than pretending.
+
+/** The camp's read: a run to resume, the depth record, the shard total. */
+export async function loadEndlessState(): Promise<EndlessState | null> {
+  try {
+    return await trpc.endless.state.query();
+  } catch {
+    return null;
+  }
+}
+
+/** Open a shaft. **Starting one abandons any run in progress, and abandoning is a
+ *  death** — the caller must have asked first. */
+export async function startEndless(
+  runId: string,
+): Promise<{ run: EndlessRunHandle; abandoned: number } | { error: string }> {
+  try {
+    const result = await trpc.endless.start.mutate({ runId });
+    return result.ok ? { run: result.run, abandoned: result.abandoned } : { error: result.error };
+  } catch {
+    return { error: 'The shaft could not be opened.' };
+  }
+}
+
+/** Save at a checkpoint. Resolves to an error string, or null when the run is safe. */
+export async function stepEndless(sent: EndlessSubmission): Promise<string | null> {
+  try {
+    const result = await trpc.endless.step.mutate(submission(sent));
+    return result.ok ? null : result.error;
+  } catch {
+    return 'The run could not be saved.';
+  }
+}
+
+/** End it. The summary is the receipt — what burned, what was banked, what was kept. */
+export async function settleEndless(
+  sent: EndlessSubmission,
+): Promise<{ summary: EndlessSummary } | { error: string }> {
+  try {
+    const result = await trpc.endless.settle.mutate(submission(sent));
+    return result.ok ? { summary: result.summary } : { error: result.error };
+  } catch {
+    return { error: 'The run could not be handed in.' };
+  }
+}
+
+/** tRPC's input type wants a mutable array; the run holds a readonly one. */
+const submission = (sent: EndlessSubmission): {
+  runId: string; seed: number; choices: RunChoice[];
+} => ({ runId: sent.runId, seed: sent.seed, choices: [...sent.choices] });

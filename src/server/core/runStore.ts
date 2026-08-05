@@ -15,6 +15,7 @@
 import { redis } from '@devvit/web/server';
 import type { HeroRedisLike } from './heroStore';
 import type { RateLimitRedisLike } from './rateLimit';
+import type { RunDedupeRedisLike } from './runDedupe';
 
 /** A leaderboard member and the score it is ranked by. */
 export interface BoardScore {
@@ -151,5 +152,27 @@ export const redisRateLimitClient: RateLimitRedisLike = {
   },
   async expire(key, seconds) {
     await redis.expire(key, seconds);
+  },
+};
+
+// ---- the Endless seam (Stage 6a) -------------------------------------------------
+
+/** The settled-run summaries, for `core/runDedupe.ts`.
+ *
+ *  **Note what is NOT bound here: the run itself.** An in-progress Endless run lives on
+ *  the hero blob (`PROGRESSION.md`'s `run{ ... }` key), so it is written by the same
+ *  compare-and-set transaction that banks the haul — which is what makes settling
+ *  exactly-once without a second claim. This binding is only the receipt a duplicate
+ *  reads back.
+ *
+ *  `set` is passed through rather than aliased to `claimOnce`: the summary is written
+ *  UNCONDITIONALLY (the transaction above already decided who won), so an NX here would
+ *  be a guard on the wrong thing. */
+export const redisEndlessDedupeClient: RunDedupeRedisLike = {
+  async get(key) {
+    return await redis.get(key);
+  },
+  async set(key, value, options) {
+    return await redis.set(key, value, options);
   },
 };

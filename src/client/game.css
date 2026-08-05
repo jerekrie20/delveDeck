@@ -2114,6 +2114,212 @@ body {
   margin: 0;
 }
 
+/* ═══ the fork + the receipt — screens 13 and 14 ═══════════════════════════════
+ *
+ * Ported from the mockup's `renderFork` / `renderDeath`, with two changes and both are
+ * design overrides recorded in the folder rather than taste:
+ *
+ *  1. **The death screen's "gear is always kept" line is gone.** Gear is unbanked
+ *     exactly like shards and dying holding a legendary means you lost it
+ *     (`MODES.md` § The haul). At 6a there is no gear, and the line must not be here
+ *     waiting to be wrong.
+ *  2. **`.kept` is used twice on the receipt**, because the promise the mode makes is
+ *     *you moved sideways, not backwards* — one line for the record and one for the
+ *     total that a death did not touch. A receipt with only a `.lost` block on it is a
+ *     scold, and this is the screen that decides whether players stay.
+ *
+ * Everything else is the mockup: the option cards with their left accent rail, the
+ * slammed depth number, the struck-through haul. Sizes route through the type scale
+ * (`tests/art.test.ts` fails on a raw one) and every block sits at z12, above the
+ * atmosphere.
+ */
+
+.fork {
+  position: relative;
+  z-index: 12;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+}
+
+.forkhead {
+  text-align: center;
+}
+
+.forkhead .k {
+  font: 400 var(--px-1)/1 var(--px);
+  letter-spacing: 0.32em;
+  color: var(--dim);
+  margin-top: 12px;
+}
+
+/* Transform only, never opacity — a backgrounded tab pins a `backwards`-filled
+   animation at frame one, and this is the number the whole screen is about. */
+.forkhead .d {
+  font: 400 var(--px-score)/1 var(--px);
+  text-shadow: 0 4px 0 #000, 0 0 34px var(--stratum);
+  animation: slam 0.45s cubic-bezier(0.2, 1.7, 0.4, 1);
+}
+
+.forkhead .s {
+  font-size: var(--ui-1);
+  color: var(--ink2);
+  margin-top: 12px;
+  line-height: 1.65;
+}
+
+.forkhead .s b {
+  color: #fff;
+}
+
+.optn {
+  position: relative;
+  overflow: hidden;
+  padding: 12px;
+  cursor: pointer;
+  background: linear-gradient(120deg, #20252f, #141821);
+  box-shadow: inset 0 0 0 1px #000, inset 0 0 0 2px color-mix(in srgb, var(--oc) 55%, #000);
+}
+
+.optn::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--oc);
+  box-shadow: 0 0 16px var(--oc);
+}
+
+.optn .ot {
+  font: 400 var(--px-4)/1 var(--px);
+  color: var(--oc);
+}
+
+.optn .od {
+  font-size: var(--ui-1);
+  color: var(--ink2);
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+.optn .od b {
+  color: #fff;
+}
+
+.optn.safe { --oc: #6bdd92; }
+.optn.risk { --oc: #ff6257; }
+
+/* The gauge is HP, and it is the honest one: the mockup draws an unlabelled 6-of-8
+   risk bar, and a number a screen collects but never names is a number nobody reads.
+   The figure it fills from is printed in the copy directly above it. */
+.riskbar {
+  display: flex;
+  gap: 3px;
+  margin-top: 9px;
+}
+
+.riskbar i {
+  flex: 1;
+  height: 5px;
+  background: #2a303b;
+}
+
+.riskbar i.on {
+  background: var(--atk);
+  box-shadow: 0 0 8px var(--atk-glow);
+}
+
+.deathwrap {
+  position: relative;
+  z-index: 12;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+  gap: 14px;
+}
+
+.deathwrap .big {
+  font: 400 var(--px-8)/1.3 var(--px);
+  color: #ff8b82;
+  text-shadow: 0 3px 0 #000, 0 0 30px var(--atk-glow);
+}
+
+/* The same block, for the run that got out. */
+.deathwrap .big.out {
+  color: #9df0b8;
+  text-shadow: 0 3px 0 #000, 0 0 30px var(--ok-glow);
+}
+
+.lost {
+  padding: 12px;
+  background: linear-gradient(120deg, #2a1416, #140a0b);
+  box-shadow: inset 0 0 0 1px #7d211d;
+}
+
+.lost .v {
+  font: 400 var(--px-score)/1 var(--px);
+  color: #ff8b82;
+  text-decoration: line-through;
+  text-decoration-thickness: 3px;
+}
+
+.lost .k,
+.kept .k {
+  font: 400 var(--px-1)/1 var(--px);
+  letter-spacing: 0.16em;
+  color: var(--dim);
+  margin-top: 9px;
+}
+
+.kept {
+  padding: 12px;
+  background: linear-gradient(120deg, #16261c, #0c1410);
+  box-shadow: inset 0 0 0 1px rgb(107 221 146 / 50%);
+}
+
+.kept .v {
+  font: 400 var(--px-10)/1 var(--px);
+  color: #9df0b8;
+}
+
+.dnote {
+  font-size: var(--ui-1);
+  color: var(--ink2);
+  line-height: 1.6;
+}
+
+.dnote b {
+  color: #fff;
+}
+
+/* The unsaved / offline strip. Amber rather than red: nothing is wrong with the run,
+   it simply is not being written down — and it keeps full readable contrast, because
+   this is the one line that tells a player their haul is not being protected. */
+.unsaved {
+  position: relative;
+  z-index: 12;
+  margin-top: 8px;
+  padding: 8px 10px;
+  font-size: var(--ui-1);
+  line-height: 1.45;
+  color: var(--ink2);
+  background: linear-gradient(120deg, #2a2416, #14110a);
+  box-shadow: inset 0 0 0 1px rgb(255 200 92 / 45%);
+}
+
+/* `.notice` is used inside `.pane` on the loadout screen, where the pane lifts it.
+   Standing on its own it needs the lift itself, or the atmosphere sits on top of it. */
+.app > .notice {
+  position: relative;
+  z-index: 12;
+}
+
 /* ═══ result / share ═══════════════════════════════════════════════════════════ */
 
 .rtop {
