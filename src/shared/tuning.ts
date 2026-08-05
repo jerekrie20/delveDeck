@@ -136,8 +136,13 @@ export const TUNING = {
     /** Budget at depth 0 for a `common`. Everything else is a multiple of it. */
     budgetBase: 10,
     /** How much a depth adds, linearly — so a rare from 40 genuinely beats a rare from
-     *  12, which is the sentence the whole endgame rests on (`GEAR.md`). */
-    budgetPerDepth: 0.06,
+     *  12, which is the sentence the whole endgame rests on (`GEAR.md`).
+     *
+     *  **Cut from 0.06 by the probe**, along with the affix costs: the first draft took
+     *  a geared delver to 90/10 at the fork, which is `GAME_DESIGN.md`'s own description
+     *  of a fork that has stopped being a decision. The curve is what makes a deep drop
+     *  better; it is not what should make a mid-game delver unkillable. */
+    budgetPerDepth: 0.045,
     /** Rarity IS the budget, not a tier bolted on top of one. */
     rarityBudget: { common: 1, uncommon: 1.5, rare: 2.1, epic: 2.9, legendary: 3.8 },
     /** …and it decides the affix count, per `GEAR.md`'s tier table. */

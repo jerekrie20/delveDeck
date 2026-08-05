@@ -151,6 +151,17 @@ cap; eleven slots of gear needs somewhere to live.
 **Not crafting.** No recipes, no materials, no bench. Salvage → reroll → ascend
 delivers the whole "I can improve this" loop with one screen and no new content type.
 
+**Salvage shipped first, alone, at Stage 6b-1 — and that ordering is the point.** It is
+the *faucet*; reroll and ascend are the *sinks*. A sink without a faucet is a price list
+nobody can pay, so the currency's source has to be real before the things it buys are.
+Salvage is priced off the item's own budget, which is what makes a deep common worth
+carrying out rather than leaving where it fell.
+
+**A full stash auto-salvages the overflow rather than refusing the bank.** That is this
+section's rule applied at the one moment it matters: overflow is income, and a bank that
+blocked would strand a haul at exactly the moment the mode promises it is safe. The
+receipt says how many were scrapped and what they paid.
+
 ---
 
 ## What the economy is not

@@ -28,18 +28,26 @@ forward; its combat model does not.
 | **M3** — the art | 25 bespoke images | 8 portraits kept, **1 hero portrait added**, 3 backdrops parked (the stage is a CSS gradient), **14 card illustrations deleted** at Stage 2. |
 | **M3.5** — tutorial | 15 steps, templated copy, separate choice list | **Deleted at Stage 1** with the deck it was written against. **Rebuilt as 5 beats at Stage 3**, on a guarantee that already held: both invariants are a 2,000-seed sweep in `content.test.ts`. |
 
-**202 checks green** after Stage 6a. `tests/`: `sim.test.ts` (30), `content.test.ts`
-(16), `server.test.ts` (30), `art.test.ts` (18), `tutorial.test.ts` (14),
-`share.test.ts` (13), `hero.test.ts` (29), `endless.test.ts` (28), plus 24 in the
-server vitest project.
+**243 checks green** after Stage 6b-1 — 219 tsx + 24 vitest. `tests/`: `sim.test.ts`
+(30), `content.test.ts` (16), `server.test.ts` (30), `art.test.ts` (22),
+`tutorial.test.ts` (14), `share.test.ts` (13), `hero.test.ts`, `endless.test.ts`,
+`endlessRun.test.ts`, `items.test.ts` (23), plus the server vitest project.
 **`npm run test` runs both halves — a tsx pass and a vitest pass — and collapsing it to
 one has already silently skipped an entire suite once.** Plus `npm run test:visual`, a
 fourth command and a real gate.
 
-`endless.test.ts` arrived at Stage 6a and owns **the second mode**: the fork, the
-lantern strain, the haul, and — from 6a — the persisted run. It is its own file because
-it fails when the fork changes and nothing else does, and because the wall keeping all
-of it away from the Daily is the thing most worth a file of its own.
+`items.test.ts` arrived at Stage 6b-1 and owns **the gear model**: the rows, the roll,
+the budget gate and the fold. It is its own file because it fails when an item changes
+and nothing else does — and because the two checks that matter most in it are the two the
+design would quietly lose without them: *a drop is a pure function of `(seed, depth,
+ceiling)`*, and *gear cannot reach the Daily*.
+
+`endless.test.ts` arrived at Stage 6a and owns **the fork**: the decision, its price, the
+lantern strain, and the wall keeping all of it away from the Daily. At 6b-1 it split, and
+`endlessRun.test.ts` took everything BEHIND the fork — the stored run, the prefix rule,
+the resume, the settle, and the item half of the haul. The same rule as always: a change
+to how a run is persisted breaks one file, a change to what one more depth costs breaks
+the other.
 
 `hero.test.ts` arrived at Stage 5 and owns **the first thing that outlives a day**: the
 persisted shape, the migration that reads it back, and the compare-and-set loop. It is
@@ -951,12 +959,12 @@ measurable *before* there is a gear model resting on it.
       the ±10 tolerance.** A ratio needs a POPULATION to mean anything — one fixed
       policy reports whatever it was told to do — so it sweeps seven risk appetites and
       pools them, which is what makes the number belong to the tuning.
-  - [ ] **It is measured shallow, and the probe says so.** Greedy-on-median dies around
-        depth 7 in *both* modes, because it is the same shaft — so today's ratio
-        describes cheap forks with a small haul at stake, and **no run reaches the
-        first lantern strain at depth 16.** Re-read this gate once 6b's gear pushes
-        runs deep enough to pay a real price; the strain depths may want to move, and
-        that is a tuning edit informed by data rather than a guess made now.
+  - [x] **It was measured shallow, the probe said so, and 6b-1 re-read it.** Greedy-on-
+        median dies around depth 7 in *both* modes because it is the same shaft, so the
+        6a ratio described cheap forks with a small haul at stake and **no run reached the
+        first lantern strain at 16.** The probe now sweeps a **second delver wearing a
+        full set**, which does reach past both strains — see § What the probe learned
+        when gear arrived, below.
 
 ### GATE — the fork has to be a decision ▸ **PASSED**
 
@@ -1033,37 +1041,78 @@ choice list at every checkpoint, so the list is both the request body and the CP
 Nothing at 6a comes close (greedy dies around 7). **Re-read it from data once 6b's gear
 pushes runs deep**, along with the lantern strain depths.
 
-## Stage 6b — gear, classes + progression ▸ **once 6a proves the loop is fun**
+> **6b-1 produced that data and it points one way: this is a real cost, not a formality.**
+> The probe's geared sweep had to be capped at 30 because an 80-deep geared run turned a
+> two-minute instrument into a half-hour one — the replay-the-whole-list shape is roughly
+> cubic in the depth reached. The server pays a smaller version of the same bill on every
+> checkpoint of a deep run. **Re-read `MAX_ENDLESS_DEPTH` at 6b-2 against what a geared
+> delver actually reaches**, and remember it is a cap on what can be PERSISTED, not a
+> floor in the shaft.
 
-- [ ] **The haul, complete.** Items found this run are unbanked exactly like shards.
+## Stage 6b — gear, classes + progression
+
+**Split in two, on the seam 6a used and for the same reason.** 6b as written was five
+systems in a trench coat — gear, classes, levels, consumables, a board and a records
+screen — and built in one pass nothing is playable until almost all of it is done. The
+seam is the one the design already has: **the haul does not need classes.** Gear is what
+the haul is *for*, and it can be found, worn, banked, burned and scrapped without a
+single class existing — so the item half of the fork becomes real, and measurable in the
+probe, before a progression curve rests on it.
+
+### Stage 6b-1 — gear ▸ **what the haul is for** ✅
+
+- [x] **The haul, complete.** Items found this run are unbanked exactly like shards.
       Death takes the whole haul — including anything equipped from it mid-run. Equipped
       kit, depth record, XP, story and deeds are **kept**. Overrides the mockup's "gear
       is always kept"; the asymmetry is the fork's whole design.
-- [ ] Death screen (14): the haul struck through, **item by item**
-- [ ] Gear (04): **11 slots** (weapon · offhand · head · body · hands · legs · feet ·
-      2 rings · amulet · **lantern**), plus the relic. Affixes as `kit.mods`,
-      code-drawn rarity plates, **6 rarity tiers** — `epic` and `legendary` need two
-      new colour tokens, which is a two-line CSS change, not an art task.
-  - [ ] **No gear sprites at this stage** (owner answer 7). Gear ships as a code-drawn
+  - [x] `{k:'equip', i}` indexes the **haul**, is legal between depths only, and wearing
+        something does not bank it. Three rules the design was silent on are decided and
+        written into `GEAR.md`: the slot is **derived** not chosen, surfacing banks to
+        the **stash** not the slots, and **max HP moves with a swap while current HP does
+        not** — or armour becomes a heal.
+- [x] Death screen (14): the haul struck through, **item by item**, worn ones included
+- [x] Gear (04): **11 slots** (weapon · offhand · head · body · hands · legs · feet ·
+      2 rings · amulet · **lantern**). Affixes as `kit.mods`, code-drawn rarity plates.
+      **Five rollable tiers and an authored sixth** — `epic` and `legendary` cost the two
+      new colour tokens `GEAR.md` predicted and nothing else; `unique`/`set` is not in the
+      union because the roller cannot produce one, and it joins with the first named row.
+  - [x] **No gear sprites at this stage** (owner answer 7). Gear ships as a code-drawn
         rarity plate, the item name and its affixes — the same degrade path 22 of the
         30 roster rows already take. The ~40 base sprites are **Stage 7**, after the
         gear model has been played; generating them against an unplayed model is how
-        you generate 40 images twice (`ART.md` § When they arrive).
-- [ ] **The lantern is a gear slot, not a shard purchase** — a found object granting
-      foresight, depth of light, warmth and the flame cosmetic
-- [ ] Salvage + reroll + ascend — server-side, deterministic. Without them the stash
-      is a chore instead of a decision.
+        you generate 40 images twice (`ART.md` § When they arrive). A test says so.
+- [x] **The lantern is a gear slot, not a shard purchase** — a found object granting
+      depth of light and warmth. **It never adds a fourth threat slot**, and that is a
+      decision recorded in `GEAR.md`: three is structural and the Daily renders all three
+      free, so what a lantern sells is *how long you keep them*, not more of them.
+- [x] **`kitForRun` fills its seam** — the run stores a gear snapshot taken when it
+      began, and resuming reads that rather than current gear. A test changes the camp
+      loadout mid-run and asserts the resumed kit does not move.
+- [x] **Salvage** — server-side, deterministic, priced off the item's own budget, and the
+      faucet a full stash auto-drains into. **Reroll and ascend are 6b-2**: they are the
+      shard *sinks*, and they belong with the economy rather than with the model.
+- [x] **Depth-record-gated rarity** — `epic` and `legendary` open on the record, not the
+      level. Wider affix bands fall out of the same budget rather than a second gate.
+- [x] `tests/items.test.ts` owns the **gear model**; `tests/endlessRun.test.ts` split off
+      `endless.test.ts` and owns **the run that outlives a tab**, including the item haul.
+
+### Stage 6b-2 — classes, progression and the board ▸ **next**
+
+- [ ] Reroll + ascend — the shard sinks. Salvage landed at 6b-1; without these two the
+      stash is a chore instead of a decision.
 - [ ] Hero level, XP, class — **Endless only**, never reaching `simulateRun`.
       Classes are archetype+school **weights** on `issuedPoolForDay`, plus one numeric
       signature field each — not three separate ability lists.
-- [ ] The hero stores a **spec id**, not an enum position, so evolution tiers stay a
-      data addition
+- [x] The hero stores a **spec id**, not an enum position, so evolution tiers stay a
+      data addition — the key shipped at 6b-1's v3, empty, because its *shape* was
+      settled and only its contents were pending
 - [ ] Consumables: **exactly three** (`ECONOMY.md`) — **Draught** (HP) and **Ember**
       (+1 energy next depth) are `RunChoice` variants used between depths, Endless
       only; **the Ledger mark** (XP) is an award-time multiplier and **never enters the
       choice list**. Mid-fight healing breaks the telegraph maths.
-- [ ] What deepens with depth (`MODES.md`): scaling · **the lantern strains** ·
-      traits arrive and stack · the cast shifts to the abyss + wanderers
+- [ ] What deepens with depth (`MODES.md`): scaling ✅ · **the lantern strains** ✅ (and
+      a lantern now moves where they bite) · **traits arrive and stack** · the cast
+      shifts to the abyss + wanderers
 - [ ] **The Endless board** — weekly, resets with the community shaft; **ranked by
       depth** (owner answer 5, confirmed as specced); the row shows **`u/username`,
       class, level, bar size, ultimate** so it reads as a build-sharing feed rather
@@ -1082,15 +1131,99 @@ pushes runs deep**, along with the lantern strain depths.
       **A missed day resets it to zero** (owner answer 4), and it ships beside a
       lifetime **days played** total that never resets — two numbers, one of which can
       never hurt you (`GAME_DESIGN.md` § Accounts).
-- [ ] **No delver name.** The delver is `u/you` (`IDENTITY.md`) — the hero has no
-      `name` field, there is no naming screen, no filter, no rename, no report flow.
-      The board already renders `u/{username}`.
+- [x] **No delver name.** The delver is `u/you` (`IDENTITY.md`) — the hero has no
+      `name` field through v3, there is no naming screen, no filter, no rename, no report
+      flow. The board already renders `u/{username}`.
 - [ ] **The seven Endless beats** (`GAME_DESIGN.md`) — event-fired coach cards spread
       over days, not a tutorial sequence. **THE LOSS is the one that decides whether
-      players stay**: an itemised receipt of what burned *and what was kept*.
-- [ ] **Depth-record-gated rarity and affix tiers** — `epic`/`legendary` and wider
-      affix bands unlock by depth record, not level. This is the endgame; there is
-      deliberately no paragon track.
+      players stay.** 6b-1 shipped the *receipt* it fires on — itemised, both faces,
+      what burned and what was kept — so what is left is the beat, not the screen.
+
+### GATE — the haul has to be worth the trip, and the Daily must not feel it
+
+- [x] **The Daily is byte-identical.** Floor 6.6/12, ceiling 11.6/12, gap 5.0, greedy
+      full-clears 30/8064 (0.37%), median→best 4.5 depths, both tutorial invariants clean
+      over 3,000 seeds. `simulateRun.length === 2` holds, `issuedKitForDay` builds a kit
+      with nothing worn, and `runDepths` rolls a drop **only in endless mode** — so a
+      Daily run finds nothing by construction, and a 300-seed sweep says so out loud.
+- [x] **Wearing a drop does not save it.** A run that equips from its haul and then dies
+      banks nothing, the receipt names what burned and marks which were being worn, and
+      the walked-in kit is untouched either way.
+- [x] **The snapshot drives the replay.** Equip something in the camp mid-run; the
+      resumed kit does not move. A v2 run with no snapshot resumes rather than being
+      dropped.
+- [x] **A full stash is income, not a wall** — the overflow scraps for shards and the
+      receipt says how many and for how much.
+- [x] `npm run test:visual` green at all three viewports, `KNOWN_FINDINGS` still empty —
+      **and it now plays screen 04** with a stash of deep rolls, wearing, taking off and
+      scrapping between measurements, plus a fork and a receipt that are actually
+      carrying a haul.
+- [x] **GATE 5 re-read with gear — and it FAILED first, which is the whole point of
+      having it.** The first draft of `TUNING.items` took a geared delver to **90/10**;
+      pooled with the bare one that is 79/21, and `GAME_DESIGN.md` names ≈70/30 as the
+      ratio at which *"the fork has stopped being a decision"*. Affix costs went up, the
+      bands came in and `budgetPerDepth` went 0.06 → 0.045. **Now 64/36 pooled — 67/33
+      bare, 62/38 geared.** The two delvers agree within 5 points, which is the finding
+      that matters: **gear moves the DEPTH (7 → 11) without moving the DECISION.**
+
+### What the probe learned when gear arrived
+
+`GATE 5` at 6a measured one delver: greedy-on-median with nothing worn, which dies around
+depth 7 in both modes because it is the same shaft. Every fork it saw was therefore a
+cheap one, and the probe said so. **6b-1 adds a second axis**: sweep B wears one item per
+slot, rolled by the real roller at depth 15 against an `epic` ceiling, so the sweep
+reaches forks where the haul at stake is real.
+
+**Two rows, and if they disagree that is the finding** — a mode that is fair while you
+own nothing and punishing once you do is a mode that punishes progress, and the probe
+prints the gap when it exceeds twice the tolerance.
+
+> **The probe also stopped lying about the kit.** Both sweeps now build their kit through
+> `gearedKit(issuedKitForDay(seed), …)` — the derivation `core/endless.ts` actually uses,
+> rarity ceiling included — rather than through `issuedKitForDay` alone. A balance
+> instrument measuring a kit the game does not issue is an instrument measuring a
+> different game.
+
+> **A capped run is now EXCLUDED from the ratio rather than counted as a surface**, and
+> that is a bug fixed rather than a policy changed. The 6a code forced `surface` when the
+> depth cap bound and then counted it — which is exactly the flattering its own comment
+> said it was there to prevent. A capped run never made the decision this gate is about;
+> the instrument made it. They are counted and printed in their own column.
+
+> **The geared sweep gets its own, much lower cap (30), and the reason is a finding.** A
+> geared greedy run goes far deeper than a bare one, and `endlessGreedy` re-simulates the
+> whole choice list at every step — so the cost is roughly cubic in the depth reached,
+> and an 80-deep geared sweep turned a two-minute instrument into a half-hour one.
+> **An instrument nobody runs is an instrument that does not exist.** 30 is past both
+> lantern strains (16 and 28), which is the whole thing 6a could not measure.
+>
+> That same curve is the reason `MAX_ENDLESS_DEPTH` needs re-reading at 6b-2: the server
+> replays the whole list at every checkpoint, so what makes the probe slow makes a deep
+> checkpoint expensive. It is now a number with data behind it rather than a guess.
+
+> **The instrument's real cost was elsewhere, and it was pure waste.** `sweepLoadouts`
+> runs 1,008 twelve-depth simulations, and Gate 5 asked for a seed's *median loadout*
+> once per **nerve** — so the same 1,008 sims ran seven times per seed, then seven more
+> for the geared sweep. It is memoised by seed now. The result is a pure function of the
+> seed, so a cache cannot change a number; it only decides whether anybody actually runs
+> this. **An instrument nobody runs is an instrument that does not exist.**
+
+**The strain is still unmeasured, and now for a different reason.** Greedy-on-median with
+a full epic set reaches depth 11, not 16 — so the warning stays, but it is now a
+statement about the FLOOR policy rather than about gear being absent. Closing it needs
+either a thinking searcher on the Endless or a deeper geared sweep, and both are 6b-2
+work; the honest thing today is that the printed ratio covers depths 1–11.
+
+### The visual gate pins its day now, and that is not tidiness
+
+`?day=2026-08-06`. Without it the seed is today's, so the enemies, the issued nine and —
+from 6b — **whether an offline run finds anything at all** change overnight. A layout
+gate that measures a different screen on Tuesday is a gate whose green is worth nothing
+on Wednesday. `measureAt` also gained a `needs` selector, because the right screen in the
+wrong *state* is a screen whose new block went unmeasured: the fork is required to be
+carrying a haul and the surfaced receipt to have a list on it. **Verified by re-breaking
+it** — pointing `needs` at a selector that does not exist produces exit 1 at all three
+viewports.
 
 ## Stage 7 — lantern, shrine, cosmetics, talents
 

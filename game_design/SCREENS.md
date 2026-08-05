@@ -128,6 +128,47 @@ is a scold.
 and must not come back at 6b: gear is unbanked exactly like shards ([MODES.md](MODES.md)
 § The haul).
 
+## Three screen-level calls taken at Stage 6b
+
+### 02 · the camp grows its tile row, with three of the four LOCKED
+
+Stage 2 shipped none of the four tiles, on the reasoning that *"four dead buttons is
+worse than none"*. That was right while all four were dead: a row of tiles that does
+nothing teaches a player that tapping things here is pointless.
+
+**Decided: the call is spent rather than reversed.** GEAR is a real screen now, so the
+row has something to be a row of, and LANTERN / SHRINE / RECORDS take the treatment the
+Community door already takes — **locked, never omitted**, desaturated and hatched with
+the stage that opens them printed on the tile. A door has to be visible before it opens;
+that is the whole reason the camp is the landing screen.
+
+**There are four and there will be four.** A fifth tile is a decision a player has to
+make before they can play.
+
+### 04 · one tap wears it, and the slot is not a question
+
+The stash does not open a slot picker. Tapping an item wears it in the slot
+[GEAR.md](GEAR.md) derives — an empty matching slot beats a full one, rings fill left to
+right — and the row prints which slot that will be *before* the tap. Taking something off
+is a tap on the slot.
+
+**Decided: the slot is not a decision worth a screen.** The player's decision is *which
+item*, and a picker between them and it is a modal in a game whose pitch is that play is
+one tap from a feed. It is also the same rule the sim uses to resolve a mid-run equip
+inside a verified choice list, so there is one implementation and the screen cannot
+promise a slot the server then fills differently.
+
+### 14 · the receipt itemises, and a worn item is still on the list
+
+The mockup's *"Cryptweave Coat was found at 16 — gear is always kept"* is overridden
+([MODES.md](MODES.md)), and the replacement is not *"you lost your haul"* — it is the
+list, by name, with what each thing did and where it dropped. A death strikes every row
+through **including the ones marked WORN**, because wearing one never saved it.
+
+**Decided: name what burned.** `GAME_DESIGN.md` § The second cliff calls THE LOSS the
+beat that decides whether players stay, and what makes it a receipt rather than a scold
+is that it is specific — and that the KEPT lines sit directly under it.
+
 ## Screens the design now needs that the mockup does not draw
 
 The mockup is a slice. Four surfaces fell out of the expanded design and have no
@@ -139,8 +180,8 @@ them gets built as an unplanned fifth camp tile.
 | **The Codex** | A second tab on screen 17 (Records), beside the calendar | 8 |
 | **The Endless board** | Its own screen, reachable from the Endless door — weekly, build-first rows | 6 |
 | **Talents** | A tab on screen 03 (Hero & abilities), where a build is already being made | 7 |
-| **Salvage / reroll / ascend** | Inside screen 04's stash, not a new screen | 6 |
-| **The haul** | A strip on the combat screen — you must be able to see what you stand to lose *while deciding at the fork* | 6 |
+| **Salvage / reroll / ascend** | Inside screen 04's stash, not a new screen | 6 — **salvage ✅ at 6b**; reroll and ascend are the shard sinks and land with the rest of the economy |
+| **The haul** | A strip on the combat screen — you must be able to see what you stand to lose *while deciding at the fork* | 6b ✅ — plus the itemised pane on the fork itself, which is where wearing one is a decision |
 | **Resume-run prompt** | On the camp, when an Endless run is in progress | 6a ✅ — and it is **always** shown when a run is in progress, never skipped for a session that just left one. See below. |
 | **🏕️ Your camp** | The hub screen (02) becomes personal — site, fire, objects, **a ledger showing both delves** | 7 |
 | **🏆 The trophy wall** | Inside the camp. **Only items you surfaced with**, and only while you still hold them — salvage takes one off the wall. Eleven on display, matching the gear slots. | 7 |

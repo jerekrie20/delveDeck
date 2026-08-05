@@ -309,6 +309,37 @@ for.
 from a string people have already typed, which is the one migration with no good
 answer.
 
+### Version 3 (Stage 6b) — a body to build
+
+| Key | v3 value | Why now |
+|---|---|---|
+| `gear` | `{}` — eleven slots, each holding an item or nothing | 6b is the stage that derives a kit from it |
+| `stash` | `[]` — what surfacing banks | same |
+| `class` · `spec` | `null` | The **shape** is settled (a spec *id*, never an enum position) and only the contents are pending, which is the "ship a key empty" rule read honestly |
+| `level` · `xp` | `1` · `0` | same |
+
+**`StoredEndlessRun` gained a `snapshot`, and that is the load-bearing part of v3.** It
+holds the gear the delver walked in wearing plus the rarity ceiling their record had
+opened, and `kitForRun` reads **it** rather than current gear. The trap it closes is
+quiet: change your loadout in the camp while a run is open and a kit built from *current*
+gear stops replaying the choice list that was played under the old one, so a resumable
+run becomes a confidently wrong one and every number the server verifies with it is
+wrong too.
+
+**The v2 → v3 step STAMPS a bare snapshot on an in-progress run rather than dropping
+it.** That is not a default standing in for the truth: a v2 hero had no gear, so an empty
+snapshot describes exactly the run that was played. *"A run waits as long as you do"*
+(owner answer 3) would otherwise have been broken for everybody mid-delve on the day
+gear shipped.
+
+Two more rules the settle path had to decide:
+
+- **The haul banks to the stash, never into the slots.** `hero.gear` moves only from the
+  camp. Anything else puts an asterisk on *"your equipped kit is never at risk"*.
+- **A full stash auto-salvages the overflow into shards** rather than refusing the bank.
+  Overflow is income ([ECONOMY.md](ECONOMY.md)), and a bank that blocked would strand a
+  haul at the one moment the mode promises it is safe.
+
 ### The CAS contract, and the trap under it
 
 Every write is load → migrate → **mutate** → transactional save, retried on conflict.

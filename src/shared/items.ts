@@ -194,51 +194,61 @@ export interface AffixRow {
   fixed?: true;
 }
 
+/**
+ * The twelve rows. **`cost` and the band are the balance surface**, and the probe moves
+ * them — the first draft made a geared delver 90/10 at the fork, which is the ratio
+ * `GAME_DESIGN.md` calls "the fork has stopped being a decision".
+ *
+ * Two rows are priced far above the rest for the same reason: `edge` lands on **every
+ * hit of every cast**, so a three-hit ability triples it, and the four displayed stats
+ * ride on four to five slots each rather than one. A band cap is doing as much work here
+ * as the cost is — it is what stops a depth-90 roll from being an arithmetic accident.
+ */
 export const AFFIXES: Record<string, AffixRow> = {
-  vigour: { id: 'vigour', text: '+{v} MAX HP', cost: 1, min: 2, max: 40, stat: 'maxHp' },
-  edge: { id: 'edge', text: '+{v} ATTACK', cost: 7, min: 1, max: 6, stat: 'attack' },
-  guarded: { id: 'guarded', text: '+{v} BLOCK', cost: 4, min: 1, max: 8, stat: 'block' },
+  vigour: { id: 'vigour', text: '+{v} MAX HP', cost: 3, min: 2, max: 14, stat: 'maxHp' },
+  edge: { id: 'edge', text: '+{v} ATTACK', cost: 10, min: 1, max: 4, stat: 'attack' },
+  guarded: { id: 'guarded', text: '+{v} BLOCK', cost: 6, min: 1, max: 6, stat: 'block' },
   // The Risk family. Equal magnitudes both ways, so the trade is legible without a
   // second number to read — `GEAR.md`'s "−N MAX HP, +N ATTACK".
   reckless: {
-    id: 'reckless', text: '+{v} ATTACK, &minus;{v} MAX HP', cost: 4, min: 1, max: 5,
+    id: 'reckless', text: '+{v} ATTACK, &minus;{v} MAX HP', cost: 6, min: 1, max: 4,
     stat: 'reckless',
   },
 
   // The lantern's own two, and the only rows it rolls. Both buy INFORMATION rather than
   // numbers, which is why they are the most expensive things in the pool.
   reach: {
-    id: 'reach', text: '+{v} DEPTH OF LIGHT', cost: 3, min: 1, max: 10, stat: 'lanternReach',
+    id: 'reach', text: '+{v} DEPTH OF LIGHT', cost: 4, min: 1, max: 6, stat: 'lanternReach',
   },
   steadfast: {
-    id: 'steadfast', text: 'the deep leaves {v} more slot lit', cost: 22, min: 1, max: 1,
+    id: 'steadfast', text: 'the deep leaves {v} more slot lit', cost: 26, min: 1, max: 1,
     stat: 'lanternFloor', fixed: true,
   },
 
   // Archetype rows. Every one of these is an `AbilityMod` folded over a COPY through
   // `effectiveAbility` — the same mechanism boons use, which is the point.
   keen: {
-    id: 'keen', text: 'your {a} abilities deal +{v}', cost: 4, min: 1, max: 9,
+    id: 'keen', text: 'your {a} abilities deal +{v}', cost: 5, min: 1, max: 6,
     mod: 'damageAdd',
   },
   bracing: {
-    id: 'bracing', text: 'your {a} abilities give +{v} block', cost: 2, min: 1, max: 12,
+    id: 'bracing', text: 'your {a} abilities give +{v} block', cost: 3, min: 1, max: 8,
     mod: 'blockAdd',
   },
   venomous: {
-    id: 'venomous', text: 'your {a} riders land {v} harder', cost: 3, min: 1, max: 5,
+    id: 'venomous', text: 'your {a} riders land {v} harder', cost: 4, min: 1, max: 4,
     mod: 'statusMagnitudeAdd',
   },
   furious: {
-    id: 'furious', text: 'your {a} abilities build +{v} rage', cost: 9, min: 1, max: 1,
+    id: 'furious', text: 'your {a} abilities build +{v} rage', cost: 10, min: 1, max: 1,
     mod: 'rageAdd', fixed: true,
   },
   swift: {
-    id: 'swift', text: 'your {a} abilities come back a turn sooner', cost: 13, min: 1, max: 1,
+    id: 'swift', text: 'your {a} abilities come back a turn sooner', cost: 15, min: 1, max: 1,
     mod: 'cdAdd', fixed: true,
   },
   deft: {
-    id: 'deft', text: 'your {a} abilities cost 1 less', cost: 15, min: 1, max: 1,
+    id: 'deft', text: 'your {a} abilities cost 1 less', cost: 18, min: 1, max: 1,
     mod: 'costAdd', fixed: true,
   },
 };

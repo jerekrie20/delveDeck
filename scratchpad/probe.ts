@@ -28,9 +28,12 @@
 // failure mode — it fails silently and in both directions. See the foot of this file.
 
 import {
-  TUNING, issuedKitForDay, issuedPoolForDay, seedForDay, simulateEndless, simulateRun,
-  type CombatView, type ForkView, type IssuedKit, type RunChoice, type RunResult,
+  EMPTY_GEAR, GEAR_SLOTS, TUNING, fitsSlot, gearedKit, issuedKitForDay, issuedPoolForDay,
+  rollItem, seedForDay, simulateEndless, simulateRun,
+  type CombatView, type EquippedGear, type ForkView, type IssuedKit, type Rarity,
+  type RunChoice, type RunResult,
 } from '../src/shared/sim';
+import { createRng } from '../src/shared/rng';
 import { ABILITIES } from '../src/shared/abilities';
 
 // How much work to do. The loadout sweep is the expensive axis.
@@ -227,13 +230,30 @@ interface LoadoutResult {
   score: number;
 }
 
+/**
+ * Memoised by seed, and that is not micro-optimisation.
+ *
+ * A sweep is 1,008 full twelve-depth simulations. Gate 5 asks for the *median loadout*
+ * of a seed once per **nerve**, and the median loadout of a seed does not depend on how
+ * brave the player is — so the uncached version did the same 1,008 sims seven times per
+ * seed, then seven more times per seed for the geared sweep. That was the dominant cost
+ * of the whole instrument and it bought nothing.
+ *
+ * The result is a pure function of the seed (`simulateRun` is deterministic), so a cache
+ * cannot change a number here. It only decides whether anybody actually runs this.
+ */
+const sweepCache = new Map<number, LoadoutResult[]>();
+
 function sweepLoadouts(seed: number): LoadoutResult[] {
+  const cached = sweepCache.get(seed);
+  if (cached) return cached;
   const out: LoadoutResult[] = [];
   for (const loadout of allLoadouts()) {
     const run = simulateRun(seed, greedy(seed, loadout));
     out.push({ loadout, cleared: run.cleared, hp: run.hp, score: run.score });
   }
   out.sort((a, b) => a.score - b.score);
+  sweepCache.set(seed, out);
   return out;
 }
 
@@ -461,10 +481,31 @@ const FORK_TOLERANCE = 0.1;
 /** Nerve: descend while HP ≥ this fraction of max. Spread across plausible players
  *  rather than centred on one, because the tail behaviour is what the fork is for. */
 const NERVES = [0.85, 0.7, 0.6, 0.5, 0.4, 0.25, 0.15];
-/** A depth no run should reach. It exists so a lucky line terminates, and every time
- *  it BINDS it is reported — a cap that silently converts a death into a surface would
- *  quietly flatter this exact gate. */
+/**
+ * A depth no run should reach. It exists so a lucky line terminates.
+ *
+ * **A capped run is neither a surface nor a death — it is the instrument running out of
+ * patience, and it is excluded from the ratio.** Counting a forced surface as a surface
+ * is exactly how a cap quietly flatters the gate it is inside, which the 6a version of
+ * this comment worried about and the 6a version of the code then did anyway.
+ */
 const FORK_DEPTH_CAP = 80;
+/**
+ * The geared sweep's own cap, and it is much lower for a reason that is itself a
+ * finding: **a geared greedy run goes far deeper, and `endlessGreedy` re-simulates the
+ * whole choice list at every step.** The cost is roughly cubic in the depth reached, so
+ * an 80-deep geared sweep turns a two-minute instrument into a half-hour one — and an
+ * instrument nobody runs is an instrument that does not exist.
+ *
+ * 30 is past **both** lantern strains (16 and 28), which is the entire thing the 6a gate
+ * could not measure. It binds often, it is reported, and the capped runs are excluded
+ * rather than counted as surfaces.
+ */
+const GEARED_DEPTH_CAP = 30;
+/** The depth sweep B's gear is rolled at. A delver who has banked a few runs, not an
+ *  endgame one — the point is to reach forks that cost something, not to prove that a
+ *  maxed hero can. */
+const GEARED_AT = 15;
 
 /** Greedy play, with the fork answered by `decide`. Reuses `greedyTurn` — the fight is
  *  not what is being measured here, the decision after it is. */
@@ -520,45 +561,110 @@ function pushEndlessTurn(
   return false;
 }
 
-console.log(`\nGATE 5 — THE FORK RATIO · ${NERVES.length} risk appetites × ` +
-  `${FORK_SEEDS} shafts\n`);
-console.log('  nerve   surfaced   died   mean depth   deepest');
-
-let surfaced = 0;
-let died = 0;
-let capped = 0;
-const allDepths: number[] = [];
-
-for (const level of NERVES) {
-  let rowSurfaced = 0;
-  let rowDied = 0;
-  const depths: number[] = [];
-
-  for (let i = 0; i < FORK_SEEDS; i++) {
-    const seed = seedForDay(`2026-09-${pad(i + 1, 2).replace(' ', '0')}`);
-    const kit = issuedKitForDay(seed);
-    // The median loadout, so the fork is measured against a normal build rather than
-    // an optimised one — the same reason the FLOOR is greedy-on-median.
-    const sorted = sweepLoadouts(seed);
-    const loadout = sorted[Math.floor(sorted.length / 2)]!.loadout;
-
-    const run = simulateEndless(seed, endlessGreedy(seed, kit, loadout, (view) => {
-      if (view.depth >= FORK_DEPTH_CAP) { capped++; return 'surface'; }
-      return view.hp >= view.maxHp * level ? 'descend' : 'surface';
-    }), kit);
-
-    depths.push(run.cleared);
-    if (run.outcome === 'surfaced') rowSurfaced++;
-    else if (run.outcome === 'died') rowDied++;
+/**
+ * A delver wearing one item per slot, rolled at `depth` against `ceiling`.
+ *
+ * **A fork ratio needs a population, and from Stage 6b that population includes what
+ * you are wearing.** The nerve sweep alone answers "how do different players decide";
+ * this axis answers "and how far can they get before deciding", which is the half the
+ * 6a gate could not reach — greedy-on-median dies around depth 7 in both modes because
+ * it is the same shaft, so every fork it ever measured was a cheap one.
+ *
+ * Built from the real roller rather than hand-authored, so a retune of `TUNING.items`
+ * moves this delver too and the two can never drift apart.
+ */
+function gearedDelver(seed: number, depth: number, ceiling: Rarity): EquippedGear {
+  const rng = createRng(seed ^ 0x6ea7_0000);
+  const gear: EquippedGear = {};
+  for (const slot of GEAR_SLOTS) {
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const item = rollItem(rng, `probe-${slot}-${attempt}`, depth, ceiling);
+      if (fitsSlot(item, slot)) { gear[slot] = item; break; }
+    }
   }
-
-  surfaced += rowSurfaced;
-  died += rowDied;
-  allDepths.push(...depths);
-  console.log(`  ${level.toFixed(2)}    ${pad(rowSurfaced, 5)}    ${pad(rowDied, 5)}   ` +
-    `${pad(mean(depths).toFixed(1), 8)}   ${pad(Math.max(...depths), 7)}`);
+  return gear;
 }
 
+/** One nerve sweep over one kind of delver. */
+function forkSweep(
+  label: string,
+  kitFor: (seed: number) => IssuedKit,
+  depthCap: number,
+): { surfaced: number; died: number; capped: number; depths: number[] } {
+  console.log(`\n  ${label}`);
+  console.log('  nerve   surfaced   died   capped   mean depth   deepest');
+  let surfaced = 0;
+  let died = 0;
+  let capped = 0;
+  const allDepths: number[] = [];
+
+  for (const level of NERVES) {
+    let rowSurfaced = 0;
+    let rowDied = 0;
+    let rowCapped = 0;
+    const depths: number[] = [];
+
+    for (let i = 0; i < FORK_SEEDS; i++) {
+      const seed = seedForDay(`2026-09-${pad(i + 1, 2).replace(' ', '0')}`);
+      const kit = kitFor(seed);
+      // The median loadout, so the fork is measured against a normal build rather than
+      // an optimised one — the same reason the FLOOR is greedy-on-median.
+      const sorted = sweepLoadouts(seed);
+      const loadout = sorted[Math.floor(sorted.length / 2)]!.loadout;
+
+      let hitCap = false;
+      const run = simulateEndless(seed, endlessGreedy(seed, kit, loadout, (view) => {
+        if (view.depth >= depthCap) { hitCap = true; return 'surface'; }
+        return view.hp >= view.maxHp * level ? 'descend' : 'surface';
+      }), kit);
+
+      depths.push(run.cleared);
+      // A capped run is EXCLUDED, not counted as a surface. It never made the decision
+      // this gate is about — the instrument made it for it.
+      if (hitCap) rowCapped++;
+      else if (run.outcome === 'surfaced') rowSurfaced++;
+      else if (run.outcome === 'died') rowDied++;
+    }
+
+    surfaced += rowSurfaced;
+    died += rowDied;
+    capped += rowCapped;
+    allDepths.push(...depths);
+    console.log(`  ${level.toFixed(2)}    ${pad(rowSurfaced, 5)}    ${pad(rowDied, 5)}   ` +
+      `${pad(rowCapped, 5)}   ${pad(mean(depths).toFixed(1), 8)}   ` +
+      `${pad(Math.max(...depths), 7)}`);
+  }
+  const decided = surfaced + died;
+  const ratio = decided === 0 ? 0 : surfaced / decided;
+  console.log(`  → ${surfaced}/${died} = ${(ratio * 100).toFixed(0)}/` +
+    `${(100 - ratio * 100).toFixed(0)} over depths 1-${Math.max(...allDepths)}` +
+    `${capped > 0 ? `, ${capped} capped and excluded` : ''}`);
+  return { surfaced, died, capped, depths: allDepths };
+}
+
+console.log(`\nGATE 5 — THE FORK RATIO · ${NERVES.length} risk appetites × ` +
+  `${FORK_SEEDS} shafts × 2 delvers`);
+
+// Note the kit: `gearedKit(issued, …)` and NOT `issuedKitForDay` on its own, so the
+// probe measures the kit `core/endless.ts` actually derives — including the rarity
+// ceiling, which is the thing a depth record opens.
+const bare = forkSweep(
+  'A · NOTHING WORN (a first run, and every player’s first week)',
+  (seed) => gearedKit(issuedKitForDay(seed), EMPTY_GEAR, 'rare'),
+  FORK_DEPTH_CAP,
+);
+const geared = forkSweep(
+  `B · GEARED (one item per slot @ depth ${GEARED_AT}, ceiling epic, cap ${GEARED_DEPTH_CAP})`,
+  (seed) => gearedKit(
+    issuedKitForDay(seed), gearedDelver(seed, GEARED_AT, 'epic'), 'epic',
+  ),
+  GEARED_DEPTH_CAP,
+);
+
+const surfaced = bare.surfaced + geared.surfaced;
+const died = bare.died + geared.died;
+const capped = bare.capped + geared.capped;
+const allDepths = [...bare.depths, ...geared.depths];
 const forkTotal = surfaced + died;
 const forkRatio = forkTotal === 0 ? 0 : surfaced / forkTotal;
 console.log(`\n  pooled: ${surfaced} surfaced / ${died} died ` +
@@ -567,25 +673,32 @@ console.log(`\n  pooled: ${surfaced} surfaced / ${died} died ` +
 console.log(`  mean depth reached ${mean(allDepths).toFixed(1)}, ` +
   `deepest ${Math.max(...allDepths)}`);
 // Reported unconditionally, because a number a gate collects but never judges is a
-// number nobody reads — and this one converts deaths into surfaces if it ever binds.
-console.log(`  depth cap (${FORK_DEPTH_CAP}) bound on ${capped} runs` +
-  `${capped > 0 ? '  ← THE RATIO ABOVE IS FLATTERED; RAISE THE CAP' : ''}`);
+// number nobody reads. These are EXCLUDED from the ratio rather than counted as
+// surfaces, so the number above is honest — but a sweep that is mostly capped is a
+// sweep measuring the instrument instead of the game.
+console.log(`  ${capped} runs hit their depth cap and were EXCLUDED ` +
+  `(${surfaced + died} decided)` +
+  `${capped > surfaced + died ? '  ← MOSTLY CAPPED; THIS IS MEASURING THE CAP' : ''}`);
 
 // WHERE the ratio was measured, not just what it was.
 //
-// The population here is greedy-on-median — the FLOOR policy, deliberately, for the
-// same reason the headroom floor is — and it dies at about the same depth in both
-// modes because it is the same shaft. So this ratio describes forks taken in shallow
-// water, where the haul at stake is small and the decision is cheap. The forks the
-// mode is actually built on are the deep ones, and reaching those needs either gear
-// (Stage 6b) or a policy that thinks. Stated rather than implied, because a ratio
-// measured over depths 1-7 and reported as "the fork ratio" is a number that reads as
-// more than it is.
+// The policy is still greedy-on-median — the FLOOR, deliberately, for the same reason
+// the headroom floor is. What changed at 6b is the second axis: sweep B wears gear, so
+// it reaches forks with a real haul at stake instead of only the cheap early ones. If
+// the two rows disagree, THAT is the finding — a mode that is fair while you own
+// nothing and punishing once you do is a mode that punishes progress.
 const deepest = Math.max(...allDepths);
 console.log(`  measured over depths 1-${deepest} (greedy @ median loadout — the FLOOR)`);
 if (deepest < TUNING.lanternStrainDepths[0]!) {
   console.log(`  ⚠ no run reached the first lantern strain (depth ` +
     `${TUNING.lanternStrainDepths[0]}), so the strain is UNMEASURED here`);
+}
+const bareRatio = bare.surfaced / Math.max(1, bare.surfaced + bare.died);
+const gearedRatio = geared.surfaced / Math.max(1, geared.surfaced + geared.died);
+if (Math.abs(bareRatio - gearedRatio) > FORK_TOLERANCE * 2) {
+  console.log(`  ⚠ the two delvers disagree by ` +
+    `${Math.round(Math.abs(bareRatio - gearedRatio) * 100)} points — gear is moving the ` +
+    `DECISION, not just the depth`);
 }
 console.log(Math.abs(forkRatio - FORK_TARGET) <= FORK_TOLERANCE
   ? '  ✓ the fork is a decision — the loss is real and the mode is not punishing you'

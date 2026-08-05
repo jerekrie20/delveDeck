@@ -141,6 +141,11 @@ harder, not easier**, because now you have something to lose. It is what turns t
 fork from a shard calculation into a decision, and it is why *"I found a Voidfang at 41
 and I got it out"* is a story while *"I found a Voidfang"* is not.
 
+**Shipped at Stage 6b-1, and the three rules it forced are in [GEAR.md](GEAR.md)**: the
+slot is derived rather than chosen, surfacing banks to the *stash* and never into the
+slots, and a mid-run swap moves max HP but not current HP. The receipt itemises the haul
+on both faces — a death strikes every row through, worn ones included.
+
 **What keeps it from being cruel:** your equipped kit is never at risk. A death moves
 you sideways, never backwards — you lose a *possible* future, not your character. That
 asymmetry is load-bearing and it must not erode.
@@ -217,6 +222,13 @@ other checkpoint, because it is locked for the delve here too.
 > iframe. The exposure is bounded to **re-rolling one depth's play** and never to
 > un-losing a haul — and at 6a there is no Endless board to carry it onto, because the
 > board is 6b. **Re-read this when the board lands.**
+>
+> **Re-read once at 6b-1, and the calculation did not change — but one input did.** Gear
+> is now findable, so a re-fought depth is a depth whose *drop* can be re-rolled too. It
+> cannot: `dropForDepth(seed, depth, ceiling)` is a pure function of the run's own seed
+> and the depth, so fighting depth 22 again produces the identical item. The exposure is
+> still exactly *re-rolling one depth's play*. **The board is still the thing that would
+> change it, and the board is still 6b-2** — this note stays open until it lands.
 
 **A stale run never expires — decided 2026-08-04.** The alternative was an expiry that
 quietly banks whatever an untouched run was holding after N days, and it was rejected

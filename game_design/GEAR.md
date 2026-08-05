@@ -34,6 +34,20 @@ it stays unbanked. Wearing it does not save it. That is the point: a great drop 
 depth 30 makes the next fork *harder*, not easier, because now you have something to
 lose.
 
+Three rules the code had to settle, recorded here because the design was silent and
+they are all consequences of that sentence rather than additions to it (Stage 6b):
+
+- **The slot is derived, not chosen.** The base decides the family, an empty matching
+  slot beats a full one, and rings fill left to right. Which ring finger you used is not
+  a decision worth a place in a verified choice list.
+- **Surfacing banks the haul to the STASH, never into the slots.** A run that quietly
+  rewrote the loadout you chose in the camp would put an asterisk on *"your equipped kit
+  is never at risk"*. You wore it down there; you choose whether to keep wearing it up
+  here.
+- **Max HP moves with a mid-run swap and current HP does not** (clamped down if the new
+  maximum is lower). Anything else makes armour a heal — put a body piece on and off to
+  top up — which is the same class of hole as mid-fight healing.
+
 This is what turns the fork from a shard calculation into a genuine decision, and it
 is the single strongest retention mechanic available here: *"I found a Voidfang at
 41 and I got it out"* is a story. *"I found a Voidfang"* is not.
@@ -80,6 +94,20 @@ It is the only slot that grants **information instead of numbers**:
 | **Warmth** | Resistance to the deep's unlighting effects |
 | **Flame** | The cosmetic you see in every frame of every fight |
 
+> **A lantern never adds a FOURTH slot — decided at Stage 6b, because the code had to
+> pick.** Three threat slots is a structural constant ([GAME_DESIGN.md](GAME_DESIGN.md))
+> and the Daily already renders all three for free, so a lantern that granted *foresight*
+> would either sell back something nobody pays for or widen the track. What it sells is
+> **how long you keep what you have**, which is the same thing said honestly:
+>
+> - **depth of light** (`reach`) pushes every strain depth deeper;
+> - **warmth** (`floor`) raises the number of slots the deep can never take, so a
+>   depth-30 delver keeps two lit where an unlit one is down to one.
+>
+> Both are still *information*, both are still strongest deep, and both are still the
+> reason losing a good lantern hurts more than losing a good weapon. The base foresight
+> is unchanged in both modes, so this is a gear model rather than a balance change.
+
 The fiction and the mechanic are the same object: *your lantern decides how far ahead
 you can read, and how long the dark stays off you.* Descending past its depth of
 light starts taking slots away — which is the Endless's best difficulty lever,
@@ -119,6 +147,18 @@ and it is the highest-leverage thing salvaged from `../infinite-delve`.
 Six tiers, up from the mockup's four. The mockup only tokenises
 `starter/common/uncommon/rare` in CSS, so `epic` and `legendary` need two new colour
 tokens — plates are code-drawn, so that is a two-line change, not an art task.
+
+**Five of the six are ROLLABLE and the sixth is not**, which is why the shipped `Rarity`
+union has five members. `unique` / `set` is the authored layer below, and it is
+explicitly a backlog row rather than a v1 system — a tier the roller cannot produce
+would be a colour token with no item behind it. It joins the union with the first named
+row, and that row brings its own sprite.
+
+**Colour is never the only channel.** The tier's *word* is printed on every gear row and
+inside every derived name (`Rare Axe`), for the same reason the share grid carries a
+shape alphabet: four of these five accents are hues that are hard work at 34px, and this
+is the screen a player makes build decisions on. `tests/art.test.ts` guards both the
+palette and the words.
 
 **Legendary signature affixes are the top of the loot chase** — the effects that
 can't appear any other way and that a build gets designed around.
@@ -162,6 +202,40 @@ systems, one fold. That is what keeps gear from ever needing an interpreter.
 **`+1 FORESIGHT` and the haul affixes are the strongest in the game.** One buys
 information; the other buys risk tolerance. Both should be rare, expensive, and
 build-defining rather than incremental.
+
+### What v1 authored, and what it did not — Stage 6b
+
+Twelve rows shipped, and every one of them is either an `AbilityMod` field or one of the
+four displayed stats. A test sweeps the catalog and fails if a row is neither, because
+a row that is neither is a row that needs an effect interpreter.
+
+| Shipped | Family |
+|---|---|
+| `vigour` `edge` `guarded` | Stat |
+| `reckless` (+N ATTACK, −N MAX HP) | Risk |
+| `reach` `steadfast` — lantern-only, and the only rows it rolls | Lantern |
+| `keen` `bracing` `venomous` `furious` `swift` `deft` | Archetype · Resource · Cooldown · Status |
+
+**Deferred with a reason, not forgotten:** the **Haul** family (*"a portion of the haul
+survives death"*) and the **Conversion** family (*"your basic attack counts as spell"*)
+are the two that need a field the fold does not have — the first reaches into settling
+and the second rewrites a row's `school`. Each is one field, and each should arrive with
+the pass that can measure what it does to the fork ratio, because both change the
+*decision* rather than a number. **School and Element affixes** wait on classes for the
+same reason: their whole point is sharpening a lean that does not exist yet.
+
+**The budget is the gate, and there is no second gating system.** An affix whose minimum
+the item's remaining budget cannot afford is dropped from the candidate pool rather than
+rolled under its band — so a cooldown that ticks sooner is rare because it is expensive,
+not because a rarity check says so. One mechanism, and nothing to keep in sync.
+
+**The first tuning pass was made by the probe, not by taste.** The opening numbers took a
+delver in a full epic set to a **90/10** fork ratio — this folder's own words for a fork
+that has stopped being a decision. Costs went up and bands came in until the geared
+delver read 62/38 against a bare delver's 67/33. **The two agreeing is the result that
+matters**: gear should move how deep you get, not whether the decision at the bottom is
+still one. Every number is in `TUNING.items` and `AFFIXES`, and the probe is where they
+move.
 
 ---
 
