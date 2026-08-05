@@ -95,6 +95,39 @@ that can go wrong on the one write that is genuinely hard to take back.
 carrying an empty `records` key, so adding the calendar later is a fill rather than a
 migration.
 
+## Two screen-level calls taken at Stage 6a
+
+### 13 · the fork names the lantern only when it takes one
+
+The mockup's descend card reads *"+8% HP and the shaft unlights one slot of your
+lantern"* — a single string, printed at every depth. Both halves of it are conditional:
+the HP step is exactly `rampPerDepth` inside the ramp knee and honestly smaller past it,
+and the lantern is only taken at a strain depth. The screen prints the step off
+`ForkView.nextHpPct` and adds the lantern sentence only when `nextLit < lit`.
+
+**Decided: never state a price you are not charging.** A screen that overstates makes the
+mode look scarier than it is, which is the same class of bug as `CombatView.incoming`
+existing at all. No Stage 6a run can reach depth 16 to find this wrong, so a test pins
+the branch instead.
+
+### 14 · the receipt has two faces, and neither of them is a scold
+
+The mockup draws only the death. Surfacing needs the same screen — a run that got out is
+also a run that just ended, and sending it to a different-looking place would make the
+two outcomes incomparable at the moment a player is deciding whether the fork was worth
+it. Same layout, one block inverted: `SHARDS LOST — NEVER BANKED` becomes
+`+N SHARDS BANKED`.
+
+**Decided: both faces carry the KEPT lines.** The record, and the banked total the run
+did not touch. `GAME_DESIGN.md` § The second cliff says THE LOSS is the beat that decides
+whether players stay, and the promise it has to make legible — *you moved sideways, not
+backwards* — is a promise about what you still have. A screen that only itemises the loss
+is a scold.
+
+**The mockup's *"Cryptweave Coat was found at 16 — gear is always kept"* is not on it**,
+and must not come back at 6b: gear is unbanked exactly like shards ([MODES.md](MODES.md)
+§ The haul).
+
 ## Screens the design now needs that the mockup does not draw
 
 The mockup is a slice. Four surfaces fell out of the expanded design and have no
@@ -108,7 +141,7 @@ them gets built as an unplanned fifth camp tile.
 | **Talents** | A tab on screen 03 (Hero & abilities), where a build is already being made | 7 |
 | **Salvage / reroll / ascend** | Inside screen 04's stash, not a new screen | 6 |
 | **The haul** | A strip on the combat screen — you must be able to see what you stand to lose *while deciding at the fork* | 6 |
-| **Resume-run prompt** | On the camp, when an Endless run is in progress | 6 |
+| **Resume-run prompt** | On the camp, when an Endless run is in progress | 6a ✅ — and it is **always** shown when a run is in progress, never skipped for a session that just left one. See below. |
 | **🏕️ Your camp** | The hub screen (02) becomes personal — site, fire, objects, **a ledger showing both delves** | 7 |
 | **🏆 The trophy wall** | Inside the camp. **Only items you surfaced with**, and only while you still hold them — salvage takes one off the wall. Eleven on display, matching the gear slots. | 7 |
 | **Visiting a camp** | One tap from any board row, read-only — **including from another subreddit**, via a published snapshot in `redis.global`. Shows a unique-visit count, never a visitor list. | 7 |

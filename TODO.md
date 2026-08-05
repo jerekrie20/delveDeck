@@ -28,11 +28,18 @@ forward; its combat model does not.
 | **M3** — the art | 25 bespoke images | 8 portraits kept, **1 hero portrait added**, 3 backdrops parked (the stage is a CSS gradient), **14 card illustrations deleted** at Stage 2. |
 | **M3.5** — tutorial | 15 steps, templated copy, separate choice list | **Deleted at Stage 1** with the deck it was written against. **Rebuilt as 5 beats at Stage 3**, on a guarantee that already held: both invariants are a 2,000-seed sweep in `content.test.ts`. |
 
-**165 checks green** after Stage 5. `tests/`: `sim.test.ts` (30), `content.test.ts`
+**202 checks green** after Stage 6a. `tests/`: `sim.test.ts` (30), `content.test.ts`
 (16), `server.test.ts` (30), `art.test.ts` (18), `tutorial.test.ts` (14),
-`share.test.ts` (13), `hero.test.ts` (24), plus 20 in the server vitest project.
+`share.test.ts` (13), `hero.test.ts` (29), `endless.test.ts` (28), plus 24 in the
+server vitest project.
 **`npm run test` runs both halves — a tsx pass and a vitest pass — and collapsing it to
-one has already silently skipped an entire suite once.**
+one has already silently skipped an entire suite once.** Plus `npm run test:visual`, a
+fourth command and a real gate.
+
+`endless.test.ts` arrived at Stage 6a and owns **the second mode**: the fork, the
+lantern strain, the haul, and — from 6a — the persisted run. It is its own file because
+it fails when the fork changes and nothing else does, and because the wall keeping all
+of it away from the Daily is the thing most worth a file of its own.
 
 `hero.test.ts` arrived at Stage 5 and owns **the first thing that outlives a day**: the
 persisted shape, the migration that reads it back, and the compare-and-set loop. It is
@@ -893,39 +900,51 @@ measurable *before* there is a gear model resting on it.
 - [x] **The fork prices itself.** `ForkView` reports the real per-depth HP step and
       both lit counts. The mockup's flat `+8%` is true inside the ramp knee and a lie
       past it; `CombatView.incoming` exists to close the same trap.
-- [ ] **Server-side kit derivation** — the client sends `{runId, seed, choices}` and
-      never the kit, from the first commit. At 6a the derivation is trivial (issued),
-      which is exactly why it is cheap to get the *shape* right now.
-  - [ ] The **run's own seed**, server-generated at start and stored with the run. The
-        client echoes it and the server **checks it against the stored run** — a client
-        that picks its own seed is a client that rerolls the shaft until it is nice.
-- [ ] Fork screen (13): surface banks shards, descend costs the reported HP step and,
-      at a strain depth, the lantern
-- [ ] **The haul, shards only.** Death takes the unbanked shard haul; depth record, XP,
-      story and deeds are **kept**. The item half of the haul lands with 6b — the rule
-      does not change, the thing it applies to does.
-- [ ] Death screen (14): the haul struck through — at 6a that is the shard line
-- [ ] **Server-side run resume.** An Endless run is 20–40 minutes on a phone in a feed
-      iframe. Persist `{seed, choices}` **at every fork** — the choice list is already
-      the save file — so a closed tab, a device switch or lost signal resumes at the
-      last fork. **The haul must only ever be lost to a decision, never an accident.**
-  - [ ] One run in progress at a time; starting a new one abandons the old, and
-        abandoning counts as a death. **No expiry** — a stale run waits indefinitely
-        (owner answer 3; reasoning in `MODES.md`)
-  - [ ] Resuming re-derives the kit **server-side** from the run's start state, not
+- [x] **Server-side kit derivation** — `core/endless.ts`'s `kitForRun(run)`. The client
+      sends `{runId, seed, choices}` and never a kit; the kit travels **downward** so the
+      client can run the same pure sim the server will verify with. At 6a the derivation
+      is `issuedKitForDay(run.seed)`, which is the point: **the seam ships with a real
+      caller**, so 6b fills it rather than inventing it.
+  - [x] The **run's own seed**, server-generated at start (`newRunSeed`, the one impure
+        function in the file) and stored with the run. The client echoes it and the
+        server **checks it against the stored run**.
+- [x] Fork screen (13): surface banks shards, descend costs the reported HP step and,
+      at a strain depth, the lantern. **Every number on it is already on `ForkView`** —
+      nothing is re-derived. The lantern line appears only on the descent that actually
+      takes a slot; a test pins that branch, because no 6a run can reach depth 16 to
+      find it wrong.
+- [x] **The haul, shards only.** Death takes the unbanked shard haul; the depth record
+      is **kept**. The item half of the haul lands with 6b — the rule does not change,
+      the thing it applies to does.
+- [x] Death screen (14): the haul struck through, and its mirror for the run that got
+      out. Both are **receipts, not scolds** — the burned line, the record, and the
+      banked total a death did not touch.
+- [x] **Server-side run resume.** `{seed, choices}` on the hero blob
+      (`PROGRESSION.md`'s `run{ ... }` key), written by **the same compare-and-set
+      transaction that banks the haul** — which is what makes settling exactly-once
+      without a second claim.
+  - [x] **A checkpoint is a DECISION, not a moment** — the loadout, or a fork answered
+        with `descend`. The stored list must be a **prefix** of anything submitted
+        afterwards, or a player descends, dies, and hands in the pre-descent list with
+        `surface` on the end. Storing a fork *unanswered* reopens the same hole from the
+        other side. Full reasoning and the residual exposure in `MODES.md`.
+  - [x] One run in progress at a time; starting a new one abandons the old, and
+        abandoning counts as a death — the haul is gone, the record is kept. **No
+        expiry**, and a test resumes a run ninety days later (owner answer 3).
+  - [x] Resuming re-derives the kit **server-side** from the run's start state, not
         from current gear, or the choice list stops replaying
-- [ ] **`src/client/endless.ts` — the split, decided (owner answer 6).** `main.ts` is
-      327 code lines against a 400 limit and the fork, the death screen and the resume
-      prompt do not fit. `main.ts` keeps boot, routing and the shared click dispatch;
-      `endless.ts` owns the fork/haul/resume state the way `sharing.ts` owns the
-      comment flow — because the Endless is *about* something, which is the only
-      legitimate reason to make a file. **Not a `state.ts`** (a pile with a filename,
-      `CODING_BIBLE` §1.9) and **not an eslint exemption**.
-- [ ] **`runDedupe.ts` (68) ported here**, deferred from Stage 5 with its reasoning: it
-      is keyed on a client-stamped `runId`, and the Daily's idempotency key is already
-      *day + user* under `claimOnce`. 6a is the stage that introduces a mode with
-      unlimited attempts, i.e. the first one where a `runId` exists. The rate limiter
-      itself landed at Stage 5.
+- [x] **`src/client/endless.ts` — the split, decided (owner answer 6).** `main.ts` keeps
+      boot, routing and the shared click dispatch and came out at **348/400**;
+      `endless.ts` (297) owns the fork/haul/resume state the way `sharing.ts` owns the
+      comment flow. **No `state.ts`, no exemption**, and the loadout, ability bar and
+      boon screens stayed one implementation each across both modes.
+- [x] **`runDedupe.ts` ported here**, deferred from Stage 5 with its reasoning.
+      **`beginRun` did not come across, and that is the same decision made again**: the
+      original claimed first-wins with an INCR because Devvit's `set NX` return is
+      opaque, and here the hero's CAS loop already IS the atomic claim. What the module
+      buys is that a *duplicate settle gets its receipt back* instead of "you have no run
+      in progress" — which is what a player on a flaky connection would otherwise see
+      after a settle that worked.
 - [x] **The probe reports a fork ratio** — GATE 5, and the target is **60/40 toward
       surfacing** (owner answer 2, `GAME_DESIGN.md` § The Stage 6 gate). Measured, not
       asserted, the same standing as Stage 1's skill headroom. **Reads 67/33, inside
@@ -939,15 +958,80 @@ measurable *before* there is a gear model resting on it.
         runs deep enough to pay a real price; the strain depths may want to move, and
         that is a tuning edit informed by data rather than a guess made now.
 
-### GATE — the fork has to be a decision
+### GATE — the fork has to be a decision ▸ **PASSED**
 
 - [x] Probe reports a fork ratio near 60/40 — **67/33**
-- [ ] A run survives a closed tab, resumed with the kit re-derived from the run's
-      start state
-- [ ] Death takes the whole unbanked haul and keeps the depth record
+- [x] A run survives a closed tab, resumed with the kit re-derived from the run's
+      start state — and after ninety days, because there is no expiry
+- [x] Death takes the whole unbanked haul and keeps the depth record
 - [x] `simulateRun.length === 2` holds; the Daily is byte-identical — floor 6.6/12,
       ceiling 11.6/12, gap 5.0
-- [x] `npm run test:visual` green, `KNOWN_FINDINGS` still empty
+- [x] `npm run test:visual` green, `KNOWN_FINDINGS` still empty — **and it now plays
+      the Endless too**: two runs, one surfacing and one pushed into the dark, so both
+      faces of the receipt are measured at all three viewports
+
+### The hero learned to hold a run — v1 → v2
+
+`StoredEndlessRun` on the hero blob, and **one key, `run`**. `class`, `spec`, `level`,
+`xp`, `gear` and `stash` deliberately did not come with it: a key ships empty when its
+*shape* is settled and only its contents are pending, and a run's shape is settled
+because 6a writes one. They land in v2 → v3. Fixture test, no gaps in the step table,
+and nothing derivable stored — `cleared`, `shards` and the kit all fall out of
+`{seed, choices}`. Full ledger in `PROGRESSION.md` § Version 2.
+
+**`records.endlessBest` counts CLEARED depths.** The design was silent and the sim
+reports both, so it was decided here: dying at 18 having cleared 17 records D17, and the
+receipt prints the deeper number separately as *"the lantern went out at depth 18"*. You
+do not set a record by walking into a fight, and it keeps the Endless consistent with
+the `D{cleared}` the Daily uses everywhere else.
+
+### Two things playing it caught that review would not have
+
+Both are camp/receipt state bugs, both invisible to every test in the repo, and both
+found by leaving a run and coming back — which is the thing this mode is *about*.
+
+- **The camp door said "you are 0 deep with 0 shards" to a player standing at the
+  depth-1 fork holding ten.** The door read the stored checkpoint, and checkpoints land
+  at fork *decisions*, so the blob is up to a whole depth behind what just happened.
+  It reads the live run when this session has one, and the blob only when it does not.
+- **Walking away from a finished receipt and tapping the door again brought the receipt
+  back** instead of opening a shaft, because "where I was" was remembered for every
+  phase rather than for the one still being played. Only a live run is parked now.
+
+### What the Endless does under `npm run preview` — an OFFLINE run
+
+There is no server behind the preview, so a run there is minted locally: a deterministic
+seed, no checkpoint, no banking, and a banner on every screen the mode owns saying so.
+That is the same fallback the Daily has (`CODING_BIBLE` §6), and it is **what lets
+screens 13 and 14 be played rather than only type-checked** — the visual gate drives
+them through it.
+
+**The resume prompt is reached too**, and getting there changed a design call. The
+camp door used to resume silently if this session had just left the run; now **a run in
+progress always meets the prompt**. It costs one tap coming back from the camp and it
+buys two things: the screen `SCREENS.md` asks for by name is one most players would
+otherwise never see, and *"abandoning is a death"* is stated on the only screen that can
+start one. Resuming keeps the **live** run when the tab still has it, so the trip to the
+camp never costs the depth you are halfway through.
+
+> **The gate reported that screen as passing before it could reach it, and the fix
+> generalises.** The first version tapped CAMP from the *loadout* — which stands on the
+> surface palette, has no depth, and therefore carries no rail and no way back — so it
+> never left, and measured the loadout under the label "resume prompt". Every named
+> screen now goes through `measureAt(expected, label)`, which files an `escaped` finding
+> when the app is somewhere else; `escaped` is the one channel that is never
+> allowlistable. **Verified by re-breaking it**: dropping the two taps produces
+> `✗ the gate expected the resume screen and the app was on fork`, exit 1, at all three
+> viewports. A gate that names a screen it did not reach is worse than one that skips
+> it — it says the screen passed.
+
+### `MAX_ENDLESS_DEPTH` is a verification budget, not a floor
+
+100 depths, in `core/endless.ts` and **not in `TUNING`** — the same call `rateLimit.ts`
+made, because nothing here changes what happens in a run. The server replays the whole
+choice list at every checkpoint, so the list is both the request body and the CPU bill.
+Nothing at 6a comes close (greedy dies around 7). **Re-read it from data once 6b's gear
+pushes runs deep**, along with the lantern strain depths.
 
 ## Stage 6b — gear, classes + progression ▸ **once 6a proves the loop is fun**
 
@@ -984,7 +1068,11 @@ measurable *before* there is a gear model resting on it.
       depth** (owner answer 5, confirmed as specced); the row shows **`u/username`,
       class, level, bar size, ultimate** so it reads as a build-sharing feed rather
       than a second score ladder. Plus one permanent all-time "deepest ever" line.
-      Run dedupe lands at 6a; the per-user rate limiter landed at Stage 5.
+      Run dedupe landed at 6a; the per-user rate limiter landed at Stage 5.
+  - [ ] **Re-read `MODES.md` § A checkpoint is a DECISION before this ships.** 6a
+        accepts a bounded exposure — a player who dies mid-depth can close the tab and
+        re-fight that depth — precisely *because* there is no board to carry it onto.
+        The board is what changes that calculation, and this is the line that says so.
   - [ ] **It belongs to 6b, not 6a, and that is deliberate.** The row *is* the build —
         class, level, ultimate — and at 6a there is no build to show, only a depth. A
         depth-only Endless board would be a second score ladder, which is the exact

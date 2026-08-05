@@ -197,6 +197,27 @@ Two rules that fall out of it:
   resumes after you changed gear in the camp uses the kit it *started* with, or the
   choice list stops being replayable.
 
+**A checkpoint is a DECISION, not a moment — decided 2026-08-05, at Stage 6a.** *"Persist
+it at every fork"* left one thing unsaid and it turned out to be load-bearing: the choice
+list stored at a fork must include **the answer given there**, not stop in front of it.
+
+The reason is the exploit it closes. The stored list is required to be a **prefix** of
+anything submitted afterwards — otherwise a player descends, dies, and hands in the
+pre-descent list with `surface` on the end instead, which deletes the haul rule and with
+it the mode. Storing the fork *unanswered* reopens exactly that from the other side: you
+would resume standing at a fork you had already left. So the checkpoint is `[…, descend]`,
+and resuming puts you at the top of the depth you chose — *"having replayed that depth"*,
+which is what this section already promised for a lost signal. The loadout is the only
+other checkpoint, because it is locked for the delve here too.
+
+> **What that still leaves open, written down rather than discovered later.** Between two
+> checkpoints the client is the only witness, so a player who dies mid-depth can close
+> the tab, resume at the top of that depth and fight it again knowing what is coming.
+> Closing it costs a round trip per turn, which is not a thing to do to a phone in a feed
+> iframe. The exposure is bounded to **re-rolling one depth's play** and never to
+> un-losing a haul — and at 6a there is no Endless board to carry it onto, because the
+> board is 6b. **Re-read this when the board lands.**
+
 **A stale run never expires — decided 2026-08-04.** The alternative was an expiry that
 quietly banks whatever an untouched run was holding after N days, and it was rejected
 because there is no N to pick: short is a free-haul exploit (start a run, find a

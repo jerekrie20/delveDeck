@@ -257,6 +257,44 @@ account later.
 | `unlocked` · `deeds` | `[]` | 6 / 9 |
 | `talents` · `codex` · `camp` | `{}` | 7 / 8 / 7 |
 
+### Version 2 (Stage 6a) — `run`, and only `run`
+
+The in-progress Endless run, so it survives a closed tab. **It is the save file and it
+already existed**: a run is `{seed, choices}`, which is exactly what the server replays
+to verify one. Nothing was invented.
+
+| Key | v2 value | Why now |
+|---|---|---|
+| `run` | `null`, or `{version, runId, seed, choices, startedAt, updatedAt}` | 6a is the stage that writes one |
+| `records.endlessBest` | filled on every settle | The deepest depth **cleared**. Death keeps it; so does abandoning. |
+
+Three things about the shape, each of which is a rule rather than a field:
+
+- **`seed` is server-generated at start.** The client echoes it and the server checks it
+  against this blob. A client that picks its own seed rerolls the shaft until it is nice.
+- **`runId` is client-stamped**, and is the idempotency key for settling — a retried
+  *"I surfaced"* must replay its award, never make a second one.
+- **`version` is the CHOICE-format version, not the hero's.** A run written against an
+  older `RunChoice` union does not error when a newer sim replays it; it produces a
+  confidently wrong run. A mismatch drops the run rather than resuming it.
+
+**`cleared`, `shards` and the kit are all absent, and that is the "store nothing
+derivable" rule rather than an omission** — every one of them falls out of
+`{seed, choices}`, and a stored copy of a derived value is a copy that will drift.
+
+**`class`, `spec`, `level`, `xp`, `gear` and `stash` deliberately did NOT arrive with
+it.** That is the same rule applied twice, not an inconsistency: a key ships empty when
+its *shape* is settled and only its contents are pending. A run's shape is settled
+because 6a writes one; a gear slot's is not, because nothing reads gear yet. They land
+in the v2 → v3 step, which is what the step table is for.
+
+**`records.endlessBest` counts CLEARED depths, not depths entered — decided at Stage
+6a, because the design was silent and the sim reports both.** Dying at depth 18 having
+cleared 17 records D17. The receipt prints the deeper number too, as *"the lantern went
+out at depth 18"*, and both are labelled: you do not set a record by walking into a
+fight. It also keeps the Endless consistent with the Daily's `D{cleared}` everywhere
+else in the game.
+
 **`class`, `spec`, `level`, `xp`, `gear`, `stash` and `run` are deliberately absent
 from v1**, and that is not an oversight in the "every key from day one" rule — it is
 that rule applied honestly. A key is shipped empty when its *shape* is already decided
