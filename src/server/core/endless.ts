@@ -37,10 +37,10 @@
 // conflict replays them.
 
 import {
-  issuedKitForDay, simulateEndless, TUNING,
-  type IssuedKit, type RunChoice, type RunResult,
+  ceilingForRecord, gearedKit, issuedKitForDay, simulateEndless, TUNING,
+  type IssuedKit, type Item, type RunChoice, type RunResult,
 } from '../../shared/sim';
-import type { StoredEndlessRun } from './heroSchema';
+import type { RunSnapshot, StoredEndlessRun, StoredHero } from './heroSchema';
 import type { HeroRedisLike } from './heroStore';
 import { CAS_ATTEMPTS, readHero, updateHero } from './heroStore';
 import {
@@ -55,19 +55,32 @@ import { findSettledRun, recordSettledRun, type RunDedupeRedisLike } from './run
 /**
  * **The kit, derived server-side from the run's START state.**
  *
- * At 6a that start state is the seed and nothing else, so this is one line — and that
- * is exactly why it is a function with a name and a caller instead of an inlined call.
- * 6b fills it from a gear/class snapshot taken when the run began, because resuming
- * must never read *current* gear: change your loadout in the camp and the stored choice
- * list stops replaying, which turns a resumable run into a wrong one.
+ * `run.snapshot` is that start state — the gear the delver walked in wearing and the
+ * rarity ceiling their record had opened — and it is read **instead of current gear, not
+ * as a shortcut to it.** Change your loadout in the camp mid-run and a kit built from
+ * *current* gear would stop replaying the choice list that was played under the old one:
+ * a resumable run would silently become a wrong one, and every number the server
+ * verifies with it would be wrong too.
+ *
+ * This is still the only place in the project a kit is derived. Classes, levels and
+ * talents join `RunSnapshot` at the stage that reads them, and this function is the one
+ * line that has to change.
  */
-export function kitForRun(run: Pick<StoredEndlessRun, 'seed'>): IssuedKit {
-  return issuedKitForDay(run.seed);
+export function kitForRun(run: Pick<StoredEndlessRun, 'seed' | 'snapshot'>): IssuedKit {
+  const { gear, dropCeiling } = run.snapshot;
+  return gearedKit(issuedKitForDay(run.seed), gear, dropCeiling);
+}
+
+/** What a run about to start would be played under. Pure, and read INSIDE the
+ *  compare-and-set mutator so a concurrent equip cannot stamp a run with gear the blob
+ *  no longer holds. */
+export function snapshotOfHero(hero: StoredHero): RunSnapshot {
+  return { gear: hero.gear ?? {}, dropCeiling: ceilingForRecord(endlessBestOf(hero)) };
 }
 
 /** Replay a stored run exactly as the server will verify it. */
 export function replayEndless(
-  run: Pick<StoredEndlessRun, 'seed'>,
+  run: Pick<StoredEndlessRun, 'seed' | 'snapshot'>,
   choices: readonly RunChoice[],
 ): RunResult {
   return simulateEndless(run.seed, choices, kitForRun(run));
@@ -149,8 +162,15 @@ export interface EndlessSummary extends EndlessSettlement {
    *  out at depth 18" and keeps a record of D17: you do not set a record by walking
    *  into a fight. Both numbers are shown, both are labelled. */
   depth: number;
-  /** The unbanked haul the run was holding. Surfacing banks it; death burns it. */
+  /** The unbanked shard haul the run was holding. Surfacing banks it; death burns it. */
   haul: number;
+  /** And its item half, in the order found — **itemised on the receipt either way.**
+   *  `GEAR.md` § The haul: dying at depth 40 with a legendary in your bag means you lost
+   *  a legendary at depth 40, and the screen has to be able to say which one. */
+  items: Item[];
+  /** Parallel to `items`: which were being WORN when the run ended. Wearing one never
+   *  saved it, and the receipt says so by naming them rather than by omitting them. */
+  itemsWorn: boolean[];
 }
 
 type Fail = { ok: false; error: string };
@@ -207,7 +227,10 @@ export function checkSubmission(
  * player resume standing at a fork they had already left, which is rule 3 reopened from
  * the other side.
  */
-function isCheckpoint(run: Pick<StoredEndlessRun, 'seed'>, choices: readonly RunChoice[]): boolean {
+function isCheckpoint(
+  run: Pick<StoredEndlessRun, 'seed' | 'snapshot'>,
+  choices: readonly RunChoice[],
+): boolean {
   if (choices.length === 0) return false;
   const last = choices[choices.length - 1]!;
   if (choices.length === 1) return last.k === 'load';
@@ -239,20 +262,22 @@ export async function startEndlessRun(
   nowMs: number,
 ): Promise<StartResult> {
   if (!runId || runId.length > MAX_RUN_ID_LENGTH) return fail('Bad run id.');
-  const run: StoredEndlessRun = {
-    version: STORED_RUN_VERSION,
-    runId,
-    seed,
-    choices: [],
-    startedAt: nowMs,
-    updatedAt: nowMs,
-  };
   const { result } = await updateHero(
     client, userId, nowMs,
-    beginEndlessRun(run, depthOfStoredRun),
+    beginEndlessRun(
+      { version: STORED_RUN_VERSION, runId, seed, choices: [], startedAt: nowMs, updatedAt: nowMs },
+      snapshotOfHero,
+      depthOfStoredRun,
+    ),
     CAS_ATTEMPTS.runResult,
   );
-  return { ok: true, run: { runId, seed, choices: [], kit: kitForRun(run) }, abandoned: result };
+  // The kit comes off the run that was actually WRITTEN, not off a hero read before the
+  // transaction — so what the client is handed is what the server will verify with.
+  return {
+    ok: true,
+    run: { runId, seed, choices: [], kit: kitForRun(result.run) },
+    abandoned: result.abandoned,
+  };
 }
 
 /**
@@ -369,10 +394,14 @@ export async function settleEndlessRun(
   // in this mode. The check above is a narrowing, not a policy.
   const outcome: EndlessOutcome = replay.outcome;
   const haul = replay.shards;
+  const surfaced = outcome === 'surfaced';
 
   const { result } = await updateHero(
     client, userId, nowMs,
-    endEndlessRun(sent.runId, outcome === 'surfaced' ? haul : 0, replay.cleared),
+    // **The items go in on the same terms as the shards, including the ones being
+    // worn.** Wearing a drop never saved it, so a death hands in an empty haul and a
+    // surfacing hands in all of it — the asymmetry `GEAR.md` says must not erode.
+    endEndlessRun(sent.runId, surfaced ? haul : 0, replay.cleared, surfaced ? replay.haul : []),
     CAS_ATTEMPTS.runResult,
   );
   if (!result) return fail('That run has already been settled.');
@@ -384,6 +413,8 @@ export async function settleEndlessRun(
     cleared: replay.cleared,
     depth: replay.facts.deepestDepth,
     haul,
+    items: replay.haul,
+    itemsWorn: replay.haulWorn,
   };
   await recordSettledRun(dedupe, userId, sent.runId, summary, nowMs);
   return { ok: true, summary };

@@ -3,14 +3,18 @@ import { z } from 'zod';
 import { transformer } from '../shared/transformer';
 import type { Context } from './context';
 import { context, reddit } from '@devvit/web/server';
-import { dayKey, seedForDay, MAX_RUN_CHOICES, TUNING } from '../shared/sim';
+import { dayKey, seedForDay, GEAR_SLOTS, MAX_RUN_CHOICES, TUNING, type GearSlot } from '../shared/sim';
 import { submitRun, getBoard, getRun, hasSubmitted, isSubmittableDay } from './core/run';
 import {
   redisEndlessDedupeClient, redisHeroClient, redisRateLimitClient, redisRunStore,
 } from './core/runStore';
 import { readDayStats } from './core/stats';
 import { postRunComment } from './core/comment';
-import { bankRunShards, readShardTotal } from './core/hero';
+import {
+  bankRunShards, equipFromStash, readGearState, readShardTotal, salvageFromStash, unequipSlot,
+  type GearState,
+} from './core/hero';
+import { CAS_ATTEMPTS, updateHero } from './core/heroStore';
 import { consumeRateLimit, RATE_LIMITS } from './core/rateLimit';
 import {
   MAX_ENDLESS_CHOICES, MAX_ENDLESS_DEPTH, MAX_RUN_ID_LENGTH, newRunSeed, readEndlessState,
@@ -94,6 +98,37 @@ const endlessSubmission = z.object({
  */
 function currentUserId(): string | undefined {
   return context.userId;
+}
+
+/** An item id is server-minted (`{seed}-{depth}`, with a `#n` suffix if two runs on one
+ *  seed ever collide) and it reaches a stash lookup, so it is bounded and
+ *  alphabet-checked rather than trusted. */
+const itemIdSchema = z.string().min(1).max(40).regex(/^[A-Za-z0-9#_-]+$/);
+
+/** `z.enum` wants a non-empty tuple of literals; `GEAR_SLOTS` is the readonly array the
+ *  sim exports. One list, spelled once — a second copy here would be a slot name that
+ *  could drift out of the model. */
+const GEAR_SLOT_NAMES = [...GEAR_SLOTS] as [GearSlot, ...GearSlot[]];
+
+/**
+ * Every gear write shares one door: logged in, rate-limited, then the mutation — and it
+ * answers with the **whole gear state** rather than a success flag, so the screen never
+ * renders a guess about what its own tap did.
+ */
+async function writeGear(
+  mutate: (userId: string, nowMs: number) => Promise<string | null>,
+): Promise<{ ok: false; error: string } | ({ ok: true } & GearState)> {
+  const now = Date.now();
+  const userId = currentUserId();
+  if (!userId) return { ok: false, error: 'You must be logged in to change your gear.' };
+  const allowed = await consumeRateLimit(
+    redisRateLimitClient, 'gear', userId,
+    RATE_LIMITS.gear.limit, RATE_LIMITS.gear.windowSeconds, now,
+  );
+  if (!allowed) return { ok: false, error: 'Too many changes — give it a moment.' };
+  const error = await mutate(userId, now);
+  if (error) return { ok: false, error };
+  return { ok: true, ...await readGearState(redisHeroClient, userId, now) };
 }
 
 /** Every Endless route is rate-limited and account-keyed, so the three of them share
@@ -276,6 +311,50 @@ export const appRouter = t.router({
         redisHeroClient, redisEndlessDedupeClient, caller.userId, now, input,
       );
     }),
+  }),
+
+  // ---- gear (Stage 6b) -----------------------------------------------------------
+  //
+  // Screen 04's whole server half, and the direction of travel is the same as the
+  // Endless's: an **item id and a slot name** go up, and the item itself comes down.
+  // There is no parameter here through which an item, a stat, an affix or a shard
+  // amount could be supplied — every one of those is read off, or computed from, the
+  // stash the server is already holding.
+  hero: t.router({
+    /** What screen 04 shows. A pure read: opening a screen is not a reason to create a
+     *  delver, the same rule the shard total follows. */
+    gear: publicProcedure.query(async () => {
+      const userId = currentUserId();
+      if (!userId) return { gear: {}, stash: [], shards: 0, capacity: 0, slots: GEAR_SLOTS };
+      return await readGearState(redisHeroClient, userId, Date.now());
+    }),
+
+    equip: publicProcedure
+      .input(z.object({ itemId: itemIdSchema, slot: z.enum(GEAR_SLOT_NAMES) }))
+      .mutation(async ({ input }) => await writeGear(
+        (userId, now) => updateHero(
+          redisHeroClient, userId, now,
+          equipFromStash(input.itemId, input.slot), CAS_ATTEMPTS.hero,
+        ).then(({ result }) => (result ? null : 'That does not go there.')),
+      )),
+
+    unequip: publicProcedure
+      .input(z.object({ slot: z.enum(GEAR_SLOT_NAMES) }))
+      .mutation(async ({ input }) => await writeGear(
+        (userId, now) => updateHero(
+          redisHeroClient, userId, now, unequipSlot(input.slot), CAS_ATTEMPTS.hero,
+        ).then(({ result }) => (result ? null : 'Your stash is full.')),
+      )),
+
+    /** Scrap a stashed item. The price is `salvageValue`, computed server-side from the
+     *  item the server stored — there is no amount in the input to disagree with. */
+    salvage: publicProcedure
+      .input(z.object({ itemId: itemIdSchema }))
+      .mutation(async ({ input }) => await writeGear(
+        (userId, now) => updateHero(
+          redisHeroClient, userId, now, salvageFromStash(input.itemId), CAS_ATTEMPTS.hero,
+        ).then(({ result }) => (result > 0 ? null : 'There is nothing there to scrap.')),
+      )),
   }),
 
   board: t.router({

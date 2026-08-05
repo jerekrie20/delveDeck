@@ -19,16 +19,17 @@ import { assert, check, describe } from './helpers';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  migrateStoredHero, newStoredHero, STORED_HERO_VERSION,
+  bareSnapshot, migrateStoredHero, newStoredHero, STORED_HERO_VERSION,
   type StoredEndlessRun, type StoredHero,
 } from '../src/server/core/heroSchema';
 import {
   HeroConflictError, heroKey, readHero, updateHero,
 } from '../src/server/core/heroStore';
 import {
-  bankRunShards, bankShards, beginEndlessRun, endEndlessRun, readShardTotal,
-  saveEndlessProgress,
+  bankRunShards, bankShards, beginEndlessRun, endEndlessRun, equipFromStash, readShardTotal,
+  salvageFromStash, saveEndlessProgress, stashCapacity, unequipSlot,
 } from '../src/server/core/hero';
+import { GEAR_SLOTS, fitsSlot, salvageValue, type Item } from '../src/shared/sim';
 import { consumeRateLimit, RATE_LIMITS } from '../src/server/core/rateLimit';
 import { FakeRedis } from './fakes/redis';
 import { simulateRun, seedForDay } from '../src/shared/sim';
@@ -165,7 +166,38 @@ await check('a run that is already on a blob is never back-filled over', () => {
   // keeps an unknown field alive, applied to a known one.
   const run = { version: 1, runId: 'r', seed: 5, choices: [], startedAt: 1, updatedAt: 1 };
   const migrated = migrateStoredHero({ v: 1, shards: 0, run }, NOW);
-  assert.deepEqual(migrated.run, run);
+  assert.deepEqual(
+    { ...migrated.run, snapshot: undefined }, { ...run, snapshot: undefined },
+    'every field the older writer put there survives, unchanged',
+  );
+});
+
+await check('A RUN STARTED BEFORE GEAR RESUMES AFTER IT — v3 stamps, it does not void', () => {
+  // `MODES.md` § A run survives everything except a decision, and owner answer 3: a run
+  // waits as long as you do. v3 gave `StoredEndlessRun` a snapshot, and the tempting
+  // move — drop a run that has none — would quietly break that promise for anybody
+  // mid-delve on the day gear ships.
+  //
+  // The stamp is not a default standing in for the truth: a v2 hero had NO gear, so an
+  // empty snapshot describes exactly the run that was played, and `kitForRun` over it
+  // returns exactly the issued kit that run was played under.
+  const run = { version: 1, runId: 'r', seed: 5, choices: [], startedAt: 1, updatedAt: 1 };
+  const migrated = migrateStoredHero({ v: 2, shards: 0, run }, NOW);
+  assert.deepEqual(migrated.run?.snapshot, bareSnapshot());
+  assert.deepEqual(migrated.gear, {}, 'and the delver itself has never worn anything');
+  assert.deepEqual(migrated.stash, []);
+  assert.equal(migrated.level, 1);
+  assert.equal(migrated.class, null, 'a spec ID, not an enum position — and not one yet');
+});
+
+await check('a v3 blob whose run is nonsense is not a reason to throw', () => {
+  // Migrations meet partial writes and hand-edited keys, and bricking an account is
+  // worse than any bug a migration was written to fix (this file's header).
+  for (const nonsense of [42, 'run', [], null]) {
+    const migrated = migrateStoredHero({ v: 2, shards: 7, run: nonsense }, NOW);
+    assert.equal(migrated.shards, 7, `a run of ${JSON.stringify(nonsense)} ate the blob`);
+    assert.equal(migrated.v, STORED_HERO_VERSION);
+  }
 });
 
 await check('the migration table has NO GAPS up to the current version', () => {
@@ -231,13 +263,80 @@ await check('beginEndlessRun keeps the abandoned run’s record and banks nothin
   hero.run = storedRunFixture('old');
   const fresh = storedRunFixture('new');
 
-  const abandoned = beginEndlessRun(fresh, () => 11)(hero);
+  const { abandoned } = beginEndlessRun(fresh, () => bareSnapshot(), () => 11)(hero);
 
   assert.equal(abandoned, 11);
   assert.equal(hero.run.runId, 'new', 'one run at a time');
   assert.equal(hero.shards, 0, 'abandoning is a DEATH — it banks nothing');
   assert.equal(hero.records['endlessBest'], 11, 'and it keeps the depth record');
 });
+
+await check('THE CAMP MUTATORS ARE PURE TOO — equip, unequip and salvage all replay clean', () => {
+  // Stage 6b put three more through the same loop, and every one of them moves an item
+  // between two lists on the same blob. A conflict re-runs them against a fresher one.
+  const item = fixtureItem('a');
+  const slot = GEAR_SLOTS.find((s) => fitsSlot(item, s))!;
+
+  const a = newStoredHero(NOW);
+  const b = newStoredHero(NOW);
+  a.stash = [fixtureItem('a')];
+  b.stash = [fixtureItem('a')];
+  b.shards = 500;
+
+  const equip = equipFromStash('a', slot);
+  assert.equal(equip(a), true);
+  assert.equal(equip(a), false, 'it left the stash, so a second call finds nothing');
+  assert.equal(equip(b), true, 'and nothing carried over from the first hero');
+  assert.equal(a.gear[slot]?.id, 'a');
+  assert.deepEqual(a.stash, [], 'the stash gave it up');
+
+  const salvage = salvageFromStash('a');
+  assert.equal(salvage(a), 0, 'a WORN item cannot be scrapped — you are standing in it');
+  assert.equal(unequipSlot(slot)(a), true);
+  assert.equal(salvage(a), salvageValue(item), 'and off the body it pays its budget');
+  assert.equal(a.shards, salvageValue(item));
+});
+
+await check('unequip is refused rather than deleting an item to make room', () => {
+  const hero = newStoredHero(NOW);
+  const item = fixtureItem('worn');
+  const slot = GEAR_SLOTS.find((s) => fitsSlot(item, s))!;
+  hero.gear = { [slot]: item };
+  hero.stash = Array.from({ length: stashCapacity(hero.level) }, (_, i) => fixtureItem(`f${i}`));
+
+  assert.equal(unequipSlot(slot)(hero), false, 'a full stash refuses, it does not discard');
+  assert.equal(hero.gear[slot]?.id, 'worn', 'and the item is still on the delver');
+});
+
+await check('THE STASH GROWS WITH LEVEL — it does not sit at a cap', () => {
+  // `GEAR.md` override #4. Eleven slots of gear needs somewhere to live, and an
+  // inventory that forces a discard every run is a chore rather than a decision.
+  assert.ok(stashCapacity(5) > stashCapacity(1));
+  assert.equal(stashCapacity(1), stashCapacity(0), 'level 0 is not a thing; it floors at 1');
+});
+
+await check('an item goes back to the stash when a swap displaces it', () => {
+  const hero = newStoredHero(NOW);
+  const worn = fixtureItem('old');
+  const slot = GEAR_SLOTS.find((s) => fitsSlot(worn, s))!;
+  hero.gear = { [slot]: worn };
+  hero.stash = [fixtureItem('new')];
+
+  assert.equal(equipFromStash('new', slot)(hero), true);
+  assert.equal(hero.gear[slot]?.id, 'new');
+  assert.deepEqual(hero.stash.map((i) => i.id), ['old'], 'a swap is reversible');
+});
+
+await check('an item cannot be forced into a slot it does not fit', () => {
+  const hero = newStoredHero(NOW);
+  hero.stash = [fixtureItem('ring')];
+  assert.equal(equipFromStash('ring', 'amulet')(hero), false);
+  assert.equal(hero.stash.length, 1, 'and a refusal writes nothing');
+});
+
+function fixtureItem(id: string): Item {
+  return { id, base: 'band', rarity: 'rare', depth: 12, budget: 40, affixes: [] };
+}
 
 await check('saveEndlessProgress refuses a rewind even inside the transaction', () => {
   // `core/endless.ts` already checked this against the blob it read; a compare-and-set
@@ -255,7 +354,10 @@ await check('saveEndlessProgress refuses a rewind even inside the transaction', 
 });
 
 function storedRunFixture(runId: string): StoredEndlessRun {
-  return { version: 1, runId, seed: 5, choices: [], startedAt: NOW, updatedAt: NOW };
+  return {
+    version: 1, runId, seed: 5, choices: [], snapshot: bareSnapshot(),
+    startedAt: NOW, updatedAt: NOW,
+  };
 }
 
 // ---- the CAS loop ----------------------------------------------------------------

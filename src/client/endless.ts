@@ -306,10 +306,17 @@ function offlineSummary(): EndlessSummary {
     cleared: result.cleared,
     depth: result.facts.deepestDepth,
     haul: result.shards,
+    items: result.haul,
+    itemsWorn: result.haulWorn,
     banked: 0,
     shardTotal: bankedTotal ?? 0,
     best,
     newRecord: beat,
+    // Nothing reached a stash either, and the receipt says *surfaced, not banked*
+    // rather than listing items as kept when there is no account to keep them.
+    kept: [],
+    overflowed: 0,
+    overflowShards: 0,
   };
 }
 

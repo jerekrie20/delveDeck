@@ -16,7 +16,7 @@ import { readDayStats } from './stats';
 import { heroKey, readHero, updateHero } from './heroStore';
 import { bankRunShards, bankShards, readShardTotal } from './hero';
 import { consumeRateLimit } from './rateLimit';
-import { STORED_HERO_VERSION } from './heroSchema';
+import { STORED_HERO_VERSION, bareSnapshot } from './heroSchema';
 import { findSettledRun, recordSettledRun, runDoneKey } from './runDedupe';
 import {
   readEndlessState, replayEndless, settleEndlessRun, startEndlessRun, stepEndlessRun,
@@ -399,14 +399,14 @@ test('the dedupe summary round-trips, so a retried settle replays its receipt', 
 function playToFirstFork(): RunChoice[] {
   const choices: RunChoice[] = [{ k: 'load', bar: [0, 1, 2], ult: 0 }];
   const legal = (candidate: RunChoice): boolean => {
-    if (replayEndless({ seed: ENDLESS_SEED }, [...choices, candidate]).outcome === 'invalid') {
+    if (replayEndless({ seed: ENDLESS_SEED, snapshot: bareSnapshot() }, [...choices, candidate]).outcome === 'invalid') {
       return false;
     }
     choices.push(candidate);
     return true;
   };
   for (let guard = 0; guard < 400; guard++) {
-    const result = replayEndless({ seed: ENDLESS_SEED }, choices);
+    const result = replayEndless({ seed: ENDLESS_SEED, snapshot: bareSnapshot() }, choices);
     const view = result.view;
     if (result.outcome !== 'outOfChoices' || !view) break;
     if (view.phase === 'fork') break;

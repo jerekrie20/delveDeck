@@ -44,6 +44,11 @@ export const RATE_LIMITS = {
    *  rate no human sustains rather than to a count anyone reaches — and every call
    *  behind it replays the whole run, which is why there is a limit at all. */
   endless: { limit: 30, windowSeconds: 60 },
+  /** The camp's gear screen (Stage 6b). Each call is a read-modify-write of one blob
+   *  with no simulation behind it, so it is cheap — but it is a WRITE, and somebody
+   *  rebuilding a loadout genuinely taps a dozen times in a row. Sized for that, not
+   *  for a script. */
+  gear: { limit: 60, windowSeconds: 60 },
 } as const;
 
 const rateLimitKey = (bucket: string, userId: string, window: number): string =>

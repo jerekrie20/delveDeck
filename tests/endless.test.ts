@@ -1,9 +1,14 @@
 // The Stage 6a gate: **the fork is a decision, and the Daily cannot feel it.**
 //
-// This file owns the second mode. It is separate from `sim.test.ts` — which owns the
-// RULES the two modes share — because it fails for a different reason: a change to the
-// fork, the lantern strain or the haul breaks this file and nothing else, and a change
-// to the turn order breaks that one and not this.
+// This file owns the second mode's DECISION. It is separate from `sim.test.ts` — which
+// owns the RULES the two modes share — because it fails for a different reason: a change
+// to the fork or the lantern strain breaks this file and nothing else, and a change to
+// the turn order breaks that one and not this.
+//
+// It split again at Stage 6b. Everything BEHIND the fork — the stored run, the prefix
+// rule, the resume, the settle, and the item half of the haul — moved to
+// `endlessRun.test.ts`, on the same rule: a change to how a run is persisted breaks that
+// file, and a change to what one more depth costs breaks this one.
 //
 // Three things it exists to stop:
 //
@@ -19,24 +24,17 @@
 //     bounded here.
 
 import { assert, check, describe } from './helpers';
-import { endlessAtFork, endlessChoices, endlessRun, firstLoadout, nerve } from './policies';
+import { endlessAtFork, endlessRun, firstLoadout } from './policies';
 import {
   TUNING, issuedKitForDay, litSlotsAt, simulateEndless, simulateRun,
   type ForkView, type RunChoice,
 } from '../src/shared/sim';
 import { forkScreen } from '../src/client/endless';
-import { readHero } from '../src/server/core/heroStore';
-import {
-  checkSubmission, kitForRun, readEndlessState, settleEndlessRun, startEndlessRun,
-  stepEndlessRun,
-} from '../src/server/core/endless';
-import { STORED_RUN_VERSION } from '../src/server/core/run';
-import { FakeRedis } from './fakes/redis';
 
-describe('endless');
+describe('endless · the fork');
 
-/** The 6a kit: the Daily's, issued. Gear and classes arrive at 6b and fill exactly
- *  this seam — which is why the seam ships with a real caller rather than empty. */
+/** A delver with nothing worn: the issued kit. Gear folds over exactly this in
+ *  `kitForRun`, which is why the fork's own maths never has to know it exists. */
 const kitFor = (seed: number) => issuedKitForDay(seed);
 
 // ---- the wall between the modes -------------------------------------------------
@@ -264,205 +262,9 @@ await check('THE FORK SCREEN NAMES THE LANTERN ONLY WHEN IT COSTS ONE', () => {
   assert.ok(deep.includes(`${litSlotsAt(TUNING.foresight, strain)} of ${TUNING.foresight} left`));
 });
 
-// ---- the persisted run ----------------------------------------------------------
-//
-// The sim above says the fork is a decision. These say the SERVER is the one that
-// decides, because a fork the client can answer twice is not a decision at all.
-
-const NOW = 1_770_000_000_000;
-const USER = 't2_delver';
-const SEED = 4242;
-
-await check('THE SEED IS THE SERVER’S — a client that names another one is refused', () => {
-  // A client that picks its own seed rerolls the shaft until it is nice. The stored run
-  // is the authority and the echo is checked against it, never trusted.
-  const run = storedRun(SEED, [firstLoadout()]);
-  assert.equal(checkSubmission(run, sent(SEED, run.choices)).ok, true);
-  const wrong = checkSubmission(run, sent(SEED + 1, run.choices));
-  assert.equal(wrong.ok, false, 'a different seed must not be accepted');
-});
-
-await check('A RUN ONLY EVER MOVES FORWARD — the rewind is what would kill the mode', () => {
-  // The one that is not obvious. The sim is deterministic, so replaying a shorter list
-  // rerolls nothing — but it lets a player descend, die, and hand in the pre-descent
-  // list with `surface` on the end instead. That single move deletes the haul rule.
-  const kit = kitFor(SEED);
-  const at = endlessAtFork(SEED, kit, 2);
-  assert.ok(at);
-  const checkpoint = [...at.choices, { k: 'descend' } as RunChoice];
-  const run = storedRun(SEED, checkpoint);
-
-  assert.equal(checkSubmission(run, sent(SEED, [...checkpoint, { k: 'end' }])).ok, true);
-  assert.equal(
-    checkSubmission(run, sent(SEED, at.choices)).ok, false,
-    'dropping the descend is a rewind, and a rewind turns a death into a surfacing',
-  );
-  assert.equal(
-    checkSubmission(run, sent(SEED, [...at.choices, { k: 'surface' }])).ok, false,
-    'and so is swapping the answer that was already given',
-  );
-});
-
-await check('a run in an older CHOICE FORMAT is refused rather than replayed', () => {
-  // Feeding an old choice list to a new sim does not error — it produces a confidently
-  // wrong run. `StoredRun` learned this at Stage 1 and the in-progress run inherits it.
-  const stale = { ...storedRun(SEED, [firstLoadout()]), version: STORED_RUN_VERSION - 1 };
-  assert.equal(checkSubmission(stale, sent(SEED, stale.choices)).ok, false);
-});
-
-await check('STARTING A RUN STORES IT, and the kit is derived from the stored seed', async () => {
-  const redis = new FakeRedis();
-  const started = await startEndlessRun(redis, USER, 'run-a', SEED, NOW);
-  assert.ok(started.ok);
-  assert.equal(started.run.seed, SEED);
-  assert.deepEqual(started.run.choices, []);
-  // The kit travels DOWNWARD and is the one the server will verify against. At 6a that
-  // is the Daily's issued kit, which is exactly why the seam has a real caller.
-  assert.deepEqual(started.run.kit, issuedKitForDay(SEED));
-
-  const hero = await readHero(redis, USER, NOW);
-  assert.equal(hero?.run?.seed, SEED, 'the run must be on the hero, not in a session');
-  assert.equal(hero?.run?.version, STORED_RUN_VERSION);
-});
-
-await check('A CHECKPOINT IS A DECISION — the loadout, or a fork answered', async () => {
-  const redis = new FakeRedis();
-  await startEndlessRun(redis, USER, 'run-b', SEED, NOW);
-  const kit = kitFor(SEED);
-
-  const load = await stepEndlessRun(redis, USER, NOW, sent(SEED, [firstLoadout()], 'run-b'));
-  assert.equal(load.ok, true, 'the loadout is locked for the delve in this mode too');
-
-  const at = endlessAtFork(SEED, kit, 1);
-  assert.ok(at);
-  // A fork with no answer on it is NOT a checkpoint: storing it would let a player
-  // resume standing at a fork they had already left, which is the rewind from the
-  // other side.
-  const unanswered = await stepEndlessRun(redis, USER, NOW, sent(SEED, at.choices, 'run-b'));
-  assert.equal(unanswered.ok, false, 'a fork nobody answered is not a save point');
-
-  const answered = await stepEndlessRun(
-    redis, USER, NOW, sent(SEED, [...at.choices, { k: 'descend' }], 'run-b'),
-  );
-  assert.equal(answered.ok, true, 'a fork answered with descend is the save point');
-  const hero = await readHero(redis, USER, NOW);
-  assert.equal(hero?.run?.choices.length, at.choices.length + 1);
-});
-
-await check('RESUMING re-derives the kit from the run’s START state', async () => {
-  const redis = new FakeRedis();
-  await startEndlessRun(redis, USER, 'run-c', SEED, NOW);
-  const at = endlessAtFork(SEED, kitFor(SEED), 1);
-  assert.ok(at);
-  await stepEndlessRun(redis, USER, NOW, sent(SEED, [...at.choices, { k: 'descend' }], 'run-c'));
-
-  // A closed tab, a device switch, a lost signal. Nothing here reads "current" anything
-  // — the kit comes back out of the stored seed, or the choice list stops replaying.
-  const state = await readEndlessState(redis, USER, NOW + 90 * 24 * 3600_000);
-  assert.ok(state.run, 'NO EXPIRY: a stale run waits indefinitely (owner answer 3)');
-  assert.deepEqual(state.run.kit, kitForRun({ seed: SEED }));
-  assert.equal(state.run.seed, SEED);
-  assert.equal(state.run.choices.length, at.choices.length + 1);
-});
-
-await check('SURFACING BANKS THE HAUL, and the run is cleared off the hero', async () => {
-  const redis = new FakeRedis();
-  await startEndlessRun(redis, USER, 'run-d', SEED, NOW);
-  const kit = kitFor(SEED);
-  const choices = endlessChoices(SEED, kit, nerve(1));
-  const run = simulateEndless(SEED, choices, kit);
-  assert.equal(run.outcome, 'surfaced');
-
-  const settled = await settleEndlessRun(redis, redis, USER, NOW, sent(SEED, choices, 'run-d'));
-  assert.ok(settled.ok);
-  assert.equal(settled.summary.banked, run.shards, 'the whole haul banks');
-  assert.equal(settled.summary.shardTotal, run.shards);
-  assert.equal(settled.summary.best, run.cleared);
-  assert.equal(settled.summary.newRecord, true);
-
-  const hero = await readHero(redis, USER, NOW);
-  assert.equal(hero?.run, null, 'the run must be cleared so the next one can start');
-  assert.equal(hero?.shards, run.shards);
-});
-
-await check('DEATH TAKES THE HAUL AND KEEPS THE DEPTH RECORD', async () => {
-  // The gate's third line, and the mode's whole promise: you moved sideways, never
-  // backwards. Nothing reaches the total, and the record stands.
-  const redis = new FakeRedis();
-  await startEndlessRun(redis, USER, 'run-e', SEED, NOW);
-  const kit = kitFor(SEED);
-  const choices = endlessChoices(SEED, kit, nerve(0, 200));
-  const run = simulateEndless(SEED, choices, kit);
-  assert.equal(run.outcome, 'died');
-  assert.ok(run.shards > 0, 'the run has to have been carrying something to lose it');
-
-  const settled = await settleEndlessRun(redis, redis, USER, NOW, sent(SEED, choices, 'run-e'));
-  assert.ok(settled.ok);
-  assert.equal(settled.summary.haul, run.shards, 'the receipt names what burned');
-  assert.equal(settled.summary.banked, 0, 'and none of it reached the total');
-  assert.equal(settled.summary.shardTotal, 0);
-  assert.equal(settled.summary.best, run.cleared, 'the depth record is KEPT');
-
-  const hero = await readHero(redis, USER, NOW);
-  assert.equal(hero?.shards, 0);
-  assert.equal(hero?.run, null);
-});
-
-await check('SETTLING IS IDEMPOTENT — a retry replays the receipt, it never pays twice', async () => {
-  const redis = new FakeRedis();
-  await startEndlessRun(redis, USER, 'run-f', SEED, NOW);
-  const kit = kitFor(SEED);
-  const choices = endlessChoices(SEED, kit, nerve(1));
-
-  const first = await settleEndlessRun(redis, redis, USER, NOW, sent(SEED, choices, 'run-f'));
-  const again = await settleEndlessRun(redis, redis, USER, NOW + 5000, sent(SEED, choices, 'run-f'));
-  assert.ok(first.ok && again.ok);
-  assert.deepEqual(again.summary, first.summary, 'the duplicate gets the same receipt back');
-
-  const hero = await readHero(redis, USER, NOW);
-  assert.equal(hero?.shards, first.summary.banked, 'and the total moved exactly once');
-});
-
-await check('ABANDONING IS A DEATH — one run at a time, and walking away banks nothing', async () => {
-  // Owner answer 3, and it is the rule that stops "start a run, find something good,
-  // walk away, collect it later" from being the whole game.
-  const redis = new FakeRedis();
-  await startEndlessRun(redis, USER, 'run-g', SEED, NOW);
-  const kit = kitFor(SEED);
-  const at = endlessAtFork(SEED, kit, 3);
-  assert.ok(at);
-  const carrying = simulateEndless(SEED, at.choices, kit);
-  assert.ok(carrying.shards > 0);
-  await stepEndlessRun(redis, USER, NOW, sent(SEED, [...at.choices, { k: 'descend' }], 'run-g'));
-
-  const next = await startEndlessRun(redis, USER, 'run-h', SEED + 7, NOW + 1000);
-  assert.ok(next.ok);
-  assert.equal(next.abandoned, carrying.cleared, 'the abandoned run reports how deep it got');
-
-  const hero = await readHero(redis, USER, NOW);
-  assert.equal(hero?.run?.runId, 'run-h', 'only one run is ever in progress');
-  assert.equal(hero?.shards, 0, 'abandoning banks NOTHING — it is a death');
-  assert.equal(hero?.records['endlessBest'], carrying.cleared, 'and the record is kept');
-
-  const orphan = await settleEndlessRun(redis, redis, USER, NOW, sent(SEED, at.choices, 'run-g'));
-  assert.equal(orphan.ok, false, 'the abandoned run cannot be handed in afterwards');
-});
-
 // ---- helpers --------------------------------------------------------------------
 
 type Kit = ReturnType<typeof issuedKitForDay>;
-
-/** A stored run blob, as `startEndlessRun` would have written it. */
-function storedRun(seed: number, choices: RunChoice[], runId = 'run-1') {
-  return {
-    version: STORED_RUN_VERSION, runId, seed, choices, startedAt: NOW, updatedAt: NOW,
-  };
-}
-
-/** What a client is allowed to say. */
-function sent(seed: number, choices: readonly RunChoice[], runId = 'run-1') {
-  return { runId, seed, choices };
-}
 
 /** A `ForkView` at an arbitrary depth. Hand-built ON PURPOSE: the point of the check
  *  above is the screen's branch, and playing to depth 15 to reach it would make the

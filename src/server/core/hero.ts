@@ -18,10 +18,13 @@
 // no path from a hero back into `simulateRun`, whose signature is two arguments
 // forever (`AGENTS.md` rule 2).
 
-import type { RunChoice } from '../../shared/sim';
+import {
+  GEAR_SLOTS, TUNING, fitsSlot, salvageValue,
+  type EquippedGear, type GearSlot, type Item, type RunChoice,
+} from '../../shared/sim';
 import type { HeroRedisLike } from './heroStore';
 import { CAS_ATTEMPTS, readHero, updateHero } from './heroStore';
-import { RECORD, type StoredEndlessRun, type StoredHero } from './heroSchema';
+import { RECORD, type RunSnapshot, type StoredEndlessRun, type StoredHero } from './heroSchema';
 
 /**
  * Add `amount` to the running total and report the new one.
@@ -111,14 +114,18 @@ function keepRecord(hero: StoredHero, cleared: number): { best: number; newRecor
  * and a compare-and-set replay therefore computes the same answer twice.
  */
 export function beginEndlessRun(
-  run: StoredEndlessRun,
+  base: Omit<StoredEndlessRun, 'snapshot'>,
+  snapshotOf: (hero: StoredHero) => RunSnapshot,
   depthOf: (previous: StoredEndlessRun) => number,
-): (hero: StoredHero) => number {
+): (hero: StoredHero) => { abandoned: number; run: StoredEndlessRun } {
   return (hero) => {
     const abandoned = hero.run ? depthOf(hero.run) : 0;
     if (abandoned > 0) keepRecord(hero, abandoned);
-    hero.run = run;
-    return abandoned;
+    // Taken HERE, from the hero this mutator was handed, so a compare-and-set replay
+    // snapshots the blob it actually wrote against. Reading it before the loop would
+    // stamp a run with gear a concurrent equip had already changed.
+    hero.run = { ...base, snapshot: snapshotOf(hero) };
+    return { abandoned, run: hero.run };
   };
 }
 
@@ -154,26 +161,169 @@ export interface EndlessSettlement {
    *  a death moves you sideways, never backwards (`MODES.md` § The haul). */
   best: number;
   newRecord: boolean;
+  /** Items that reached the stash. **Empty on a death**, for the same reason `banked`
+   *  is 0: the haul is unbanked until you walk out with it. */
+  kept: Item[];
+  /** How many surfaced items the stash had no room for and turned into shards, and what
+   *  they paid. Overflow is income rather than a chore (`ECONOMY.md` § Salvage) — and a
+   *  bank that blocked on a full stash would strand a haul at the one moment the mode
+   *  promises it is safe. */
+  overflowed: number;
+  overflowShards: number;
 }
 
 /**
- * End the run: bank `banked` (already 0 for a death), keep the record, clear the run.
+ * End the run: bank the haul (already emptied for a death), keep the record, clear the
+ * run.
  *
  * **Clearing `hero.run` in the same transaction that banks is what makes the award
  * exactly-once**, which is why this is one mutator and not three. Returns null when the
  * run in the blob is not the one being settled — the caller then has a duplicate on its
  * hands, not a failure.
+ *
+ * **The haul goes to the STASH, never to the slots.** A run that quietly rewrote the
+ * loadout chosen in the camp would make "your equipped kit is never at risk" a sentence
+ * with an asterisk on it, and that asymmetry is the fork's whole design.
  */
 export function endEndlessRun(
   runId: string,
   banked: number,
   cleared: number,
+  haul: readonly Item[] = [],
 ): (hero: StoredHero) => EndlessSettlement | null {
   const safe = Number.isFinite(banked) && banked > 0 ? Math.floor(banked) : 0;
+  const carried = [...haul];
   return (hero) => {
     if (hero.run?.runId !== runId) return null;
     hero.run = null;
     hero.shards += safe;
-    return { banked: safe, shardTotal: hero.shards, ...keepRecord(hero, cleared) };
+    const { kept, overflowed, overflowShards } = stow(hero, carried);
+    hero.shards += overflowShards;
+    return {
+      banked: safe,
+      shardTotal: hero.shards,
+      kept,
+      overflowed,
+      overflowShards,
+      ...keepRecord(hero, cleared),
+    };
+  };
+}
+
+// ---- the stash (Stage 6b) -----------------------------------------------------------
+
+/** **It grows, it does not sit at a cap** (`GEAR.md` override #4). Eleven slots of gear
+ *  needs somewhere to live, and an inventory that forces a discard every run is a chore
+ *  rather than a decision. */
+export const stashCapacity = (level: number): number =>
+  TUNING.items.stashBase + TUNING.items.stashPerLevel * Math.max(0, Math.floor(level) - 1);
+
+/**
+ * Put a surfaced haul into the stash, scrapping whatever will not fit.
+ *
+ * Pure and replay-safe: it reads only the hero it is handed, and `salvageValue` is a
+ * function of the item. Ids are made unique against what is already held, because two
+ * runs on the same seed would otherwise produce two items the client could not tell
+ * apart when it asks to salvage one.
+ */
+function stow(
+  hero: StoredHero,
+  haul: readonly Item[],
+): { kept: Item[]; overflowed: number; overflowShards: number } {
+  const room = Math.max(0, stashCapacity(hero.level) - hero.stash.length);
+  const kept: Item[] = [];
+  let overflowed = 0;
+  let overflowShards = 0;
+  const taken = new Set(hero.stash.map((item) => item.id));
+  for (const item of haul) {
+    if (kept.length >= room) {
+      overflowed++;
+      overflowShards += salvageValue(item);
+      continue;
+    }
+    let id = item.id;
+    for (let n = 2; taken.has(id); n++) id = `${item.id}#${n}`;
+    taken.add(id);
+    const stored = { ...item, id };
+    kept.push(stored);
+    hero.stash.push(stored);
+  }
+  return { kept, overflowed, overflowShards };
+}
+
+/**
+ * Wear something out of the stash. Returns false when there is nothing to wear, or
+ * nowhere it fits.
+ *
+ * What comes off goes back to the stash rather than nowhere, so a swap is reversible and
+ * the stash's own capacity is never the thing that eats an item — the slot it left is
+ * the room it takes.
+ */
+export function equipFromStash(itemId: string, slot: GearSlot): (hero: StoredHero) => boolean {
+  return (hero) => {
+    const index = hero.stash.findIndex((item) => item.id === itemId);
+    if (index < 0) return false;
+    const item = hero.stash[index]!;
+    if (!fitsSlot(item, slot)) return false;
+    hero.stash.splice(index, 1);
+    const displaced = hero.gear[slot];
+    const gear: EquippedGear = { ...hero.gear, [slot]: item };
+    hero.gear = gear;
+    if (displaced) hero.stash.push(displaced);
+    return true;
+  };
+}
+
+/** Take a slot off. Refused when the stash is full, because the alternative is deleting
+ *  the item to make room for the gesture. */
+export function unequipSlot(slot: GearSlot): (hero: StoredHero) => boolean {
+  return (hero) => {
+    const item = hero.gear[slot];
+    if (!item) return false;
+    if (hero.stash.length >= stashCapacity(hero.level)) return false;
+    const gear: EquippedGear = { ...hero.gear };
+    delete gear[slot];
+    hero.gear = gear;
+    hero.stash.push(item);
+    return true;
+  };
+}
+
+/** Scrap a stashed item for shards. **Worn items cannot be salvaged** — you would be
+ *  scrapping the thing you are standing in, and it is one tap away from a slot the
+ *  screen also shows. Returns what it paid, or 0 if there was nothing to scrap. */
+export function salvageFromStash(itemId: string): (hero: StoredHero) => number {
+  return (hero) => {
+    const index = hero.stash.findIndex((item) => item.id === itemId);
+    if (index < 0) return 0;
+    const [item] = hero.stash.splice(index, 1);
+    const paid = item ? salvageValue(item) : 0;
+    hero.shards += paid;
+    return paid;
+  };
+}
+
+/** What the gear screen reads. Never writes — opening a screen is not a reason to
+ *  create a delver, the same rule `readShardTotal` follows. */
+export interface GearState {
+  gear: EquippedGear;
+  stash: Item[];
+  shards: number;
+  capacity: number;
+  slots: readonly GearSlot[];
+}
+
+export async function readGearState(
+  client: Pick<HeroRedisLike, 'get'>,
+  userId: string,
+  nowMs: number,
+): Promise<GearState> {
+  const hero = await readHero(client, userId, nowMs);
+  return {
+    gear: hero?.gear ?? {},
+    stash: hero?.stash ?? [],
+    shards: hero?.shards ?? 0,
+    capacity: stashCapacity(hero?.level ?? 1),
+    slots: GEAR_SLOTS,
   };
 }

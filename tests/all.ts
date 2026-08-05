@@ -26,8 +26,12 @@ await import('./hero.test');
 // wall that keeps all three away from the Daily. It fails when the fork changes and
 // nothing else does, which is exactly why it is not part of `sim.test`.
 await import('./endless.test');
+// `endlessRun` owns everything BEHIND the fork — the run that outlives a tab, the
+// prefix rule, the resume, the settle, and the item half of the haul. Split off at 6b
+// on the same rule: persistence and the decision fail for different reasons.
+await import('./endlessRun.test');
 // `items` owns the GEAR MODEL — the rows, the roll, the budget gate and the fold.
-// `endless` owns what a haul COSTS you; this owns what is in one.
+// The two files above own what a haul COSTS you; this owns what is in one.
 await import('./items.test');
 
 summary();
