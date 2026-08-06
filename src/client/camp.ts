@@ -15,7 +15,7 @@
 // owns the bar like everything else. Nothing on this screen may outlive that commit.
 
 import { ABILITIES } from '../shared/abilities';
-import { TUNING, classById, levelProgress, type LoadoutView } from '../shared/sim';
+import { TUNING, abilityDetail, classById, levelProgress, type LoadoutView } from '../shared/sim';
 import { abilityClass, abilityGlyph, HERO_ART } from './art';
 import type { EndlessDoor } from './endless';
 import { escapeHtml, fillPercent, inShell } from './shell';
@@ -193,7 +193,11 @@ function abilityRow(id: string, poolIndex: number, order: number | null): string
     + `<div class="gk">${row.cd > 0 ? `COOLDOWN ${row.cd} TURNS` : 'NO COOLDOWN'}`
     + ` &middot; ${row.cost} ENERGY</div>`
     + `<div class="gn">${escapeHtml(row.name)}</div>`
-    + `<div class="gs">${escapeHtml(row.text)}</div></div>`
+    // **The FULL rule here, not the tile's terse line.** This is the screen where the
+    // choice is made and it is full width, so a rider is spelled out rather than named:
+    // `Weaken 4` on a 91px combat tile is scannable once you know what weaken is, and
+    // meaningless the first time anybody meets it. See `statuses.ts`.
+    + `<div class="gs">${escapeHtml(abilityDetail(row.text, row.status))}</div></div>`
     + `<div class="gtail${inBar ? ' in' : ''}">${inBar ? `&#9679; ${order}` : '&#43; ADD'}</div>`
     + '</div>';
 }
@@ -205,7 +209,7 @@ function ultimateRow(id: string, offerIndex: number, picked: boolean): string {
     + `<div class="gi"><span>${abilityGlyph(id)}</span></div><div class="gm">`
     + '<div class="gk">ULTIMATE &middot; CHARGED BY RAGE</div>'
     + `<div class="gn">${escapeHtml(row.name)}</div>`
-    + `<div class="gs">${escapeHtml(row.text)}</div></div>`
+    + `<div class="gs">${escapeHtml(abilityDetail(row.text, row.status))}</div></div>`
     + `<div class="gtail${picked ? ' in' : ''}">${picked ? '&#9679; TAKEN' : '&#43; TAKE'}</div>`
     + '</div>';
 }

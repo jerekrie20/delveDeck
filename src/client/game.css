@@ -749,6 +749,25 @@ body {
   box-shadow: inset 0 0 0 1px rgb(167 144 238 / 55%);
 }
 
+/* What is standing on YOU, on the plinth rather than the stage. Rendered nowhere at all
+   until Stage 6b-2 — Regen and Thorns were tracked by the sim, carried by the view and
+   printed by nothing, so the two abilities that read as defensive looked inert.
+
+   Green rather than the enemy pills' violet, because the plinth is the light half of the
+   screen and the same colour on both sides would read as "this is happening to them".
+   It is never colour ALONE: the pill spells the status out. */
+.youtags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.tag.status.you {
+  color: #a9e3bd;
+  box-shadow: inset 0 0 0 1px rgb(111 194 138 / 55%);
+}
+
 .fhp {
   margin-top: 8px;
 }

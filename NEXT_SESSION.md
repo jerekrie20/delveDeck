@@ -1,10 +1,16 @@
 # Next session
 
-**Stage 6b-2 is three slices in, and the one everything waited on has landed.** The shard
-sinks ship, levels and XP ship, and **classes ship** — a delver is a Warden, a Hunter or an
-Adept now, and the Endless row finally *is* a build. **The Endless board is next**, and it
-is the last big piece of 6b-2. Nothing is blocked on you. Paste from the line below as the
-opening prompt.
+**Stage 6b-2 shipped, and then you corrected its central assumption.** The shard sinks,
+levels and XP, and classes are all in — but classes shipped as *draw weights on a
+nine-of-twenty-four roll*, which is the Daily's structure with a lean bolted on. **Your
+call, 2026-08-06: the Endless is not a daily and must not draw. It is class and collection
+based.** That is Stage 6b-3 and it is the next task; the board moves behind it.
+
+The status glossary landed with the correction, because the same session found that the
+game had been printing a vocabulary — `Weaken 4`, `Thorns 2 for 1 turn` — that it defined
+absolutely nowhere.
+
+Nothing is blocked on you. Paste from the line below as the opening prompt.
 
 ---
 
@@ -22,50 +28,102 @@ folder is right and the code is a bug.** Only I unlock it, and a change lands in
 folder first, then in code and TODO.md.
 
 
-## TASK — **Stage 6b-2, continued**: THE BOARD, then consumables
+## TASK — **Stage 6b-3**: the Endless stops drawing
 
-`TODO.md` § Stage 6b-2 has the list and four boxes are ticked. **The Endless board is
-next**, and it is now buildable for the reason 6b said it would be: *the row IS the
-build.* `u/username · class · level · bar size · ultimate` reads as a build-sharing feed;
-a depth-only row would be the second score ladder `MODES.md` argues the board must never
-be. Every field in that row exists today.
+`TODO.md` § Stage 6b-3 has the list. **The Endless is class and collection based**: you own
+abilities, and you build a bar from what you own. No seed, no nine-of-twenty-four, no
+weights.
 
-**Read these three before writing anything.**
+| | The Daily | The Endless |
+|---|---|---|
+| Where the nine come from | **Drawn from the seed**, same shaft for the whole sub | **What you OWN** |
+| What varies run to run | The issued nine | Your gear, the depth, the cast |
+| What you choose between | The nine you were handed | Everything you have unlocked |
+
+- **Abilities unlock by LEVEL and DEPTH RECORD**, as hero flags like every other unlock.
+- **The catalog stays mostly shared**: the 24 shared rows remain (the Daily needs them),
+  plus **3–4 class-locked rows each** — the ones `CLASSES.md` names by name already. ~36
+  rows, not three separate kits. `Ability.class` and `endlessEquippableFor` exist for
+  exactly this, so a locked row is a **data edit**.
+
+> **⚠ THE TRAP, and it is not a detail: `load.bar` indexes `kit.pool`.**
+>
+> A collection that grew between runs would make a stored choice list replay a **different
+> ability** — silently, and only in the Endless, and only for people who levelled mid-run.
+> So `RunSnapshot` has to freeze the **pool itself**, not the class it was derived from.
+> `STORED_HERO_VERSION` **4 → 5**, a migration step, a fixture test, and a v4 snapshot
+> rebuilds its pool from the class it stored. This is the whole reason the snapshot exists
+> and it is the third stage running that has needed widening; the pattern is proven.
+
+**Delete `endlessPoolFor` and `classWeightFor` when you do it.** A class then has no draw
+lean at all — its identity is the locked rows plus the one signature, which is a smaller
+and sharper claim than the one 6b-2 shipped.
+
+**GATE 5 re-runs.** It has failed first **twice** — when gear arrived and when classes did
+— and both times the failure was the real answer. This is a bigger change to what a run can
+do than either. Budget for a retune and read § What the probe learned before touching a
+number.
+
+### Then the board, which is unblocked but no longer first
 
 - **`MODES.md` § A checkpoint is a DECISION — re-read the note before shipping a board.**
-  6a accepts a bounded exposure (die mid-depth, close the tab, re-fight that depth
-  knowing what is coming) **precisely because there is no board to carry it onto**. The
-  board changes that calculation and `core/endless.ts`'s header says so in as many words.
-  This is the one thing in the slice that is a decision rather than a build.
+  6a accepts a bounded exposure (die mid-depth, close the tab, re-fight that depth knowing
+  what is coming) **precisely because there is no board to carry it onto.** The board
+  changes that calculation and `core/endless.ts`'s header says so in as many words.
 - **`MAX_ENDLESS_DEPTH = 100` is still owed a re-read**, and now there is data: the probe's
   classed sweep reaches **depth 15** on the greedy floor with a full epic set at level 20.
-  The server replays the whole choice list at every checkpoint and the cost is roughly
-  cubic in the depth reached.
-- **`server/core/leaderboard.ts` and `runStore.ts`** are the Daily board's shape. The
-  Endless board is **weekly and resets with the community shaft**, so it is a different
-  key and a different TTL — and every community key carries a season id from the first
-  write (`TODO.md` § Stage 8).
-
-Two more boxes after it, both smaller:
-
-1. **Consumables need `kit.consumables` filled.** The `use` variant has been in the union
-   since Stage 1 and the sim refuses every index today because the list is empty. Only
-   **Draught** and **Ember** are choices; the **Ledger mark** is an award-time multiplier
-   and must never widen the run format (`ECONOMY.md` says so).
-2. **What deepens with depth** — traits arriving and stacking, and the cast shifting to
-   the abyss + wanderers. Scaling and the lantern strains are already done.
-
-**GATE 5 will have to be re-run again** if any of that reaches a run. It has now failed
-first **twice** — once when gear arrived and once when classes did — and both times the
-failure was the real answer. Budget for a retune and read § What the probe learned before
-touching a number.
+- Consumables (`kit.consumables` is still empty, so the sim refuses every `use`) and
+  traits-arriving-with-depth are the two smaller boxes after that.
 
 
-## WHAT LANDED THIS SESSION — classes, and the delver stops being generic
+## THE GAME WAS PRINTING WORDS IT NEVER DEFINED
+
+Reported as *"the ability descriptions don't make sense to a human"*, and the audit was
+worse than the complaint. **A dozen tiles printed `Weaken 4`, `Thorns 2 for 1 turn`,
+`Expose 2 for 2 turns` — and nothing anywhere in the game said what any of those words
+meant.** The combat screen rendered the raw enum id, in lower case, straight out of the
+union. **Statuses standing on the HERO were not rendered at all**: Regen and Thorns were
+tracked by the sim, carried by the view, and printed by nobody, so the two abilities that
+read as defensive looked inert.
+
+`AGENTS.md` says the design rests on *reasoning from the numbers*. You cannot reason from
+`Weaken 3` if nobody told you it comes off the next hit — so this was the telegraph being
+unreadable, not a copy problem.
+
+**`shared/statuses.ts` owns the six rules now**, and there are three renderings of them:
+
+| Where | What it says |
+|---|---|
+| Combat tile (91px, clamps to two lines) | `Deal 15 damage. Weaken 4.` |
+| **Loadout row** (full width, where you choose) | `Deal 15 damage. Weaken — its next attack lands 4 lighter.` |
+| Combat pill | `WEAKEN 4`, carrying the rule itself |
+
+The keyword survives as a **label** because the pill prints it and a player has to connect
+the two — and it **replaces** the terse clause rather than appending. The first attempt
+appended and read *"Bleed 3 for 2 turns. It loses 3 HP at the start of each of its next 2
+turns."*: the same rule twice, the second time longer. A test keeps that gone.
+
+**Playing it found a second one.** A thorns pill on its last turn read **"for 1 turns"** —
+which is every status, on the turn before it expires. Every duration in the catalog is
+authored at 2 or 3, so nothing static could have shown it. The duration is a *phrase* now,
+and the assert sweeps all six at 1 and 2 turns.
+
+**The class copy went with it.** *"Out-tempos. A hit taken charges you twice over."* said
+nothing; it reads *"Fastest. Every hit you take builds your ultimate twice as quickly."*
+The test that capped a class line at 48 characters now also **requires it to say what
+happens to YOU** — "Out-tempos" fit in 48 characters and taught nobody anything.
+
+## WHAT LANDED EARLIER — classes, and the delver stops being generic
 
 A class is **two things and only two**: a set of draw weights over the shared catalog, and
 **one numeric field**. Not an ability list, not a code branch. `src/shared/classes.ts` is
 the registry; `tests/classes.test.ts` (18) is what stops it becoming anything else.
+
+> **The DRAW WEIGHTS half of that is superseded** — see the task at the top. The
+> signature, the per-class HP, the unlock flags, the snapshot and the whole client half
+> all survive 6b-3 untouched; what goes is `endlessPoolFor` and `classWeightFor`. Left
+> written up as shipped because the retune below is what the *next* GATE 5 gets compared
+> against.
 
 | | **WARDEN** | **HUNTER** | **ADEPT** |
 |---|---|---|---|
@@ -232,12 +290,12 @@ AS WARDEN at 558. Verified by hand at 320×568 and 1920×1080.
 
 - On **`main`**. Working tree clean. Stages 3, 4, 5, 6a, **6b-1** and the first three
   slices of **6b-2** merged.
-- **298 checks green** — 274 tsx (`tests/all.ts`) + 24 vitest (`--project server`).
+- **301 checks green** — 277 tsx (`tests/all.ts`) + 24 vitest (`--project server`).
   `npm run test` runs both; don't "simplify" it to one, that has silently skipped a whole
   suite before. **Plus `npm run test:visual`**, a fourth command and a real gate, green at
   all three viewports with **`KNOWN_FINDINGS` still empty** — keep it that way.
 - `tests/` is fourteen files. **`sim.test.ts` (30) owns the RULES**, **`content.test.ts`
-  (16) the ROWS**, **`classes.test.ts` (18) what a CLASS IS**, **`share.test.ts` (13) the
+  (19) the ROWS**, **`classes.test.ts` (18) what a CLASS IS**, **`share.test.ts` (13) the
   artifact that LEAVES the game**, **`hero.test.ts` (34) the first thing that OUTLIVES A
   DAY**, **`camp.test.ts` (22) what the CAMP does to a delver**, **`progression.test.ts`
   (10) the CURVE**, **`endless.test.ts` (18) the FORK**, **`endlessRun.test.ts` (17) the

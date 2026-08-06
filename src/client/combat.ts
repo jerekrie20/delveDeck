@@ -22,7 +22,9 @@
 //     five-ability loadout is really six actions.
 
 import { ABILITIES } from '../shared/abilities';
-import { TUNING, type CombatView, type IntentKind } from '../shared/sim';
+import {
+  TUNING, statusPill, statusText, type CombatView, type IntentKind,
+} from '../shared/sim';
 import { abilityClass, abilityGlyph, enemyArt, HERO_ART } from './art';
 import { escapeHtml, fillPercent, inShell, motes } from './shell';
 
@@ -101,10 +103,15 @@ function stage(view: CombatView, focus?: CombatFocus): string {
   const below = remaining > 0 ? `${remaining} BELOW` : remaining === 0 ? 'THE FLOOR' : 'NO FLOOR';
   const tags = [
     ...view.enemyTags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`),
-    ...view.enemyStatuses.map(
-      (s) => `<span class="tag status">${escapeHtml(s.id)} ${s.magnitude}</span>`,
-    ),
-    ...(view.enemyBlock > 0 ? [`<span class="tag trait">block ${view.enemyBlock}</span>`] : []),
+    // The NAME and the number. It printed the raw enum id until Stage 6b-2 — `weaken 3`,
+    // in lower case, straight out of the union — which is a vocabulary the game asks a
+    // player to learn and never once defines. `title` carries the rule itself, so the
+    // thing is explained where it is actually happening rather than only where it was
+    // chosen.
+    ...view.enemyStatuses.map((s) => `<span class="tag status" `
+      + `title="${escapeHtml(statusText(s.id, s.magnitude, s.turns))}">`
+      + `${escapeHtml(statusPill(s.id, s.magnitude))}</span>`),
+    ...(view.enemyBlock > 0 ? [`<span class="tag trait">BLOCK ${view.enemyBlock}</span>`] : []),
   ].join('');
   return `<div class="stage${lit ? ' lit' : ''}">`
     + '<div class="bd"></div><div class="above"></div>' + motes()
@@ -141,6 +148,25 @@ function heroBand(view: CombatView): string {
     + `<small>/${view.maxHp}</small></div>`
     + `<div class="d${view.incoming ? '' : ' safe'}">`
     + `${view.incoming ? `-${view.incoming} HP` : 'NO DMG'}</div></div></div>`;
+}
+
+/**
+ * What is standing on YOU — and it was rendered nowhere at all until Stage 6b-2.
+ *
+ * The sim has tracked hero statuses since Stage 1 and `CombatView` has carried them just
+ * as long; no screen ever printed one. So `Last Stand` granted Regen 5 and `Fortify`
+ * granted Thorns 2 and the game simply did not mention it, which makes the two abilities
+ * that read as defensive look like they did nothing.
+ *
+ * **It renders nothing when there is nothing**, so the plinth's geometry is unchanged on
+ * the turns this is empty — which is most of them.
+ */
+function heroStatusRow(view: CombatView): string {
+  if (view.heroStatuses.length === 0) return '';
+  const pills = view.heroStatuses.map((s) => `<span class="tag status you" `
+    + `title="${escapeHtml(statusText(s.id, s.magnitude, s.turns))}">`
+    + `${escapeHtml(statusPill(s.id, s.magnitude))}</span>`).join('');
+  return `<div class="youtags">${pills}</div>`;
 }
 
 function resourceRow(view: CombatView): string {
@@ -276,7 +302,7 @@ export function combatScreen(view: CombatView, log: string, chrome: CombatChrome
     + (chrome.banner ?? '')
     + (chrome.haul === true ? haulStrip(view) : '')
     + stage(view, focus)
-    + `<div class="plinth${litPlinth ? ' lit' : ''}">${heroBand(view)}${resourceRow(view)}`
+    + `<div class="plinth${litPlinth ? ' lit' : ''}">${heroBand(view)}${heroStatusRow(view)}${resourceRow(view)}`
     + `<div class="log"><span>&#9662;</span><em>${escapeHtml(log)}</em></div>`
     + `${abilityBar(view, chrome.live, focus)}<div class="grow"></div>${foot}`
     + `${litPlinth ? VEIL : ''}</div>`;

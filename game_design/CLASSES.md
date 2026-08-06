@@ -74,6 +74,36 @@ resists them except plate, and plate is visible.
 A class is **two things**: a set of weights over the shared catalog, and a short list
 of **abilities nobody else can be issued.**
 
+> ## ⚠ OWNER OVERRIDE (2026-08-06): the Endless does not DRAW
+>
+> **Everything below about weights over a per-run draw is superseded.** Stage 6b-2 shipped
+> classes as draw weights on a nine-of-twenty-four roll, which is the *Daily's* structure
+> with a lean bolted on — and the owner's correction is that the Endless is not a daily and
+> should never have had one. **The Endless is class and collection based.**
+>
+> | | The Daily | The Endless |
+> |---|---|---|
+> | Where the nine come from | **Drawn from the seed**, same for the whole subreddit | **What you OWN** — no draw, no seed |
+> | What varies run to run | The issued nine | Your gear, the depth, the cast |
+> | What you are choosing between | The nine you were handed | Everything you have unlocked |
+>
+> **Abilities unlock by LEVEL and DEPTH RECORD**, as hero flags like every other unlock
+> ([PROGRESSION.md](PROGRESSION.md) § Unlocks) — so the collection grows as the delver
+> does, and the bar is built from it. That is the shape the mode wanted: a build you own
+> rather than a hand you were dealt.
+>
+> **The catalog stays mostly shared.** The 24 shared rows remain — the Daily needs them —
+> and each class gets **3–4 rows nobody else can have**, which is what the locked table
+> below already names. ~36 rows total rather than three separate kits, because three
+> separate kits is 30 new abilities to author *and* three catalogs for the probe to sweep.
+>
+> **What this costs when it is built**, stated now so it is not discovered later:
+> `endlessPoolFor` and `classWeightFor` are deleted; `RunSnapshot` has to freeze the
+> **pool itself** rather than the class (a stored `load.bar` indexes the pool, so a
+> collection that grew between runs would make an old choice list replay a different
+> ability — a v5 stored-shape change); and GATE 5 re-runs against a delver who no longer
+> gets a random nine. See `TODO.md` § Stage 6b-3.
+
 ### The catalog splits in two
 
 | Rows | Draw-eligible in | Purpose |

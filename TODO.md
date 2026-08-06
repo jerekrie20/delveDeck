@@ -28,8 +28,8 @@ forward; its combat model does not.
 | **M3** — the art | 25 bespoke images | 8 portraits kept, **1 hero portrait added**, 3 backdrops parked (the stage is a CSS gradient), **14 card illustrations deleted** at Stage 2. |
 | **M3.5** — tutorial | 15 steps, templated copy, separate choice list | **Deleted at Stage 1** with the deck it was written against. **Rebuilt as 5 beats at Stage 3**, on a guarantee that already held: both invariants are a 2,000-seed sweep in `content.test.ts`. |
 
-**298 checks green** after Stage 6b-2's third slice — 274 tsx + 24 vitest. `tests/`:
-`sim.test.ts` (30), `content.test.ts` (16), `server.test.ts` (30), `art.test.ts` (22),
+**301 checks green** after Stage 6b-2's third slice — 277 tsx + 24 vitest. `tests/`:
+`sim.test.ts` (30), `content.test.ts` (19), `server.test.ts` (30), `art.test.ts` (22),
 `tutorial.test.ts` (14), `share.test.ts` (13), `hero.test.ts` (34), `camp.test.ts` (22),
 `progression.test.ts` (10), `classes.test.ts` (18), `endless.test.ts` (18),
 `endlessRun.test.ts` (17), `items.test.ts` (30), plus the server vitest project.
@@ -1235,6 +1235,30 @@ probe, before a progression curve rests on it.
       over days, not a tutorial sequence. **THE LOSS is the one that decides whether
       players stay.** 6b-1 shipped the *receipt* it fires on — itemised, both faces,
       what burned and what was kept — so what is left is the beat, not the screen.
+
+### Stage 6b-3 — the Endless stops drawing ▸ **next**
+
+**Owner correction (2026-08-06): the Endless is not a daily and must not have a daily's
+draw.** 6b-2 shipped classes as weights on a nine-of-twenty-four roll — the Daily's
+structure with a lean bolted on. The mode is **class and collection based**: you own
+abilities, and you build a bar from what you own.
+
+- [ ] **Abilities unlock by LEVEL and DEPTH RECORD**, as hero flags like every other
+      unlock. The collection grows as the delver does; the bar is chosen from all of it.
+- [ ] **Mostly-shared catalog**: the 24 shared rows stay (the Daily needs them), plus
+      **3–4 class-locked rows each** — the ones `CLASSES.md` already names by name. ~36
+      rows, not three separate kits. `Ability.class` and `endlessEquippableFor` already
+      exist for exactly this, so a locked row is a data edit.
+- [ ] **`RunSnapshot` must freeze the POOL, not the class** — and this is the trap, not a
+      detail. `load.bar` indexes `kit.pool`; a collection that grew between runs would make
+      a stored choice list replay a *different ability*. `STORED_HERO_VERSION` 4 → 5, a
+      migration step, and a fixture test. A v4 snapshot rebuilds its pool from its class.
+- [ ] **Delete `endlessPoolFor` and `classWeightFor`.** A class is then weights-free: draw
+      leans stop existing and the identity is the locked rows plus the signature.
+- [ ] The loadout screen shows the whole collection rather than nine, and marks what is
+      newly unlocked. It already scrolls; what it needs is an order that is not random.
+- [ ] **GATE 5 re-runs against a delver who no longer gets a random nine.** It has failed
+      first twice now, and this is a bigger change to what a run can do than either.
 
 ### GATE — the haul has to be worth the trip, and the Daily must not feel it
 

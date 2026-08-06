@@ -18,10 +18,12 @@
 import { assert, check, describe } from './helpers';
 import { firstCombat, firstLoadout, loadoutWithArchetypes } from './policies';
 import {
-  TUNING, difficultyAt, enemyForDepth, issuedKitForDay, issuedPoolForDay, simulateRun,
+  STATUS_RULES, TUNING, abilityDetail, difficultyAt, enemyForDepth, issuedKitForDay, statusText,
+  issuedPoolForDay, simulateRun,
 } from '../src/shared/sim';
 import {
-  ABILITIES, ARCHETYPES, EQUIPPABLE, SHARED_EQUIPPABLE, ULTIMATES, type Archetype,
+  ABILITIES, ARCHETYPES, EQUIPPABLE, SHARED_EQUIPPABLE, ULTIMATES,
+  type Archetype, type StatusId,
 } from '../src/shared/abilities';
 import { BOON_LIST } from '../src/shared/boons';
 import { ENEMIES, bossForStratum, isBossDepth, stratumForDepth } from '../src/shared/enemies';
@@ -268,6 +270,87 @@ await check('ability text matches the numbers on the tile (no lying tooltips)', 
     }
     if (row.ignoresBlock) assert.ok(row.text.includes('ignoring block'), `${row.id}: silent pierce`);
   }
+});
+
+await check('EVERY STATUS THE CATALOG CAN APPLY IS DEFINED SOMEWHERE A PLAYER CAN READ', () => {
+  // The gap this file did not catch for three stages: a dozen tiles printed `Weaken 4`,
+  // `Thorns 2 for 1 turn`, `Expose 2 for 2 turns` — and NOTHING anywhere said what any of
+  // those words meant. The combat screen rendered the raw enum id beside the number.
+  //
+  // `AGENTS.md` says the design rests on *reasoning from the numbers*. You cannot reason
+  // from `Weaken 3` if nobody told you it comes off the next hit, so an undefined keyword
+  // is not a copy problem — it is the telegraph being unreadable.
+  const applied = new Set<string>();
+  for (const row of Object.values(ABILITIES)) if (row.status) applied.add(row.status.id);
+  assert.ok(applied.size > 0, 'the catalog applies no statuses at all — check this test');
+  for (const id of applied) {
+    const rule = STATUS_RULES[id as StatusId];
+    assert.ok(rule, `${id} is applied by an ability and defined nowhere`);
+    assert.ok(rule.name.length > 0, `${id} has no printable name`);
+    assert.ok(rule.rule.length > 12, `${id}'s rule says nothing: "${rule.rule}"`);
+  }
+});
+
+await check('a status rule NEVER hand-types a number — it is filled from the row', () => {
+  // The trap `tutorial.ts` already has a test for, one layer down. A magnitude typed into
+  // a sentence stops being true the moment the ability is retuned, and nothing anywhere
+  // reports it — the player just reads a confident lie.
+  for (const [id, rule] of Object.entries(STATUS_RULES)) {
+    assert.ok(!/\d/.test(rule.rule), `${id}'s rule has a literal number in it: ${rule.rule}`);
+    // …and it has to actually USE what it is given, or the fill is decoration.
+    assert.ok(
+      rule.rule.includes('{n}') || id === 'stun',
+      `${id}'s rule never mentions its magnitude`,
+    );
+    // The PHRASE token, never a bare count. A `{t}` printed "for 1 turns" on every status
+    // the turn before it expired — which is every status, and it took playing it to see
+    // because every authored duration in the catalog is 2 or 3.
+    assert.ok(!/\{t\}/.test(rule.rule), `${id} uses a bare turn count: ${rule.rule}`);
+  }
+  // Stun is the exception and it is the one whose sentence carries a RULE rather than a
+  // number: it delays and never deletes. If that ever stops being true of `sim.ts`, the
+  // most load-bearing sentence in the glossary is the one that went wrong.
+  assert.match(STATUS_RULES.stun.rule, /telegraph does not move/i);
+});
+
+await check('the loadout spells a rider OUT, and the combat tile stays terse', () => {
+  // Two renderings of one truth, split on SPACE rather than audience: the combat bar's
+  // tile is 91px and clamps to two lines, the loadout row is full width and is where the
+  // choice is actually made. A test rather than a convention, because the easy mistake is
+  // to "simplify" them into one and lose the half with room to explain.
+  const withRider = Object.values(ABILITIES).find((row) => row.status?.id === 'expose');
+  assert.ok(withRider, 'this check needs an expose row to be about anything');
+  const detail = abilityDetail(withRider.text, withRider.status);
+  assert.ok(detail.includes(STATUS_RULES.expose.name), 'the keyword survives as a LABEL');
+  assert.ok(detail.includes(String(withRider.status!.magnitude)), 'with its real number');
+
+  // **It REPLACES the terse clause, never appends to it.** The first attempt appended and
+  // playing it read "Expose 2 for 2 turns. Every hit it takes deals 2 more, for 2 turns."
+  // — the same rule twice, the second time longer. This is the check that keeps it gone.
+  assert.ok(
+    !/expose \d+ for/i.test(detail),
+    `the terse rider clause is still in there: ${detail}`,
+  );
+  assert.ok(detail.includes('deals'), 'and the rule replaced it');
+
+  // ONE TURN IS NOT ONE TURNS. Every status ticks down to 1 before it expires, so this
+  // is the reading a player gets every single time rather than an edge case — and it
+  // shipped, because nothing in the catalog is authored at 1.
+  for (const id of Object.keys(STATUS_RULES) as StatusId[]) {
+    assert.ok(!/\d turns\b/.test(statusText(id, 2, 1)), `${id} @ 1: ${statusText(id, 2, 1)}`);
+    assert.ok(!/\b1 turns\b/.test(statusText(id, 2, 1)), `${id} says "1 turns"`);
+    assert.ok(!/\b2 turn\b/.test(statusText(id, 2, 2)), `${id} @ 2 lost its plural`);
+  }
+
+  // A row whose whole text IS the rider still reads as a sentence rather than a fragment.
+  const stunner = Object.values(ABILITIES).find((row) => row.status?.id === 'stun')!;
+  const stun = abilityDetail(stunner.text, stunner.status);
+  assert.ok(stun.startsWith(STATUS_RULES.stun.name), `a bare rider needs its label: ${stun}`);
+  assert.ok(!stun.includes('  '), 'and no gap where the dropped clause was');
+
+  // No rider, no change — a plain attack does not grow a sentence.
+  const plain = Object.values(ABILITIES).find((row) => !row.status && row.damage)!;
+  assert.equal(abilityDetail(plain.text, plain.status), plain.text);
 });
 
 await check('an element always carries a rider, and physical rows never do', () => {

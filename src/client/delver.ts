@@ -96,10 +96,11 @@ function classChip(
   const action = mode === 'strip' ? 'gear-class' : 'class-pick';
   const attrs = open && !(mode === 'strip' && on) ? ` data-action="${action}" data-index="${index}"` : '';
   const tail = !open
-    ? `LVL ${row.unlockLevel}`
+    ? `OPENS AT LEVEL ${row.unlockLevel}`
     : mode === 'choice'
-      ? `${on ? '&#9679; CHOSEN' : 'CHOOSE'} &middot; ${hpFor(row.id, state.level)} HP`
-      : `${on ? 'DELVING AS' : 'SWITCH'} &middot; ${hpFor(row.id, state.level)} HP`;
+      ? `${on ? '&#9679; SELECTED' : 'TAP TO PICK'} &middot; ${hpFor(row.id, state.level)} MAX HP`
+      : `${on ? '&#9679; THIS IS YOU' : 'TAP TO SWITCH'} &middot; `
+        + `${hpFor(row.id, state.level)} MAX HP`;
   return `<div class="cchip a-${row.accentArchetype}${on ? ' on' : ''}`
     + `${open ? '' : ' off'}"${attrs}>`
     + `<div class="cn">${escapeHtml(row.name.toUpperCase())}</div>`
@@ -118,11 +119,12 @@ function classChip(
 export function classStrip(state: DelverView): string {
   const chips = CLASS_LIST.map((_, i) => classChip(state, i, 'strip', state.class)).join('');
   const head = state.class === null
-    ? 'YOUR CLASS &middot; CHOSEN ON YOUR FIRST ENDLESS DELVE'
-    : `YOUR CLASS &middot; ENDLESS ONLY &nbsp;&nbsp;LVL ${state.level}`;
+    ? 'YOUR CLASS &mdash; PICKED ON YOUR FIRST ENDLESS DELVE'
+    : `YOUR CLASS &mdash; ENDLESS ONLY, NEVER THE DAILY`;
   return '<div class="pane" style="margin-top:9px"><div class="rowitem head">'
     + `<div class="gm"><div class="gk">${head}</div></div>`
-    + `<div class="gtail">${state.class === null ? 'NOT YET SET' : 'FREE TO SWITCH'}</div></div>`
+    + `<div class="gtail">${state.class === null ? 'NONE YET' : 'SWITCH ANY TIME, FREE'}</div>`
+    + '</div>'
     + `<div class="cstrip">${chips}</div></div>`;
 }
 
@@ -144,20 +146,20 @@ export function classChoiceScreen(state: DelverView): string {
   const only = state.unlocked.length <= 1;
   const chips = CLASS_LIST.map((_, i) => classChip(state, i, 'choice', pending)).join('');
   const body = '<div class="hd"><span class="eyebrow">the endless &middot; your delver</span>'
-    + `<div class="h">${only ? 'YOU BEGIN AS A WARDEN' : 'CHOOSE YOUR DELVER'}</div></div>`
-    + '<div class="notice">A class is <b>two things</b>: what the shaft tends to issue you, '
-    + 'and one rule that is yours alone. <b>It never touches the Daily</b>, and you can '
-    + 'change it in the camp whenever you like &mdash; an open run keeps the class it '
-    + 'started with.</div>'
+    + `<div class="h">${only ? 'YOU BEGIN AS A WARDEN' : 'PICK YOUR DELVER'}</div></div>`
+    + '<div class="notice">Your class changes <b>two things</b>: how much health you have, '
+    + 'and one rule that only you get. <b>The Daily is not affected</b> &mdash; everyone '
+    + 'still gets the same kit down there. You can switch class any time from the camp, '
+    + 'for free.</div>'
     + `<div class="cstrip tall">${chips}</div>`
     + (only
-      ? '<div class="notice">The other two open as you level. Nothing here is locked '
-        + 'behind shards, and nothing is permanent.</div>'
+      ? '<div class="notice">The other two unlock as you level up. Nothing here costs '
+        + 'shards, and nothing you pick is permanent.</div>'
       : '')
     + '<div class="grow"></div>'
     + '<div class="act sticky"><button class="btn small" data-action="camp">BACK</button>'
     + `<button class="btn go" data-action="class-confirm"${chosen ? '' : ' disabled'}>`
     + `DELVE AS ${chosen ? escapeHtml(chosen.name.toUpperCase()) : '&mdash;'}`
-    + '<span class="sub">CHANGEABLE IN THE CAMP</span></button></div>';
+    + '<span class="sub">YOU CAN CHANGE THIS LATER</span></button></div>';
   return inShell({ shell: 'surface', fire: true }, body);
 }

@@ -555,6 +555,11 @@ export {
 export type { ClassSignature, DelverClass } from './classes';
 export { damageRampAt, difficultyAt, enemyForDepth, litSlotsAt } from './encounter';
 export { effectiveAbility, resolveIntent } from './combat';
+// The status glossary (Stage 6b-2). Six keywords the catalog prints on a dozen tiles and
+// the game never defined anywhere — the loadout reads them out in full, the combat pill
+// prints the NAME rather than the enum id, and one file owns both.
+export { STATUS_RULES, abilityDetail, statusPill, statusText } from './statuses';
+export type { StatusRule } from './statuses';
 export { scoreRun } from './report';
 // Gear (Stage 6b). The server derives a kit from a stored snapshot, the client draws a
 // plate and previews a swap, and both do it through these — one implementation, so what

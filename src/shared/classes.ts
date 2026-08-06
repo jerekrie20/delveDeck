@@ -129,7 +129,7 @@ export const CLASSES: Record<string, DelverClass> = {
   warden: {
     id: 'warden',
     name: 'Warden',
-    line: 'Outlasts. Over-blocking stops being waste.',
+    line: 'Toughest. Block you do not spend carries into your next turn.',
     unlockLevel: 1,
     archetypeWeights: {
       guard: 2.5, wall: 2.5, counter: 1.5, strike: 1, control: 0.8, burst: 0.6, tempo: 0.6,
@@ -143,7 +143,7 @@ export const CLASSES: Record<string, DelverClass> = {
   hunter: {
     id: 'hunter',
     name: 'Hunter',
-    line: 'Out-tempos. A hit taken charges you twice over.',
+    line: 'Fastest. Every hit you take builds your ultimate twice as quickly.',
     unlockLevel: 5,
     archetypeWeights: {
       tempo: 2.5, strike: 2.5, counter: 1.5, control: 1, guard: 1, burst: 0.8, wall: 0.6,
@@ -157,7 +157,7 @@ export const CLASSES: Record<string, DelverClass> = {
   adept: {
     id: 'adept',
     name: 'Adept',
-    line: 'Out-damages. An empty turn banks a cooldown.',
+    line: 'Hardest hitting. Spend no energy and your cooldowns drop twice as fast.',
     unlockLevel: 10,
     archetypeWeights: {
       burst: 2.5, control: 2.5, wall: 1, guard: 1, strike: 1, tempo: 0.8, counter: 0.6,

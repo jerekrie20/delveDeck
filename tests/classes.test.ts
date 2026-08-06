@@ -42,9 +42,16 @@ await check('THREE BASE CLASSES, and every row is complete', () => {
   for (const row of CLASS_LIST) {
     assert.equal(CLASSES[row.id], row, `${row.id} must be reachable by its own id`);
     assert.ok(row.name.length > 0 && row.line.length > 0, `${row.id} needs a name and a line`);
-    // "A specialisation must be legible in one line" — the same bar for the thing it
-    // specialises, and the chip it renders on is a third of a 320px column.
-    assert.ok(row.line.length <= 48, `${row.id}'s line does not fit a chip: ${row.line}`);
+    // *"A specialisation must be legible in one line"* — the same bar for the thing it
+    // specialises. The cap was 48 while the line had to fit a 91px chip, and it went up
+    // when the first-entry prompt started STACKING them at full width: that screen is the
+    // explanation, so the sentence gets to be one. It still has to say what HAPPENS —
+    // "Out-tempos" fit in 48 characters and told a player nothing.
+    assert.ok(row.line.length <= 80, `${row.id}'s line is too long to read: ${row.line}`);
+    assert.ok(
+      /\b(you|your)\b/i.test(row.line),
+      `${row.id}'s line does not say what it does TO YOU: ${row.line}`,
+    );
     assert.ok(ARCHETYPES.includes(row.accentArchetype), `${row.id} accents a real archetype`);
     assert.ok(row.unlockLevel >= 1 && row.unlockLevel <= TUNING.hero.levelCap,
       `${row.id} unlocks at a level that exists`);

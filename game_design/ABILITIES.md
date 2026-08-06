@@ -241,6 +241,38 @@ changes the outcome but not the telegraph breaks the premise the whole game rest
 Bleed, Regen and Thorns are shown as **standing markers**, not as changes to the
 NOW/NEXT/THEN numbers, since they resolve outside the enemy's attack.
 
+### …and a status must be DEFINED, which for three stages it was not
+
+**The game shipped a vocabulary it never explained.** A dozen tiles printed `Weaken 4`,
+`Thorns 2 for 1 turn`, `Expose 2 for 2 turns`, and nothing anywhere said what any of those
+words meant. The combat screen rendered the raw enum id — `weaken 3`, in lower case,
+straight out of the union. **Statuses standing on the HERO were not rendered at all**, so
+Regen and Thorns were tracked by the sim, carried by the view, and printed by nobody.
+
+That is not a copy problem. This document's own premise is that the telegraph can be
+reasoned from, and you cannot reason from `Weaken 3` if nobody told you it comes off the
+next hit. Fixed at Stage 6b-2, and the rules now live in one place (`shared/statuses.ts`)
+with a test that fails if the catalog can apply a status nothing defines.
+
+**Two renderings of one truth, split on space rather than audience:**
+
+| Where | What it says |
+|---|---|
+| **Combat tile** (91px, clamps to two lines) | The terse line — `Deal 15 damage. Weaken 4.` |
+| **Loadout row** (full width, where the choice is made) | `Deal 15 damage. Weaken — its next attack lands 4 lighter.` |
+| **Combat pill** | `WEAKEN 4`, with the rule on the element itself |
+
+The keyword survives as a **label** rather than being replaced outright, because the pill
+prints it and a player has to be able to connect the two. It **replaces** the terse clause
+rather than appending to it — the first attempt appended and read *"Bleed 3 for 2 turns.
+It loses 3 HP at the start of each of its next 2 turns."*, which is the same rule twice.
+
+> **Numbers are filled from the row, never typed into the sentence** — the trap the
+> tutorial already had a test for, one layer down. And the duration is a **phrase**
+> (`1 turn` / `2 turns`) rather than a count, because a bare count printed *"for 1 turns"*
+> on every status the turn before it expired. Every duration in the catalog is authored at
+> 2 or 3, so only playing it could ever have shown that.
+
 ## Boons
 
 Boons **modify what is already equipped** rather than adding to a pool, so nothing
