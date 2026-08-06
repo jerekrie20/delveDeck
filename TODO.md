@@ -1122,6 +1122,10 @@ probe, before a progression curve rests on it.
         + salvage materials"* while `ECONOMY.md` refuses recipes, materials and benches in
         as many words. Resolved toward `ECONOMY.md` — shards only — and **recorded in both
         docs** rather than coded around silently.
+  - [x] **Owner answer (2026-08-06): a reroll CAN make an item worse, and that stays.**
+        It is what makes reroll a gamble and gives ascend its own job — protecting a roll.
+        A reroll that could only improve collapses the two sinks into one. Recorded in
+        `GEAR.md` § Salvage, reroll, ascend so it is not re-argued.
 - [ ] Hero level, XP, class — **Endless only**, never reaching `simulateRun`.
       Classes are archetype+school **weights** on `issuedPoolForDay`, plus one numeric
       signature field each — not three separate ability lists.

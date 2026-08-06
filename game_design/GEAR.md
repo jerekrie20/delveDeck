@@ -297,6 +297,19 @@ same item pays**, or the stash is a perpetual motion machine; a test pins that.
 ascend *protects* a good roll and buys one more line on top of it. That split is what
 stops a player with a good rare from ignoring both.
 
+> **A REROLL CAN MAKE AN ITEM WORSE — owner decision, 2026-08-06, and it is not to be
+> re-argued.** The new affix set replaces the old one outright, and it may be weaker.
+>
+> That is the whole reason reroll is a *gamble* rather than a slot-machine handle with no
+> downside, and it is what gives ascend a job of its own: **ascend is the one that keeps
+> what you already have.** A reroll that could only improve collapses the two sinks into
+> one — nobody would ever ascend for the protection, only for the tier — and it would make
+> the obvious play "reroll everything, forever, until the shards run out", which is a
+> chore wearing a decision's clothes.
+>
+> The alternative (keep the better roll, charge for the attempt) was considered and
+> declined for exactly that reason, not because it is unfriendly.
+
 **The depth-record gate applies to ascend too**, and that is load-bearing: ascending into
 `epic` or `legendary` needs the same record a *drop* of that tier needs. Without it,
 shards would buy past the one gate that carries the game beyond the level cap — the
