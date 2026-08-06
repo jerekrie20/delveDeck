@@ -252,6 +252,24 @@ export async function salvageGear(itemId: string): Promise<GearState | { error: 
   }
 }
 
+/** The two sinks. An item id goes up and the whole gear state comes down — the price and
+ *  the roll are the server's, and this file has no way to name either. */
+export async function rerollGear(itemId: string): Promise<GearState | { error: string }> {
+  try {
+    return gearResult(await trpc.hero.reroll.mutate({ itemId }));
+  } catch {
+    return { error: 'Your delver could not be reached.' };
+  }
+}
+
+export async function ascendGear(itemId: string): Promise<GearState | { error: string }> {
+  try {
+    return gearResult(await trpc.hero.ascend.mutate({ itemId }));
+  } catch {
+    return { error: 'Your delver could not be reached.' };
+  }
+}
+
 /** tRPC's input type wants a mutable array; the run holds a readonly one. */
 const submission = (sent: EndlessSubmission): {
   runId: string; seed: number; choices: RunChoice[];

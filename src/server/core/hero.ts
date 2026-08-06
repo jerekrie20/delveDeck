@@ -19,8 +19,9 @@
 // forever (`AGENTS.md` rule 2).
 
 import {
-  GEAR_SLOTS, TUNING, fitsSlot, salvageValue,
-  type EquippedGear, type GearSlot, type Item, type RunChoice,
+  GEAR_SLOTS, RARITY_LABEL, TUNING, ascendCost, ascendItem, ceilingForRecord, fitsSlot,
+  nextRarity, rarityRank, rerollCost, rerollItem, salvageValue,
+  type EquippedGear, type GearSlot, type Item, type Rarity, type RunChoice,
 } from '../../shared/sim';
 import type { HeroRedisLike } from './heroStore';
 import { CAS_ATTEMPTS, readHero, updateHero } from './heroStore';
@@ -303,6 +304,63 @@ export function salvageFromStash(itemId: string): (hero: StoredHero) => number {
   };
 }
 
+/**
+ * Re-roll a stashed item's affixes for shards (`ECONOMY.md` § Sinks, `GEAR.md` § Salvage,
+ * reroll, ascend). Returns an error string, or null on success.
+ *
+ * **Pure and replay-safe**, which is the whole reason `seed` is a parameter rather than a
+ * `Math.random()` inside: `rerollItem` is deterministic given `(item, seed)`, the seed is
+ * minted once in the route, and a compare-and-set replay re-runs this against a fresher
+ * blob with the SAME seed — so the reforge cannot land on one attempt and vanish on the
+ * retry, and a concurrent spend that left too few shards is caught on the replay's fresh
+ * read rather than overdrawn.
+ *
+ * **Stash only**, like salvage: you re-forge what you are not standing in. To re-roll a
+ * worn item, take it off first — one door for every gear-improvement action.
+ */
+export function rerollStashItem(itemId: string, seed: number): (hero: StoredHero) => string | null {
+  return (hero) => {
+    const index = hero.stash.findIndex((item) => item.id === itemId);
+    if (index < 0) return 'There is nothing there to reforge.';
+    const item = hero.stash[index]!;
+    const cost = rerollCost(item);
+    if (hero.shards < cost) return 'Not enough shards to reforge that.';
+    hero.stash[index] = rerollItem(item, seed);
+    hero.shards -= cost;
+    return null;
+  };
+}
+
+/**
+ * Ascend a stashed item one rarity tier for shards, keeping its affixes and adding one.
+ *
+ * **The depth-record gate applies here too** (`GEAR.md` § Rarity and affix tiers are gated
+ * on depth record): you cannot ascend into `epic` or `legendary` your record has not
+ * opened, or ascend would be a way to buy past the endgame gate that drops cannot. Below
+ * that ceiling — up to `rare` — ascend is always available.
+ *
+ * Pure and replay-safe for the same reason `rerollStashItem` is; see its note.
+ */
+export function ascendStashItem(itemId: string, seed: number): (hero: StoredHero) => string | null {
+  return (hero) => {
+    const index = hero.stash.findIndex((item) => item.id === itemId);
+    if (index < 0) return 'There is nothing there to ascend.';
+    const item = hero.stash[index]!;
+    const next = nextRarity(item.rarity);
+    if (!next) return 'That is already legendary — the top of the ladder.';
+    if (rarityRank(next) > rarityRank(ceilingForRecord(endlessBestOf(hero)))) {
+      return `Reach a deeper record to forge ${RARITY_LABEL[next]} gear.`;
+    }
+    const cost = ascendCost(item);
+    if (hero.shards < cost) return 'Not enough shards to ascend that.';
+    const ascended = ascendItem(item, seed);
+    if (!ascended) return 'That cannot be ascended.';
+    hero.stash[index] = ascended;
+    hero.shards -= cost;
+    return null;
+  };
+}
+
 /** What the gear screen reads. Never writes — opening a screen is not a reason to
  *  create a delver, the same rule `readShardTotal` follows. */
 export interface GearState {
@@ -311,6 +369,12 @@ export interface GearState {
   shards: number;
   capacity: number;
   slots: readonly GearSlot[];
+  /** The deepest rarity this delver's record has opened — the same gate drops obey.
+   *  Sent DOWN so the screen can say why an ascend is locked instead of hiding it
+   *  (`GAME_DESIGN.md` § Look and feel: disabled is never invisible). It is derived from
+   *  the record here rather than in `client/`, which is rule 4: if a screen needs a
+   *  derived number, the layer that owns the rule reports it. */
+  ceiling: Rarity;
 }
 
 export async function readGearState(
@@ -325,5 +389,6 @@ export async function readGearState(
     shards: hero?.shards ?? 0,
     capacity: stashCapacity(hero?.level ?? 1),
     slots: GEAR_SLOTS,
+    ceiling: ceilingForRecord(endlessBestOf(hero)),
   };
 }

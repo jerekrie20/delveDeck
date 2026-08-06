@@ -28,10 +28,18 @@ forward; its combat model does not.
 | **M3** — the art | 25 bespoke images | 8 portraits kept, **1 hero portrait added**, 3 backdrops parked (the stage is a CSS gradient), **14 card illustrations deleted** at Stage 2. |
 | **M3.5** — tutorial | 15 steps, templated copy, separate choice list | **Deleted at Stage 1** with the deck it was written against. **Rebuilt as 5 beats at Stage 3**, on a guarantee that already held: both invariants are a 2,000-seed sweep in `content.test.ts`. |
 
-**243 checks green** after Stage 6b-1 — 219 tsx + 24 vitest. `tests/`: `sim.test.ts`
-(30), `content.test.ts` (16), `server.test.ts` (30), `art.test.ts` (22),
-`tutorial.test.ts` (14), `share.test.ts` (13), `hero.test.ts`, `endless.test.ts`,
-`endlessRun.test.ts`, `items.test.ts` (23), plus the server vitest project.
+**255 checks green** after Stage 6b-2's first slice — 231 tsx + 24 vitest. `tests/`:
+`sim.test.ts` (30), `content.test.ts` (16), `server.test.ts` (30), `art.test.ts` (22),
+`tutorial.test.ts` (14), `share.test.ts` (13), `hero.test.ts`, `camp.test.ts` (10),
+`endless.test.ts`, `endlessRun.test.ts`, `items.test.ts` (30), plus the server vitest
+project.
+
+`camp.test.ts` arrived at Stage 6b-2 and owns **what the camp does to a delver** — wear,
+take off, scrap, reforge, raise a tier. It split off `hero.test.ts` when that file crossed
+400 lines, on the seam `core/hero.ts` itself uses: `hero.test.ts` fails when the stored
+shape or the write path changes, `camp.test.ts` when a tap on screen 04 changes what it
+costs. **Split by subject, never exempted** — the same call `sim.ts` and `endless.test.ts`
+got at 6b-1.
 **`npm run test` runs both halves — a tsx pass and a vitest pass — and collapsing it to
 one has already silently skipped an entire suite once.** Plus `npm run test:visual`, a
 fourth command and a real gate.
@@ -1098,8 +1106,22 @@ probe, before a progression curve rests on it.
 
 ### Stage 6b-2 — classes, progression and the board ▸ **next**
 
-- [ ] Reroll + ascend — the shard sinks. Salvage landed at 6b-1; without these two the
-      stash is a chore instead of a decision.
+- [x] **Reroll + ascend — the shard sinks.** Salvage landed at 6b-1; without these two the
+      stash is a chore instead of a decision. Both are pure `(item, seed)` functions in
+      `shared/loot.ts`, both are priced off the item's own budget, and **the seed is minted
+      in the route and handed to a pure mutator** — a compare-and-set replay has to reforge
+      to the *same* item, or a retry charges for one roll and hands back another.
+  - [x] **They are different decisions, not two prices.** Reroll gambles the whole affix
+        set; ascend keeps what is there and adds one line. A test pins both halves.
+  - [x] **The depth-record gate applies to ascend**, or shards would buy past the one gate
+        that carries the game beyond the level cap. Below the ceiling it is always
+        available, so the sink exists in week one.
+  - [x] **A reroll always costs more than salvaging the same item pays** — swept across
+        every rarity at every depth. Without it the stash is a perpetual motion machine.
+  - [x] **A folder contradiction found and resolved**: `GEAR.md` priced ascend at *"shards
+        + salvage materials"* while `ECONOMY.md` refuses recipes, materials and benches in
+        as many words. Resolved toward `ECONOMY.md` — shards only — and **recorded in both
+        docs** rather than coded around silently.
 - [ ] Hero level, XP, class — **Endless only**, never reaching `simulateRun`.
       Classes are archetype+school **weights** on `issuedPoolForDay`, plus one numeric
       signature field each — not three separate ability lists.

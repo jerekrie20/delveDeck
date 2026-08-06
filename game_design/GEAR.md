@@ -274,11 +274,34 @@ The back end. Without it, the 200th Uncommon Coat is litter and the stash is a c
 |---|---|---|
 | **Salvage** | — | Item → shards, scaled by rarity and the depth it dropped at |
 | **Reroll** | shards | Re-roll the affixes, keeping slot, base and rarity |
-| **Ascend** | shards + salvage materials | Raise an item one rarity tier, adding an affix |
+| **Ascend** | shards | Raise an item one rarity tier, **keeping its affixes and adding one** |
 
 **No crafting bench, no recipes.** These three deliver the whole "I can improve this"
 loop with one screen. All server-side and deterministic — value comes from the item
 the server stores, never a number a client sends.
+
+> **⚠ This table said "shards + salvage materials" until Stage 6b-2, and that was this
+> folder contradicting itself.** [ECONOMY.md](ECONOMY.md) § Salvage is unambiguous —
+> *"Not crafting. No recipes, no materials, no bench"* — and a material would be a second
+> currency in a game whose economy doc refuses one in as many words. **Resolved toward
+> ECONOMY.md: ascend is shard-priced, like everything else.** Recorded here rather than
+> silently coded around; reversible by the owner, but it would cost a new content type
+> and the sentence above.
+
+**Both are priced off the item's own budget**, the same rule salvage already follows — so
+improving a depth-50 legendary costs more than improving a depth-2 common, and a flat
+price cannot make the deep end cheap. **Reroll must always cost more than salvaging the
+same item pays**, or the stash is a perpetual motion machine; a test pins that.
+
+**The two are different decisions, not two prices.** Reroll gambles the whole affix set;
+ascend *protects* a good roll and buys one more line on top of it. That split is what
+stops a player with a good rare from ignoring both.
+
+**The depth-record gate applies to ascend too**, and that is load-bearing: ascending into
+`epic` or `legendary` needs the same record a *drop* of that tier needs. Without it,
+shards would buy past the one gate that carries the game beyond the level cap — the
+endgame is *"get deeper to find better"*, and a purchasable tier is that sentence deleted.
+Below the ceiling, ascend is always available, so the sink exists in week one.
 
 **Stash size grows with progression** rather than sitting at a hard cap. Eleven slots
 of gear needs somewhere to live, and an inventory that forces a discard every run is

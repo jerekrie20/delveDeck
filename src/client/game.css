@@ -2436,6 +2436,25 @@ body {
   box-shadow: inset 0 0 0 1px rgb(168 146 236 / 45%);
 }
 
+/* The three shard actions on a stashed item — scrap, reroll, ascend (`ECONOMY.md` §
+   Sinks). A column rather than a row because the tail is the narrow half of the row at
+   320px, and a price that wraps mid-number is a price nobody can read. */
+.gacts {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: center;
+}
+
+/* Disabled is never invisible (`GAME_DESIGN.md` § Look and feel). The price stays
+   readable and the reason stays printed; the paint is DARKENED rather than thinned,
+   because `opacity` composites the chip's own fill against whatever scrolls behind it —
+   the bug `.btn[disabled]` shipped once and this rule exists not to repeat. */
+.gsalv.off {
+  cursor: default;
+  filter: saturate(0.25) brightness(0.68);
+}
+
 .gdelta {
   font-size: var(--ui-1);
   color: var(--atk);

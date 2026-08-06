@@ -13,9 +13,10 @@ import { assert, check, describe } from './helpers';
 import { createRng } from '../src/shared/rng';
 import { ARCHETYPES } from '../src/shared/abilities';
 import {
-  AFFIXES, EMPTY_GEAR, GEAR_SLOTS, RARITIES, TUNING, affixText, budgetFor, ceilingForRecord,
-  dropForDepth, fitsSlot, gearStats, gearedKit, issuedKitForDay, itemMods, itemName,
-  itemStats, rarityRank, rollItem, salvageValue, simulateRun, slotFamily,
+  AFFIXES, EMPTY_GEAR, GEAR_SLOTS, RARITIES, TUNING, affixText, ascendCost, ascendItem,
+  budgetFor, ceilingForRecord, dropForDepth, fitsSlot, gearStats, gearedKit, issuedKitForDay,
+  itemMods, itemName, itemStats, nextRarity, rarityRank, rerollCost, rerollItem, rollItem,
+  salvageValue, simulateRun, slotFamily,
   type EquippedGear, type GearSlot, type Item, type Rarity,
 } from '../src/shared/sim';
 import { AFFIX_LIST, ITEM_BASES, LANTERN_AFFIXES, affixesForSlot } from '../src/shared/items';
@@ -222,6 +223,122 @@ await check('salvage pays off the budget, so a deep common is still worth carryi
   const deep = rollItem(createRng(1), 'b', 50, 'rare');
   assert.ok(salvageValue(deep) > salvageValue(shallow));
   assert.ok(salvageValue(shallow) >= 1, 'salvage never pays nothing');
+});
+
+// ---- the two sinks: reroll and ascend --------------------------------------------
+
+await check('A REFORGE IS A PURE FUNCTION OF (item, seed) — a CAS replay rolls the same', () => {
+  // The load-bearing property of both sinks, and the reason the seed is a parameter
+  // rather than a `Math.random()` inside: `updateHero` REPLAYS its mutator on a
+  // compare-and-set conflict. A roll that differed on the replay would hand the player a
+  // different item than the one their shards were spent against, silently and rarely.
+  for (let seed = 1; seed <= 60; seed++) {
+    const item = rollItem(createRng(seed), 'i', 25, DEEP_CEILING);
+    assert.deepEqual(rerollItem(item, seed), rerollItem(item, seed), `reroll ${seed} drifted`);
+    assert.deepEqual(ascendItem(item, seed), ascendItem(item, seed), `ascend ${seed} drifted`);
+  }
+});
+
+await check('a reroll keeps slot, base, rarity, depth and budget — only affixes move', () => {
+  // `GEAR.md` § Salvage, reroll, ascend: *"re-roll the affixes, keeping slot, base and
+  // rarity"*. Rerolling into a different base would be a slot machine, not a forge.
+  let moved = 0;
+  for (let seed = 1; seed <= 120; seed++) {
+    const item = rollItem(createRng(seed), 'i', 30, DEEP_CEILING);
+    const after = rerollItem(item, seed * 7);
+    assert.equal(after.base, item.base);
+    assert.equal(after.rarity, item.rarity);
+    assert.equal(after.depth, item.depth);
+    assert.equal(after.budget, item.budget);
+    assert.equal(after.id, item.id, 'the id is the stash key — a reforge is the same item');
+    if (JSON.stringify(after.affixes) !== JSON.stringify(item.affixes)) moved++;
+  }
+  assert.ok(moved > 60, `only ${moved}/120 rerolls changed anything — this is the gamble`);
+});
+
+await check('AN ASCEND KEEPS WHAT WAS THERE AND ADDS TO IT', () => {
+  // The split that makes the two sinks different decisions rather than two prices:
+  // reroll gambles the whole set, ascend PROTECTS a good roll and buys one more line.
+  // Without that, a player with a good rare would never touch either.
+  for (let seed = 1; seed <= 120; seed++) {
+    const item = rollItem(createRng(seed), 'i', 40, 'rare');
+    const after = ascendItem(item, seed);
+    if (!after) continue;
+    assert.equal(rarityRank(after.rarity), rarityRank(item.rarity) + 1, 'exactly one tier');
+    assert.ok(after.budget > item.budget, 'rarity IS the budget, so the budget must grow');
+    for (const affix of item.affixes) {
+      assert.ok(
+        after.affixes.some((row) => row.id === affix.id && row.value === affix.value),
+        `ascend lost ${affix.id} — the affixes it had must survive`,
+      );
+    }
+    assert.ok(after.affixes.length >= item.affixes.length, 'and it never ends up with fewer');
+  }
+});
+
+await check('an ascended item still cannot outspend its own budget', () => {
+  // The model's one hard invariant (`GEAR.md`: rarity IS the budget), and the sink most
+  // able to break it — the preserved affixes were priced against a SMALLER budget, so a
+  // naive "divide what is left by the count" would let the new row spend budget the old
+  // ones already had.
+  for (let seed = 1; seed <= 200; seed++) {
+    let item = rollItem(createRng(seed), 'i', 45, 'common');
+    for (let step = 0; step < 4; step++) {
+      const next = ascendItem(item, seed + step);
+      if (!next) break;
+      item = next;
+      let spent = 0;
+      for (const affix of item.affixes) spent += affix.value * AFFIXES[affix.id]!.cost;
+      assert.ok(
+        spent <= item.budget,
+        `${itemName(item)} spent ${spent} of a ${item.budget} budget after ascending`,
+      );
+      const ids = item.affixes.map((affix) => affix.id);
+      assert.equal(new Set(ids).size, ids.length, 'an ascend rolled an affix it already had');
+      assert.ok(
+        item.affixes.length <= TUNING.items.rarityAffixes[item.rarity],
+        'and never more lines than its tier allows',
+      );
+    }
+  }
+});
+
+await check('ascend stops at the top of the rollable ladder', () => {
+  // `unique`/`set` is authored and is not in the union, so there is nothing above
+  // legendary for a roller to ascend into (`items.ts`, the `Rarity` header).
+  assert.equal(nextRarity('legendary'), null);
+  assert.equal(nextRarity('common'), 'uncommon');
+  const top = rollItem(createRng(4), 'i', 40, 'legendary');
+  const legendary: Item = { ...top, rarity: 'legendary' };
+  assert.equal(ascendItem(legendary, 1), null, 'nothing to buy at the top');
+  assert.equal(ascendCost(legendary), 0, 'and therefore nothing to charge');
+});
+
+await check('BOTH SINKS ARE PRICED OFF THE ITEM, so a deep item costs more to improve', () => {
+  // `ECONOMY.md` § Sinks — the same rule salvage already prices by. A flat price would
+  // make improving a depth-50 legendary as cheap as a depth-2 common.
+  const shallow = rollItem(createRng(9), 'a', 3, 'rare');
+  const deep = rollItem(createRng(9), 'b', 50, 'rare');
+  assert.ok(rerollCost(deep) > rerollCost(shallow), 'a deep reroll must cost more');
+  assert.ok(ascendCost(deep) > ascendCost(shallow), 'and so must a deep ascend');
+  assert.ok(rerollCost(shallow) >= 1 && ascendCost(shallow) >= 1, 'nothing is ever free');
+});
+
+await check('THE SINKS OUTPRICE THE FAUCET — salvage cannot fund an endless forge', () => {
+  // `ECONOMY.md`: salvage is the FAUCET and these two are the SINKS. If scrapping an item
+  // paid for rerolling the same item, the stash would be a perpetual motion machine and
+  // shards would stop being a decision.
+  for (let depth = 5; depth <= 60; depth += 5) {
+    for (const rarity of RARITIES) {
+      const item: Item = {
+        id: 'x', base: 'band', rarity, depth, budget: budgetFor(rarity, depth), affixes: [],
+      };
+      assert.ok(
+        rerollCost(item) > salvageValue(item),
+        `${rarity}@${depth}: a reroll costs ${rerollCost(item)} but scraps for ${salvageValue(item)}`,
+      );
+    }
+  }
 });
 
 // ---- what wearing it does -------------------------------------------------------

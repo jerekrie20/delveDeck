@@ -174,6 +174,15 @@ export const TUNING = {
      *  (`ECONOMY.md` § Salvage). */
     salvageShare: 0.6,
 
+    /** The two SINKS, priced off the item's own budget so a deep or ascended item costs
+     *  more to improve — the same rule salvage prices by (`ECONOMY.md` § Sinks). A reroll
+     *  is repeatable and gambles the whole affix set, so it is cheaper than the budget it
+     *  is spent on; an ascend is a one-time tier jump priced off the budget the item is
+     *  BECOMING. First-pass numbers, owed a retune against real session data
+     *  (`ECONOMY.md` § Balance posture). */
+    rerollShare: 0.8,
+    ascendShare: 1.5,
+
     /** The stash **grows**, it does not sit at a cap (`GEAR.md`, override #4). Levels
      *  arrive with classes, so today every delver is level 1 and holds the base. */
     stashBase: 24,

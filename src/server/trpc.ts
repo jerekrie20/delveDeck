@@ -11,7 +11,8 @@ import {
 import { readDayStats } from './core/stats';
 import { postRunComment } from './core/comment';
 import {
-  bankRunShards, equipFromStash, readGearState, readShardTotal, salvageFromStash, unequipSlot,
+  ascendStashItem, bankRunShards, equipFromStash, readGearState, readShardTotal,
+  rerollStashItem, salvageFromStash, unequipSlot,
   type GearState,
 } from './core/hero';
 import { CAS_ATTEMPTS, updateHero } from './core/heroStore';
@@ -325,7 +326,11 @@ export const appRouter = t.router({
      *  delver, the same rule the shard total follows. */
     gear: publicProcedure.query(async () => {
       const userId = currentUserId();
-      if (!userId) return { gear: {}, stash: [], shards: 0, capacity: 0, slots: GEAR_SLOTS };
+      if (!userId) {
+        return {
+          gear: {}, stash: [], shards: 0, capacity: 0, slots: GEAR_SLOTS, ceiling: 'rare' as const,
+        };
+      }
       return await readGearState(redisHeroClient, userId, Date.now());
     }),
 
@@ -355,6 +360,34 @@ export const appRouter = t.router({
           redisHeroClient, userId, now, salvageFromStash(input.itemId), CAS_ATTEMPTS.hero,
         ).then(({ result }) => (result > 0 ? null : 'There is nothing there to scrap.')),
       )),
+
+    // The two SINKS (`ECONOMY.md` § Sinks). Both take an item id and nothing else: the
+    // price, the new affixes and the tier are all computed from the stash the server is
+    // already holding, so there is no parameter through which a cost could be argued down
+    // or a roll named. **The seed is minted HERE, once**, and handed to a pure mutator —
+    // a compare-and-set replay must re-roll to the same item, or a retry would silently
+    // hand back a different reforge than the one that was paid for.
+    reroll: publicProcedure
+      .input(z.object({ itemId: itemIdSchema }))
+      .mutation(async ({ input }) => {
+        const seed = newRunSeed();
+        return await writeGear(
+          (userId, now) => updateHero(
+            redisHeroClient, userId, now, rerollStashItem(input.itemId, seed), CAS_ATTEMPTS.hero,
+          ).then(({ result }) => result),
+        );
+      }),
+
+    ascend: publicProcedure
+      .input(z.object({ itemId: itemIdSchema }))
+      .mutation(async ({ input }) => {
+        const seed = newRunSeed();
+        return await writeGear(
+          (userId, now) => updateHero(
+            redisHeroClient, userId, now, ascendStashItem(input.itemId, seed), CAS_ATTEMPTS.hero,
+          ).then(({ result }) => result),
+        );
+      }),
   }),
 
   board: t.router({

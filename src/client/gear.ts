@@ -22,12 +22,15 @@
 //     ~40 base sprites are Stage 7, after the model has been played.
 
 import {
-  GEAR_SLOTS, RARITY_LABEL, SLOT_LABEL, TUNING, affixText, gearStats, itemName, itemStats,
+  GEAR_SLOTS, RARITY_LABEL, SLOT_LABEL, TUNING, affixText, ascendCost, ascendItem, gearStats,
+  itemName, itemStats, nextRarity, rarityRank, recordForRarity, rerollCost, rerollItem,
   rollItem, salvageValue, slotForItem,
-  type EquippedGear, type GearSlot, type GearStats, type Item,
+  type EquippedGear, type GearSlot, type GearStats, type Item, type Rarity,
 } from '../shared/sim';
 import { createRng } from '../shared/rng';
-import { equipGear, loadGearState, salvageGear, unequipGear } from './session';
+import {
+  ascendGear, equipGear, loadGearState, rerollGear, salvageGear, unequipGear,
+} from './session';
 import { escapeHtml, inShell } from './shell';
 
 /** What the server last said. Null until the screen has been opened once. */
@@ -36,6 +39,9 @@ interface GearView {
   stash: Item[];
   shards: number;
   capacity: number;
+  /** The rarity the delver's depth record has opened. Reported by the server so the
+   *  ascend chip can say WHY it is locked rather than disappearing. */
+  ceiling: Rarity;
 }
 
 let open = false;
@@ -71,7 +77,12 @@ function offlineStash(): GearView {
     createRng(0x0be1_0000 + i), `preview-${i}`, 8 + i * 9,
     i > 4 ? 'legendary' : i > 2 ? 'epic' : 'rare',
   ));
-  return { gear: {}, stash, shards: 640, capacity: 24 };
+  // **An `epic` ceiling rather than `legendary`, deliberately.** It is what puts BOTH
+  // ascend states on the offline screen: a rare row can be raised, and a legendary row is
+  // locked behind a record and prints the depth that opens it. A preview that could only
+  // ever reach the happy path is a preview the visual gate cannot measure the off state
+  // through — and the off state carries the longer string.
+  return { gear: {}, stash, shards: 640, capacity: 24, ceiling: 'epic' };
 }
 
 async function refresh(rerender: () => void): Promise<void> {
@@ -147,9 +158,70 @@ export function gearAction(action: string, index: number, rerender: () => void):
       }
       return true;
     }
+    // The two sinks. Offline the local fold re-rolls with a seed of this tab's own — the
+    // one place that is honest, because offline this tab IS the server and nothing it
+    // rolls is saved anywhere. Online, the item that comes back is the server's roll and
+    // this branch never runs.
+    case 'gear-reroll': {
+      const item = view?.stash[index];
+      if (item && affordable(view, rerollCost(item))) {
+        void write(() => rerollGear(item.id), (state) => {
+          state.shards -= rerollCost(item);
+          state.stash = state.stash.map((row) => (
+            row.id === item.id ? rerollItemLocally(row) : row
+          ));
+        }, rerender);
+      }
+      return true;
+    }
+    case 'gear-ascend': {
+      const item = view?.stash[index];
+      if (item && view && ascendable(view, item) && affordable(view, ascendCost(item))) {
+        void write(() => ascendGear(item.id), (state) => {
+          state.shards -= ascendCost(item);
+          state.stash = state.stash.map((row) => (
+            row.id === item.id ? ascendItemLocally(row) : row
+          ));
+        }, rerender);
+      }
+      return true;
+    }
     default: return false;
   }
 }
+
+/** Whether the banked total covers a price. Checked here only so a tap that cannot
+ *  succeed does not cost a round trip — **the server checks it again and its answer is
+ *  the one that counts**, which is the same contract every other action on this screen
+ *  has. */
+const affordable = (state: GearView | null, cost: number): boolean =>
+  (state?.shards ?? 0) >= cost;
+
+/** Whether a tier above this item is both real and open to this delver's record. */
+function ascendable(state: GearView, item: Item): boolean {
+  const next = nextRarity(item.rarity);
+  return next !== null && rarityRank(next) <= rarityRank(state.ceiling);
+}
+
+/**
+ * The offline forge's seed. **Deterministic**, and deliberately not `Math.random()`: the
+ * visual gate plays this screen, and a gate that rolls different affixes on every run is
+ * a gate whose green means nothing on the next one. It still differs per item and per
+ * press, which is all the offline stash needs.
+ */
+let offlineForges = 0;
+function offlineSeed(item: Item): number {
+  let hash = 0x811c_9dc5;
+  for (let i = 0; i < item.id.length; i++) {
+    hash ^= item.id.charCodeAt(i);
+    hash = Math.imul(hash, 0x0100_0193);
+  }
+  offlineForges += 1;
+  return (hash ^ Math.imul(offlineForges, 0x9e37_79b1)) >>> 0;
+}
+
+const rerollItemLocally = (item: Item): Item => rerollItem(item, offlineSeed(item));
+const ascendItemLocally = (item: Item): Item => ascendItem(item, offlineSeed(item)) ?? item;
 
 // ---- drawing ----------------------------------------------------------------------
 
@@ -222,7 +294,9 @@ function statBlock(stats: GearStats): string {
 }
 
 export function gearScreen(): string {
-  const state = view ?? { gear: {}, stash: [], shards: 0, capacity: 0 };
+  const state: GearView = view ?? {
+    gear: {}, stash: [], shards: 0, capacity: 0, ceiling: 'rare',
+  };
   const stats = gearStats(state.gear);
   const worn = GEAR_SLOTS.map((slot, i) => slotRow(slot, i, state.gear)).join('');
   const stash = state.stash.map((item, i) => {
@@ -231,8 +305,7 @@ export function gearScreen(): string {
     return itemRow(
       item,
       `<div class="gwear">WEAR${target ? `<span>${SLOT_LABEL[target]}</span>` : ''}</div>`
-      + `<div class="gsalv" data-action="gear-salvage" data-index="${i}">`
-      + `SCRAP ${salvageValue(item)}</div>${gain}`,
+      + forgeChips(state, item, i) + gain,
       'gear-equip', i,
     );
   }).join('');
@@ -253,6 +326,56 @@ export function gearScreen(): string {
     + '<div class="act sticky"><button class="btn go" data-action="camp">BACK TO CAMP'
     + '<span class="sub">GEAR IS ENDLESS-ONLY</span></button></div>';
   return inShell({ shell: 'surface', fire: true }, body);
+}
+
+/**
+ * The three things shards do to an item: scrap it, re-roll it, raise it a tier
+ * (`ECONOMY.md` § Sinks). One chip each, and **a chip is never merely absent**: an
+ * unaffordable price is shown dimmed with the price still on it, and an ascend the
+ * record has not opened says so. `GAME_DESIGN.md` § Look and feel — disabled desaturates
+ * and keeps readable text, because a control that vanishes teaches nothing about how to
+ * get it back.
+ */
+function forgeChips(state: GearView, item: Item, index: number): string {
+  const chip = (
+    label: string, cost: number, action: string, enabled: boolean, note?: string,
+  ): string => {
+    const attrs = enabled ? ` data-action="${action}" data-index="${index}"` : '';
+    // `note` and every label here are authored constants, never player text — the one
+    // reason nothing on this line is escaped, and the entities in them are deliberate.
+    return `<div class="gsalv${enabled ? '' : ' off'}"${attrs}>${label}`
+      + `${note ?? ` ${cost}`}</div>`;
+  };
+
+  const next = nextRarity(item.rarity);
+  const reroll = rerollCost(item);
+  return '<div class="gacts">'
+    + chip('SCRAP', salvageValue(item), 'gear-salvage', true)
+    + chip('REROLL', reroll, 'gear-reroll', affordable(state, reroll))
+    + ascendChip(state, item, next, chip)
+    + '</div>';
+}
+
+type ChipFn = (
+  label: string, cost: number, action: string, enabled: boolean, note?: string,
+) => string;
+
+/** Ascend has three states where the other two chips have two, which is the whole reason
+ *  it is its own function: at the top of the ladder there is nothing to buy, and past the
+ *  record gate there is something to buy and no way to buy it yet. Both say which. */
+function ascendChip(
+  state: GearView, item: Item, next: Rarity | null, chip: ChipFn,
+): string {
+  if (next === null) return chip('ASCEND', 0, 'gear-ascend', false, ' MAX');
+  if (rarityRank(next) > rarityRank(state.ceiling)) {
+    // The depth-record gate (`GEAR.md`), named rather than merely refused — and named as
+    // the NUMBER that would open it, in the game's own `D10` register. A chip that only
+    // said LOCKED would be the unlit threat slot with its reason taken off, which is the
+    // one thing `GAME_DESIGN.md` says an off state may never be.
+    return chip('ASCEND', 0, 'gear-ascend', false, ` D${recordForRarity(next)}`);
+  }
+  const cost = ascendCost(item);
+  return chip('ASCEND', cost, 'gear-ascend', affordable(state, cost));
 }
 
 /** What wearing this would move, folded the same way the run will fold it. */

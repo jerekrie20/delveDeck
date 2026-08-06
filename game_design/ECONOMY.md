@@ -157,6 +157,17 @@ nobody can pay, so the currency's source has to be real before the things it buy
 Salvage is priced off the item's own budget, which is what makes a deep common worth
 carrying out rather than leaving where it fell.
 
+**The two sinks landed at Stage 6b-2, priced against that faucet rather than against
+taste.** Both cost a share of the item's own budget, the same way salvage pays one — and
+the one hard rule between them is that **a reroll must always cost more than salvaging the
+same item pays**. Otherwise the stash is a perpetual motion machine and shards stop being
+a decision. A test sweeps every rarity at every depth for it.
+
+**Ascend is shard-priced and takes no materials**, which resolves a contradiction this
+folder carried: [GEAR.md](GEAR.md)'s table used to say *"shards + salvage materials"*
+while the section above refuses recipes, materials and benches outright. The refusal wins
+— a material would be the second currency this file spends a section declining.
+
 **A full stash auto-salvages the overflow rather than refusing the bank.** That is this
 section's rule applied at the one moment it matters: overflow is income, and a bank that
 blocked would strand a haul at exactly the moment the mode promises it is safe. The

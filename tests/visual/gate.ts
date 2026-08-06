@@ -443,13 +443,34 @@ async function endlessLeg(screens: ScreenReport[]): Promise<void> {
  * is deliberately deep-rolled — epics and legendaries carry five affixes, which is the
  * longest string this screen can ever be asked to fit.
  *
- * It also *plays*: wear one, take it off, scrap one, and measure after each — because
- * the rows that move are the rows whose neighbours change.
+ * It also *plays*: wear one, take it off, scrap one, reroll one, ascend one, and measure
+ * after each — because the rows that move are the rows whose neighbours change.
+ *
+ * **The forge chips are measured in every state they have**, which is why the offline
+ * stash carries an `epic` ceiling: a reroll that is affordable, an ascend that is, an
+ * ascend locked behind a depth record, and — once the purse runs down — a chip dimmed by
+ * its own price. The off states carry the longer strings, so a gate that only saw the
+ * live ones would be measuring the easy half of the screen.
  */
 async function gearLeg(screens: ScreenReport[]): Promise<void> {
   tap('[data-action="enter-gear"]');
   await wait(700);
-  screens.push(measureAt('gear', 'gear (stash full of deep rolls)'));
+  // `.gsalv.off` is required on the FIRST measurement because the offline stash's deep
+  // rows are locked behind a depth record from the moment the screen opens. It is the
+  // longest chip string on the screen, and requiring it here is what stops the locked
+  // state going unmeasured the day somebody "tidies" the preview stash.
+  screens.push(measureAt('gear', 'gear (stash full of deep rolls)', '.gsalv.off'));
+
+  // The two sinks (`TODO.md` § Stage 6b-2), played BEFORE the equip legs so the taps land
+  // on a known row: index 0 of the untouched preview stash is shallow, so it is both
+  // affordable and below the record ceiling — the one row where each chip is live.
+  tap('[data-action="gear-reroll"][data-index="0"]');
+  await wait(300);
+  screens.push(measureAt('gear', 'gear (a rerolled row)', '.gacts'));
+
+  tap('[data-action="gear-ascend"][data-index="0"]');
+  await wait(300);
+  screens.push(measureAt('gear', 'gear (an ascended row)', '.gacts'));
 
   tap('[data-action="gear-equip"][data-index="0"]');
   await wait(300);

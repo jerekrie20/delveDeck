@@ -26,10 +26,9 @@ import {
   HeroConflictError, heroKey, readHero, updateHero,
 } from '../src/server/core/heroStore';
 import {
-  bankRunShards, bankShards, beginEndlessRun, endEndlessRun, equipFromStash, readShardTotal,
-  salvageFromStash, saveEndlessProgress, stashCapacity, unequipSlot,
+  bankRunShards, bankShards, beginEndlessRun, endEndlessRun, readShardTotal,
+  saveEndlessProgress,
 } from '../src/server/core/hero';
-import { GEAR_SLOTS, fitsSlot, salvageValue, type Item } from '../src/shared/sim';
 import { consumeRateLimit, RATE_LIMITS } from '../src/server/core/rateLimit';
 import { FakeRedis } from './fakes/redis';
 import { simulateRun, seedForDay } from '../src/shared/sim';
@@ -271,72 +270,9 @@ await check('beginEndlessRun keeps the abandoned run’s record and banks nothin
   assert.equal(hero.records['endlessBest'], 11, 'and it keeps the depth record');
 });
 
-await check('THE CAMP MUTATORS ARE PURE TOO — equip, unequip and salvage all replay clean', () => {
-  // Stage 6b put three more through the same loop, and every one of them moves an item
-  // between two lists on the same blob. A conflict re-runs them against a fresher one.
-  const item = fixtureItem('a');
-  const slot = GEAR_SLOTS.find((s) => fitsSlot(item, s))!;
-
-  const a = newStoredHero(NOW);
-  const b = newStoredHero(NOW);
-  a.stash = [fixtureItem('a')];
-  b.stash = [fixtureItem('a')];
-  b.shards = 500;
-
-  const equip = equipFromStash('a', slot);
-  assert.equal(equip(a), true);
-  assert.equal(equip(a), false, 'it left the stash, so a second call finds nothing');
-  assert.equal(equip(b), true, 'and nothing carried over from the first hero');
-  assert.equal(a.gear[slot]?.id, 'a');
-  assert.deepEqual(a.stash, [], 'the stash gave it up');
-
-  const salvage = salvageFromStash('a');
-  assert.equal(salvage(a), 0, 'a WORN item cannot be scrapped — you are standing in it');
-  assert.equal(unequipSlot(slot)(a), true);
-  assert.equal(salvage(a), salvageValue(item), 'and off the body it pays its budget');
-  assert.equal(a.shards, salvageValue(item));
-});
-
-await check('unequip is refused rather than deleting an item to make room', () => {
-  const hero = newStoredHero(NOW);
-  const item = fixtureItem('worn');
-  const slot = GEAR_SLOTS.find((s) => fitsSlot(item, s))!;
-  hero.gear = { [slot]: item };
-  hero.stash = Array.from({ length: stashCapacity(hero.level) }, (_, i) => fixtureItem(`f${i}`));
-
-  assert.equal(unequipSlot(slot)(hero), false, 'a full stash refuses, it does not discard');
-  assert.equal(hero.gear[slot]?.id, 'worn', 'and the item is still on the delver');
-});
-
-await check('THE STASH GROWS WITH LEVEL — it does not sit at a cap', () => {
-  // `GEAR.md` override #4. Eleven slots of gear needs somewhere to live, and an
-  // inventory that forces a discard every run is a chore rather than a decision.
-  assert.ok(stashCapacity(5) > stashCapacity(1));
-  assert.equal(stashCapacity(1), stashCapacity(0), 'level 0 is not a thing; it floors at 1');
-});
-
-await check('an item goes back to the stash when a swap displaces it', () => {
-  const hero = newStoredHero(NOW);
-  const worn = fixtureItem('old');
-  const slot = GEAR_SLOTS.find((s) => fitsSlot(worn, s))!;
-  hero.gear = { [slot]: worn };
-  hero.stash = [fixtureItem('new')];
-
-  assert.equal(equipFromStash('new', slot)(hero), true);
-  assert.equal(hero.gear[slot]?.id, 'new');
-  assert.deepEqual(hero.stash.map((i) => i.id), ['old'], 'a swap is reversible');
-});
-
-await check('an item cannot be forced into a slot it does not fit', () => {
-  const hero = newStoredHero(NOW);
-  hero.stash = [fixtureItem('ring')];
-  assert.equal(equipFromStash('ring', 'amulet')(hero), false);
-  assert.equal(hero.stash.length, 1, 'and a refusal writes nothing');
-});
-
-function fixtureItem(id: string): Item {
-  return { id, base: 'band', rarity: 'rare', depth: 12, budget: 40, affixes: [] };
-}
+// The camp's own mutators — equip, unequip, salvage, reroll, ascend — live in
+// `camp.test.ts`. Split at 6b-2 on the seam `core/hero.ts` uses: this file owns the hero
+// as a PERSISTED thing, that one owns what a player standing in the camp does to one.
 
 await check('saveEndlessProgress refuses a rewind even inside the transaction', () => {
   // `core/endless.ts` already checked this against the blob it read; a compare-and-set

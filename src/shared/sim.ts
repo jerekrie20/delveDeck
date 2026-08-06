@@ -517,7 +517,10 @@ export {
 } from './items';
 export type { Affix, EquippedGear, GearSlot, GearStats, Item, Rarity } from './items';
 export { gearMods, gearStats, gearedKit, wornItems } from './kit';
-export { budgetFor, ceilingForRecord, dropForDepth, rollItem, salvageValue } from './loot';
+export {
+  ascendCost, ascendItem, budgetFor, ceilingForRecord, dropForDepth, nextRarity,
+  recordForRarity, rerollCost, rerollItem, rollItem, salvageValue,
+} from './loot';
 // The client colours a screen by the stratum it is standing in, including the two —
 // boon and descent — that sit BETWEEN depths and so have no `CombatView` to read it
 // off. Depth → stratum is the same banding the roster and the share grid use, so it

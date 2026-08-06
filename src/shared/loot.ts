@@ -20,11 +20,11 @@
 //     never bend: nothing findable may make a Daily run easier.
 
 import { createRng, randInt, type Rng } from './rng';
-import { ARCHETYPES, type Archetype } from './abilities';
+import { ARCHETYPES } from './abilities';
 import { TUNING } from './tuning';
 import {
   AFFIXES, BASES_FOR_SLOT, IMPLICIT_SHARE, RARITIES, affixesForSlot, itemBase, rarityRank,
-  type AffixRow, type BaseSlot, type Item, type Rarity,
+  type Affix, type AffixRow, type BaseSlot, type Item, type Rarity,
 } from './items';
 
 /** Every base family, in the order a drop picks from them. Rings appear once and fit
@@ -52,6 +52,16 @@ export function ceilingForRecord(record: number): Rarity {
   if (record >= TUNING.items.epicAtRecord) return 'epic';
   return 'rare';
 }
+
+/** The depth record a rarity opens at — `ceilingForRecord` read backwards, so the screen
+ *  that refuses an ascend can name the number that would allow it rather than only saying
+ *  no. One function per direction over one set of thresholds; a second copy in `client/`
+ *  would be a screen promising a gate the server does not have. */
+export const recordForRarity = (rarity: Rarity): number => {
+  if (rarity === 'legendary') return TUNING.items.legendaryAtRecord;
+  if (rarity === 'epic') return TUNING.items.epicAtRecord;
+  return 0;
+};
 
 /**
  * What a cleared depth drops, or null. **Endless only** — the caller decides that, and
@@ -111,6 +121,77 @@ export const salvageValue = (item: Item): number => Math.max(
   1, Math.round(item.budget * TUNING.items.salvageShare),
 );
 
+// ---- the two sinks: reroll and ascend --------------------------------------------
+//
+// **Both are pure functions of `(item, seed)`, and the seed is minted OUTSIDE the CAS
+// mutator** — the same trick `newRunSeed` plays in `core/endless.ts`. A reroll or an
+// ascend re-rolls affixes, which needs randomness; a compare-and-set replay must produce
+// the *same* result, so the impurity is the seed's origin, never the roll itself. Given a
+// fixed seed the roll is deterministic, which is exactly what "the client previews and the
+// server decides" already requires of a drop.
+//
+// Neither is part of a verified RUN — they are camp actions on a stored hero, not choices
+// in a replayed list — so nothing here has to match a sim step. The only rules they carry
+// are `ECONOMY.md`'s: the price comes from the item the server holds, never from the
+// client, and no findable/buyable thing may reach the Daily (it cannot: this is server
+// hero state, and the Daily reads no account).
+
+/** The rarity one tier up, or null at the top of the rollable ladder. */
+export const nextRarity = (rarity: Rarity): Rarity | null =>
+  RARITIES[rarityRank(rarity) + 1] ?? null;
+
+/** Shards to re-roll an item's affixes. Priced off its own budget, like salvage — a deep
+ *  or already-ascended item costs more to gamble. */
+export const rerollCost = (item: Item): number =>
+  Math.max(1, Math.round(item.budget * TUNING.items.rerollShare));
+
+/** Shards to ascend one tier. Priced off the budget of the item it BECOMES, so the cost
+ *  scales with the tier being bought. Zero at the top, where there is nothing to buy. */
+export const ascendCost = (item: Item): number => {
+  const next = nextRarity(item.rarity);
+  return next
+    ? Math.max(1, Math.round(budgetFor(next, item.depth) * TUNING.items.ascendShare))
+    : 0;
+};
+
+/** Re-roll the affixes, keeping slot, base, rarity, depth and budget (`GEAR.md` § Salvage,
+ *  reroll, ascend). The whole affix set is replaced — reroll is the gamble; ascend is the
+ *  one that protects a good roll. */
+export function rerollItem(item: Item, seed: number): Item {
+  const base = itemBase(item);
+  if (!base) return item;
+  const rng = createRng(seed >>> 0);
+  const affixes = rollAffixes(
+    rng, base.slot, item.budget, base.implicit !== undefined,
+    TUNING.items.rarityAffixes[item.rarity],
+  );
+  return { ...item, affixes };
+}
+
+/**
+ * Raise one rarity tier, KEEPING the existing affixes and adding one more rolled against
+ * the larger budget — `GEAR.md`'s *"raise a tier, adding an affix"*. The implicit grows
+ * with the budget on its own, because `implicitValue` derives it rather than storing it.
+ *
+ * When the leftover budget cannot afford even the cheapest new affix the tier still
+ * upgrades without one — **the budget is the gate**, exactly as it is for a drop, and a
+ * drop is already allowed to carry fewer affixes than its tier's maximum. Ascend targets
+ * deep items, where the larger budget affords the new row easily. Returns null at the top
+ * of the ladder, where there is no tier to ascend into.
+ */
+export function ascendItem(item: Item, seed: number): Item | null {
+  const next = nextRarity(item.rarity);
+  const base = itemBase(item);
+  if (!next || !base) return null;
+  const budget = budgetFor(next, item.depth);
+  const rng = createRng(seed >>> 0);
+  const affixes = rollAffixes(
+    rng, base.slot, budget, base.implicit !== undefined,
+    TUNING.items.rarityAffixes[next], item.affixes,
+  );
+  return { ...item, rarity: next, budget, affixes };
+}
+
 // ---- the draws --------------------------------------------------------------------
 
 function drawBase(rng: Rng): { id: string; slot: BaseSlot } {
@@ -154,14 +235,22 @@ function rollAffixes(
   budget: number,
   hasImplicit: boolean,
   count: number,
-): { id: string; value: number; archetype?: Archetype }[] {
+  existing: readonly Affix[] = [],
+): Affix[] {
   let remaining = budget * (hasImplicit ? 1 - IMPLICIT_SHARE : 1);
   const candidates = affixesForSlot(slot);
-  const taken = new Set<string>();
-  const out: { id: string; value: number; archetype?: Archetype }[] = [];
+  const taken = new Set<string>(existing.map((affix) => affix.id));
+  const out: Affix[] = [...existing];
+  // Affixes kept from a lower tier (ascend) were rolled against a SMALLER budget, so what
+  // they cost against the larger one is subtracted first — the added row divides only what
+  // is genuinely left, never budget the preserved rows already spent.
+  for (const affix of existing) {
+    const row = AFFIXES[affix.id];
+    if (row) remaining = Math.max(0, remaining - affix.value * row.cost);
+  }
 
-  for (let picked = 0; picked < count; picked++) {
-    const left = count - picked;
+  while (out.length < count) {
+    const left = count - out.length;
     // Jittered so two rolls of one rarity differ, and clamped to what is actually left
     // so the last affix can never spend a budget the first three already did.
     const share = Math.min(remaining, (remaining / left) * (randInt(rng, 80, 121) / 100));
