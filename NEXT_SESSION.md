@@ -163,38 +163,28 @@ still owed a re-read** — the server replays the whole list at every checkpoint
 probe's own cost curve is the same shape.
 
 
-## TWO QUESTIONS FOR YOU — neither blocks 6b-2
+## TWO QUESTIONS — both ANSWERED, at their recommendation (2026-08-05)
 
-**An unanswered question stands at its recommendation**, same as the last three rounds.
+Both were confirmed, and both are already how the code ships, so nothing changed. Kept
+here as the record so they do not get re-opened.
 
-### 1 · Is splitting 6b in two the right call?
+### 1 · Is splitting 6b in two the right call? — **YES, keep the split.**
 
-I split it the way 6a/6b was split, at the seam the design already has: **the haul does
-not need classes.** 6b-1 is gear — findable, wearable, bankable, burnable, scrappable —
-and 6b-2 is classes, levels, XP, consumables, reroll/ascend, the Endless board and the
-records screen.
+Split the way 6a/6b was, at the seam the design already has: **the haul does not need
+classes.** 6b-1 is gear — findable, wearable, bankable, burnable, scrappable — and 6b-2
+is classes, levels, XP, consumables, reroll/ascend, the Endless board and the records
+screen. 6b as written was five systems in a trench coat, and built in one pass nothing is
+playable until almost all of it is done — the exact argument owner answer 1 accepted for
+6a. The item half of the fork is now real *and measurable in the probe* before a
+progression curve rests on it.
 
-**Recommendation: keep the split.** 6b as written was five systems in a trench coat, and
-built in one pass nothing is playable until almost all of it is done — which is the exact
-argument owner answer 1 accepted for 6a. The item half of the fork is now real *and
-measurable in the probe* before a progression curve rests on it, which is the ordering
-that let 6a's fork ratio mean anything.
+### 2 · The camp's three unbuilt tiles — **keep them drawn LOCKED.**
 
-*The alternative is folding the rest back in and shipping 6b whole; nothing is blocked
-either way, and the checkboxes are already written.*
-
-### 2 · Should the camp's three unbuilt tiles be drawn LOCKED, or stay absent?
-
-Stage 2 shipped none of the four tiles — *"four dead buttons is worse than none"* — and
-6b-1 drew the row with GEAR live and LANTERN / SHRINE / RECORDS locked and hatched, the
-same treatment the Community door has had since Stage 2.
-
-**Recommendation: keep them drawn.** The reason the camp is the landing screen at all is
-that a player who only ever sees a combat screen reads the whole product as a four-minute
-puzzle; a door has to be visible before it opens. Stage 2's call was right while all four
-were dead, and it is spent rather than wrong now that one of them is a real screen.
-
-*The alternative is one line: render the GEAR tile alone until its neighbours exist.*
+GEAR is live; LANTERN / SHRINE / RECORDS are drawn locked and hatched, the same treatment
+the Community door has had since Stage 2. A door has to be visible before it opens —
+which is the whole reason the camp is the landing screen. Stage 2's *"four dead buttons
+is worse than none"* was right while all four were dead, and is spent rather than wrong
+now that one is a real screen.
 
 
 ## STATE
