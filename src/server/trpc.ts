@@ -11,9 +11,9 @@ import {
 import { readDayStats } from './core/stats';
 import { postRunComment } from './core/comment';
 import {
-  ascendStashItem, bankRunShards, equipFromStash, readGearState, readShardTotal,
+  ascendStashItem, bankRunShards, equipFromStash, readCampTotals, readGearState,
   rerollStashItem, salvageFromStash, unequipSlot,
-  type GearState,
+  type DailyAward, type GearState,
 } from './core/hero';
 import { CAS_ATTEMPTS, updateHero } from './core/heroStore';
 import { consumeRateLimit, RATE_LIMITS } from './core/rateLimit';
@@ -168,8 +168,10 @@ export const appRouter = t.router({
       // trip would render it blank and then pop. `readShardTotal` never writes — a
       // player who has never submitted reads 0 without a key being created for them.
       const userId = currentUserId();
-      const shards = userId ? await readShardTotal(redisHeroClient, userId, Date.now()) : 0;
-      return { day, seed, username, subreddit, alreadyPlayed, stats, shards };
+      const totals = userId
+        ? await readCampTotals(redisHeroClient, userId, Date.now())
+        : { shards: 0, xp: 0 };
+      return { day, seed, username, subreddit, alreadyPlayed, stats, ...totals };
     }),
   }),
 
@@ -207,12 +209,14 @@ export const appRouter = t.router({
       // board, and the score is the thing the player came for. Losing shards to a
       // conflict storm is a bad day; losing a submitted run to one is a bug report.
       let shardTotal: number | null = null;
+      let award: DailyAward | null = null;
       try {
-        shardTotal = await bankRunShards(redisHeroClient, userId, result.shards, now);
+        award = await bankRunShards(redisHeroClient, userId, result.shards, now);
+        shardTotal = award.shardTotal;
       } catch (error) {
-        console.error('run.submit: banking shards failed', error);
+        console.error('run.submit: banking the daily award failed', error);
       }
-      return { ...result, shardTotal };
+      return { ...result, shardTotal, award };
     }),
 
     replay: publicProcedure

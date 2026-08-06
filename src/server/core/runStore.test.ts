@@ -22,7 +22,8 @@ import {
   readEndlessState, replayEndless, settleEndlessRun, startEndlessRun, stepEndlessRun,
 } from './endless';
 import {
-  depthReached, MAX_RUN_CHOICES, seedForDay, simulateRun, TUNING, type RunChoice,
+  depthReached, levelForXp, MAX_RUN_CHOICES, seedForDay, simulateRun, TUNING,
+  type RunChoice,
 } from '../../shared/sim';
 
 const inAnHour = (): Date => new Date(Date.now() + 60 * 60 * 1000);
@@ -261,10 +262,14 @@ test('readHero is a read — it never creates a key', async () => {
   expect(await redisRunStore.readRun(heroKey(user))).toBeNull();
 });
 
-test('END TO END — a submitted run banks its shards onto the hero', async () => {
+test('END TO END — a submitted run banks its shards AND its XP onto the hero', async () => {
   // The gate's fourth line, against real Redis. `submitRun` reports the shards it
   // recomputed; the route banks them on the far side of the one-per-day claim. The
   // Daily itself is untouched: this reads `result.shards`, an OUTPUT of the sim.
+  //
+  // **Both halves move in ONE transaction** (Stage 6b-2). Two writes would be two
+  // conflict windows and, worse, a partial failure that banked the shards and not the
+  // XP — an inconsistency nothing downstream could detect, let alone repair.
   const day = '2026-07-27';
   const sub = 'shardsub';
   const user = 't2_shardbanker';
@@ -274,9 +279,13 @@ test('END TO END — a submitted run banks its shards onto the hero', async () =
   expect(submitted.ok).toBe(true);
   if (!submitted.ok) return;
 
-  const banked = await bankRunShards(redisHeroClient, user, submitted.shards, NOW);
-  expect(banked).toBe(submitted.shards);
+  const award = await bankRunShards(redisHeroClient, user, submitted.shards, NOW);
+  expect(award.shardTotal).toBe(submitted.shards);
+  expect(award.xpEarned).toBe(TUNING.hero.xpDailyRun);
   expect(await readShardTotal(redisHeroClient, user, NOW)).toBe(submitted.shards);
+  // The Daily's XP is flat and small on purpose: it must never be the efficient way to
+  // level, or players optimise their one comparable run for progression over depth.
+  expect(award.level).toBe(levelForXp(TUNING.hero.xpDailyRun));
 });
 
 test('incrBy returns a NUMBER, so the rate limiter can compare against a limit', async () => {

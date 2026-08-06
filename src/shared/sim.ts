@@ -517,6 +517,12 @@ export {
 } from './items';
 export type { Affix, EquippedGear, GearSlot, GearStats, Item, Rarity } from './items';
 export { gearMods, gearStats, gearedKit, wornItems } from './kit';
+// Levels and XP (Stage 6b-2). Endless-fed and Daily-paid, but never Daily-READ: the sim
+// takes a seed and a choice list, and XP is an output written after the score, like shards.
+export {
+  levelForXp, levelProgress, xpForEndlessRun, xpForLevel, xpToReachLevel,
+} from './progression';
+export type { LevelProgress } from './progression';
 export {
   ascendCost, ascendItem, budgetFor, ceilingForRecord, dropForDepth, nextRarity,
   recordForRarity, rerollCost, rerollItem, rollItem, salvageValue,

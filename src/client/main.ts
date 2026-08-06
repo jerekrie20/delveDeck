@@ -302,6 +302,10 @@ function screenFor(result: RunResult): string {
       // that counts up mid-delve and then snaps back on submit. The Endless reads the
       // same hero and moves the same total, so its number wins once it has one.
       shards: gearShardTotal() ?? endlessShardTotal() ?? session.init?.shards ?? 0,
+      // Straight off the server's hero, and NOT nudged by the run in hand: a run's XP is
+      // not earned until it settles, so a level that climbed mid-delve would have to snap
+      // back — the same trap the shard total above is written the way it is to avoid.
+      xp: session.init?.xp ?? 0,
       endless: endlessDoor(),
     });
   }

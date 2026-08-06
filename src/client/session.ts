@@ -47,6 +47,11 @@ export interface ServerInit {
    *  then pop. 0 for a logged-out player and under `npm run preview`, where there is
    *  no account to read. */
   shards: number;
+  /** Lifetime XP. **The level is derived from it** rather than sent — sending the
+   *  derivation would pin it at whatever the curve said the day it was written
+   *  (`PROGRESSION.md` § The hero object: store nothing derivable). 0 logged out and
+   *  under `npm run preview`. */
+  xp: number;
 }
 
 interface SessionState {

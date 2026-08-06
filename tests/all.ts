@@ -27,6 +27,10 @@ await import('./hero.test');
 // `core/hero.ts` uses: that file fails when the stored shape or write path changes, this
 // one when a tap on screen 04 changes what it costs.
 await import('./camp.test');
+// `progression` owns the CURVE — levels, XP, the cap, and the rule that deeper always
+// pays better per depth. Its own file because it fails when the curve changes and nothing
+// else does; the PACING it is tuned to is measured by `scratchpad/progression.ts`.
+await import('./progression.test');
 // `endless` owns the SECOND MODE — the fork, the lantern strain, the haul, and the
 // wall that keeps all three away from the Daily. It fails when the fork changes and
 // nothing else does, which is exactly why it is not part of `sim.test`.

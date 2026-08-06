@@ -31,7 +31,7 @@
 // than only type-checked.
 
 import {
-  affixText, itemName, issuedKitForDay, seedForDay, simulateEndless, TUNING,
+  affixText, itemName, issuedKitForDay, seedForDay, simulateEndless, TUNING, xpForEndlessRun,
   type ForkView, type IssuedKit, type Item, type RunChoice, type RunResult,
 } from '../shared/sim';
 import type { EndlessSummary } from '../server/core/endless';
@@ -318,6 +318,14 @@ function offlineSummary(): EndlessSummary {
     kept: [],
     overflowed: 0,
     overflowShards: 0,
+    // The XP this run WOULD have earned, priced by the same shared function the server
+    // prices it with — so an offline receipt shows the real number rather than a zero the
+    // player would have to distrust. `level` stays 1 because there is no delver here to
+    // have levelled: offline has no account, and inventing a level would be the one kind
+    // of lie the offline fallback exists to avoid.
+    xpEarned: xpForEndlessRun(result.cleared, beat),
+    level: 1,
+    levelledUp: false,
   };
 }
 
@@ -556,6 +564,20 @@ function itemReceipt(receipt: EndlessSummary, died: boolean): string {
  * the list it applies to does. **The mockup's "gear is always kept" is overridden** and
  * does not appear here (`MODES.md` § The haul).
  */
+/**
+ * What the run earned toward the delver. Offline it names the number and says plainly
+ * that nothing received it — the same contract the shard line above keeps, and for the
+ * same reason: printing `LVL 1` for a delver that does not exist is the one kind of lie
+ * the offline fallback is built to avoid.
+ */
+function xpReceipt(receipt: EndlessSummary): string {
+  const label = offlineNow
+    ? 'XP EARNED &mdash; NO DELVER TO KEEP IT'
+    : receipt.levelledUp ? `LEVEL ${receipt.level} &mdash; LEVELLED UP` : `LEVEL ${receipt.level}`;
+  return `<div class="kept"><div class="v">&plus;${receipt.xpEarned} XP</div>`
+    + `<div class="k">${label}</div></div>`;
+}
+
 function outcomeScreen(receipt: EndlessSummary): string {
   const died = receipt.outcome === 'died';
   // A surfacing that did not reach the total is an OFFLINE one, and the line says so
@@ -583,9 +605,21 @@ function outcomeScreen(receipt: EndlessSummary): string {
     + `</div><div class="big${died ? '' : ' out'}">DEPTH ${receipt.depth}</div></div>`
     + burned
     + items
+    // **The record and the XP are a PAIR, side by side, and on both faces of the screen.**
+    // A death burns the haul and keeps the record — so it keeps what that record earned.
+    // Together they are the line that makes *"you moved sideways, not backwards"* a number
+    // rather than a claim, printed at exactly the moment it is hardest to believe.
+    //
+    // They share a row rather than stacking because this screen is the tallest in the
+    // game: at 320×568 a seventh stacked block put DELVE AGAIN eight pixels below the
+    // fold, and a receipt whose only forward action needs a scroll is a receipt that reads
+    // as an ending (`CODING_BIBLE` §6).
+    + '<div class="keptrow">'
     + `<div class="kept"><div class="v">D${receipt.best} `
     + `&middot; ${receipt.newRecord ? 'NEW' : 'KEPT'}</div>`
     + '<div class="k">DEPTH RECORD</div></div>'
+    + xpReceipt(receipt)
+    + '</div>'
     + `<div class="dnote">${total}</div></div>`
     + '<div class="act"><button class="btn small" data-action="camp">CAMP</button>'
     + '<button class="btn go" data-action="endless-again">DELVE AGAIN'

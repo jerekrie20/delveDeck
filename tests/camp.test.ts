@@ -16,13 +16,16 @@
 // rarely. It is why both sinks take a `seed` rather than reaching for `Math.random`.
 
 import { assert, check, describe } from './helpers';
-import { newStoredHero } from '../src/server/core/heroSchema';
 import {
-  ascendStashItem, equipFromStash, rerollStashItem, salvageFromStash, stashCapacity,
-  unequipSlot,
+  bareSnapshot, newStoredHero, type StoredEndlessRun,
+} from '../src/server/core/heroSchema';
+import {
+  ascendStashItem, bankDailyRun, endEndlessRun, equipFromStash, rerollStashItem,
+  salvageFromStash, stashCapacity, unequipSlot,
 } from '../src/server/core/hero';
 import {
-  GEAR_SLOTS, TUNING, fitsSlot, rerollCost, salvageValue, type Item,
+  GEAR_SLOTS, TUNING, fitsSlot, levelForXp, rerollCost, salvageValue, xpForEndlessRun,
+  xpToReachLevel, type Item,
 } from '../src/shared/sim';
 
 describe('camp — the stash and the forge');
@@ -167,6 +170,84 @@ await check('below the gate, ascend is always available — a common can always 
   assert.equal(hero.stash[0]?.rarity, 'rare', 'up to the ceiling the record already gives');
   assert.ok(ascendStashItem('x', 3)(hero), 'and no further');
 });
+
+// ---- XP awards (Stage 6b-2) -------------------------------------------------------
+
+await check('THE XP MUTATORS ARE PURE TOO — a replay never pays twice', () => {
+  // Same contract as every other mutator in this file, and XP is the one where a lost
+  // replay is invisible: a shard total somebody watches, a level they only notice later.
+  const mutate = bankDailyRun(40);
+  const a = newStoredHero(NOW);
+  const b = newStoredHero(NOW);
+  b.xp = 500;
+  b.shards = 1000;
+
+  const first = mutate(a);
+  assert.equal(first.xpEarned, TUNING.hero.xpDailyRun);
+  assert.equal(first.shardTotal, 40);
+  const second = mutate(b);
+  assert.equal(second.shardTotal, 1040, 'nothing carried over from the first hero');
+  assert.equal(b.xp, 500 + TUNING.hero.xpDailyRun);
+  assert.equal(a.xp, TUNING.hero.xpDailyRun, 'and the first hero was not touched again');
+});
+
+await check('THE LEVEL IS DERIVED FROM XP, never incremented', () => {
+  // `PROGRESSION.md` § The hero object: store nothing derivable. `hero.level` is written,
+  // but as a CACHE of `levelForXp(hero.xp)` — recomputed on every award rather than
+  // stepped — so retuning the curve moves everybody together instead of stranding
+  // whatever number was written at the old rate.
+  const hero = newStoredHero(NOW);
+  hero.xp = xpToReachLevel(6);
+  // A blatantly wrong cached level, as a bad write or an old curve would leave one.
+  hero.level = 99;
+
+  bankDailyRun(0)(hero);
+
+  assert.equal(hero.level, levelForXp(hero.xp), 'the award must RECOMPUTE, not increment');
+  assert.ok(hero.level < 99, 'a wrong stored level is corrected rather than carried');
+});
+
+await check('A DEATH STILL PAYS ITS XP — the haul burns, the progress does not', () => {
+  // The asymmetry `GEAR.md` and `MODES.md` both rest on: a death costs you the HAUL and
+  // nothing else. It keeps the depth record, so it keeps what that record earned. XP that
+  // evaporated on a death would make it a step backwards, which is the one thing the mode
+  // promises it is not — and it is the promise that has to be legible when it hurts most.
+  const died = newStoredHero(NOW);
+  const surfaced = newStoredHero(NOW);
+  died.run = runFixture('r');
+  surfaced.run = runFixture('r');
+
+  // Same depth, same record; the only difference is that one banked a haul and one did not.
+  const deathReceipt = endEndlessRun('r', 0, 9)(died);
+  const surfaceReceipt = endEndlessRun('r', 300, 9)(surfaced);
+
+  assert.equal(deathReceipt?.xpEarned, surfaceReceipt?.xpEarned, 'the XP must not differ');
+  assert.equal(deathReceipt?.xpEarned, xpForEndlessRun(9, true), 'and it is priced on depth');
+  assert.equal(deathReceipt?.banked, 0, 'while the haul is the thing that burned');
+  assert.equal(surfaceReceipt?.banked, 300);
+  assert.equal(deathReceipt?.best, 9, 'and the record is kept either way');
+});
+
+await check('a deeper run levels a delver further than a shallow one', () => {
+  const shallow = newStoredHero(NOW);
+  const deep = newStoredHero(NOW);
+  shallow.run = runFixture('r');
+  deep.run = runFixture('r');
+
+  const a = endEndlessRun('r', 0, 3)(shallow);
+  const b = endEndlessRun('r', 0, 18)(deep);
+
+  assert.ok(b!.xpEarned > a!.xpEarned, 'depth is what pays');
+  assert.ok(b!.level >= a!.level);
+  assert.ok(a!.levelledUp, 'even a shallow first run should cross the first level');
+});
+
+function runFixture(runId: string): StoredEndlessRun {
+  return {
+    version: 1, runId, seed: 5, choices: [], snapshot: bareSnapshot(),
+    startedAt: NOW, updatedAt: NOW,
+  };
+}
 
 await check('a WORN item cannot be reforged — the stash is the one door', () => {
   // The same rule salvage follows: you re-forge what you are not standing in. One door

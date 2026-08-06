@@ -20,7 +20,7 @@
 
 import {
   GEAR_SLOTS, RARITY_LABEL, TUNING, ascendCost, ascendItem, ceilingForRecord, fitsSlot,
-  nextRarity, rarityRank, rerollCost, rerollItem, salvageValue,
+  levelForXp, nextRarity, rarityRank, rerollCost, rerollItem, salvageValue, xpForEndlessRun,
   type EquippedGear, type GearSlot, type Item, type Rarity, type RunChoice,
 } from '../../shared/sim';
 import type { HeroRedisLike } from './heroStore';
@@ -47,28 +47,54 @@ export function bankShards(amount: number): (hero: StoredHero) => number {
   };
 }
 
+/** What a submitted Daily run left on the delver. */
+export interface DailyAward {
+  shardTotal: number;
+  xpEarned: number;
+  level: number;
+  levelledUp: boolean;
+}
+
 /**
- * Bank a finished Daily run's shards onto the delver, returning the new total.
+ * Bank a finished Daily run's shards **and its flat XP** onto the delver.
  *
  * **Called only after the one-run-per-day claim has been won**, which is what makes it
  * exactly-once: a refused second submission never reaches here, so there is no second
  * award to guard against. That is also why the Daily needs no `runId` dedupe — day plus
  * user already is the idempotency key (`TODO.md` § Stage 5).
+ *
+ * **Both move in ONE mutator and therefore one transaction**, deliberately. Two writes
+ * would be two conflict windows and, worse, a partial failure that banked the shards and
+ * not the XP — an inconsistency nothing downstream could detect or repair.
  */
 export async function bankRunShards(
   client: HeroRedisLike,
   userId: string,
   shards: number,
   nowMs: number,
-): Promise<number> {
+): Promise<DailyAward> {
   const { result } = await updateHero(
     client,
     userId,
     nowMs,
-    bankShards(shards),
+    bankDailyRun(shards),
     CAS_ATTEMPTS.runResult,
   );
   return result;
+}
+
+/** The Daily's whole award, as one pure mutator. Pure and replay-safe for the same reason
+ *  `bankShards` is: it reads only the hero it is handed. */
+export function bankDailyRun(shards: number): (hero: StoredHero) => DailyAward {
+  const banked = bankShards(shards);
+  return (hero) => {
+    const shardTotal = banked(hero);
+    // Flat and small on purpose (`ECONOMY.md` § Sources, applied to XP): if the Daily were
+    // the efficient way to level, players would optimise their one comparable run for
+    // progression instead of for depth, and the board would measure the wrong thing.
+    const { xpEarned, level, levelledUp } = awardXp(hero, TUNING.hero.xpDailyRun);
+    return { shardTotal, xpEarned, level, levelledUp };
+  };
 }
 
 /** The camp's number. Read-only — showing a total is not a reason to create a hero,
@@ -79,6 +105,19 @@ export async function readShardTotal(
   nowMs: number,
 ): Promise<number> {
   return (await readHero(client, userId, nowMs))?.shards ?? 0;
+}
+
+/** Both of the camp head's numbers in ONE read, because they are drawn side by side on
+ *  the landing screen and two reads would be two round trips for one row of text.
+ *  **`xp` rather than a level**: the level is derived, and sending the derivation instead
+ *  of the source would pin it at whatever the curve said on the day it was written. */
+export async function readCampTotals(
+  client: Pick<HeroRedisLike, 'get'>,
+  userId: string,
+  nowMs: number,
+): Promise<{ shards: number; xp: number }> {
+  const hero = await readHero(client, userId, nowMs);
+  return { shards: hero?.shards ?? 0, xp: hero?.xp ?? 0 };
 }
 
 // ---- the Endless run (Stage 6a) ---------------------------------------------------
@@ -162,6 +201,14 @@ export interface EndlessSettlement {
    *  a death moves you sideways, never backwards (`MODES.md` § The haul). */
   best: number;
   newRecord: boolean;
+  /** XP this run earned, and where it left the delver. **Paid on a death too** — a death
+   *  keeps its depth record, so it keeps what that record earned. What a death costs is
+   *  the HAUL (`GEAR.md`); XP that evaporated would make it a step backwards, which is
+   *  the one thing the mode promises it is not. */
+  xpEarned: number;
+  level: number;
+  /** True when this run crossed a level boundary — the receipt says so, once. */
+  levelledUp: boolean;
   /** Items that reached the stash. **Empty on a death**, for the same reason `banked`
    *  is 0: the haul is unbanked until you walk out with it. */
   kept: Item[];
@@ -200,16 +247,43 @@ export function endEndlessRun(
     hero.shards += safe;
     const { kept, overflowed, overflowShards } = stow(hero, carried);
     hero.shards += overflowShards;
+    // The record is raised BEFORE the XP is priced, because beating it is worth a bonus
+    // and `keepRecord` is the only thing that knows whether this run did.
+    const record = keepRecord(hero, cleared);
     return {
       banked: safe,
       shardTotal: hero.shards,
       kept,
       overflowed,
       overflowShards,
-      ...keepRecord(hero, cleared),
+      ...record,
+      ...awardXp(hero, xpForEndlessRun(cleared, record.newRecord)),
     };
   };
 }
+
+/**
+ * Add XP and report where it left the delver. **The level is DERIVED from the total, never
+ * stored** (`PROGRESSION.md` § The hero object: store nothing derivable) — so retuning the
+ * curve moves everybody together instead of stranding whatever was written at the old rate.
+ *
+ * `hero.level` is still written, and that is not a contradiction: it is a **cache of the
+ * derivation** kept so a read path that only wants the stash capacity does not have to
+ * walk the curve, and it is rewritten from `xp` on every award rather than incremented.
+ * Nothing ever trusts it over `levelForXp(hero.xp)`.
+ */
+function awardXp(
+  hero: StoredHero,
+  amount: number,
+): { xpEarned: number; level: number; levelledUp: boolean } {
+  const earned = Number.isFinite(amount) && amount > 0 ? Math.floor(amount) : 0;
+  const before = levelForXp(hero.xp ?? 0);
+  hero.xp = (hero.xp ?? 0) + earned;
+  const level = levelForXp(hero.xp);
+  hero.level = level;
+  return { xpEarned: earned, level, levelledUp: level > before };
+}
+
 
 // ---- the stash (Stage 6b) -----------------------------------------------------------
 

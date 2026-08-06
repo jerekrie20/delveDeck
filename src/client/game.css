@@ -2277,6 +2277,20 @@ body {
   text-shadow: 0 3px 0 #000, 0 0 30px var(--ok-glow);
 }
 
+/* What a death KEPT — the depth record and the XP, side by side because they are the
+   same promise said twice. They pair rather than stack because this is the tallest screen
+   in the game: stacked, the seventh block put DELVE AGAIN below the fold at 320×568, and
+   a receipt whose only forward action needs a scroll reads as an ending. */
+.keptrow {
+  display: flex;
+  gap: 10px;
+}
+
+.keptrow .kept {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 .lost {
   padding: 12px;
   background: linear-gradient(120deg, #2a1416, #140a0b);

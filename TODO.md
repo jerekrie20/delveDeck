@@ -28,11 +28,16 @@ forward; its combat model does not.
 | **M3** — the art | 25 bespoke images | 8 portraits kept, **1 hero portrait added**, 3 backdrops parked (the stage is a CSS gradient), **14 card illustrations deleted** at Stage 2. |
 | **M3.5** — tutorial | 15 steps, templated copy, separate choice list | **Deleted at Stage 1** with the deck it was written against. **Rebuilt as 5 beats at Stage 3**, on a guarantee that already held: both invariants are a 2,000-seed sweep in `content.test.ts`. |
 
-**255 checks green** after Stage 6b-2's first slice — 231 tsx + 24 vitest. `tests/`:
+**269 checks green** after Stage 6b-2's first two slices — 245 tsx + 24 vitest. `tests/`:
 `sim.test.ts` (30), `content.test.ts` (16), `server.test.ts` (30), `art.test.ts` (22),
-`tutorial.test.ts` (14), `share.test.ts` (13), `hero.test.ts`, `camp.test.ts` (10),
-`endless.test.ts`, `endlessRun.test.ts`, `items.test.ts` (30), plus the server vitest
-project.
+`tutorial.test.ts` (14), `share.test.ts` (13), `hero.test.ts`, `camp.test.ts` (14),
+`progression.test.ts` (10), `endless.test.ts`, `endlessRun.test.ts`, `items.test.ts` (30),
+plus the server vitest project.
+
+`progression.test.ts` owns **the curve** — levels, XP, the cap, and the rule that deeper
+always pays better per depth. The *pacing* it is tuned to is measured by
+`scratchpad/progression.ts` rather than asserted, because "3–4 weeks" depends on how often
+somebody plays and how deep they get: a test that pinned it would be pinning the model.
 
 `camp.test.ts` arrived at Stage 6b-2 and owns **what the camp does to a delver** — wear,
 take off, scrap, reforge, raise a tier. It split off `hero.test.ts` when that file crossed
@@ -1126,9 +1131,35 @@ probe, before a progression curve rests on it.
         It is what makes reroll a gamble and gives ascend its own job — protecting a roll.
         A reroll that could only improve collapses the two sinks into one. Recorded in
         `GEAR.md` § Salvage, reroll, ascend so it is not re-argued.
-- [ ] Hero level, XP, class — **Endless only**, never reaching `simulateRun`.
+- [x] **Hero level + XP** — Endless-fed, Daily-paid, and never Daily-*read*.
+      `shared/progression.ts` owns the curve; `TUNING.hero` owns the numbers.
+  - [x] **XP comes from DEPTH, never from kills**, and the per-depth award compounds — so
+        one deep run beats several shallow ones and farming depth 3 is never the line. A
+        test sweeps sixty depths for it.
+  - [x] **XP is paid on a DEATH too.** A death keeps its depth record, so it keeps what
+        that record earned; what a death costs is the haul. `xpForEndlessRun` takes no
+        outcome argument, and a test pins that absence.
+  - [x] **The level is DERIVED from lifetime XP**, never incremented — `hero.level` is a
+        cache recomputed on every award, so retuning the curve moves everybody together
+        instead of stranding a number written at the old rate.
+  - [x] **The cap is a real cap** (20) with no paragon track behind it, and the Daily's
+        XP is flat and deliberately poor — the same reasoning that keeps Daily shards poor.
+  - [x] **`scratchpad/progression.ts` is the second instrument**, and it FAILED first: the
+        opening curve took a regular player **33 weeks** against `PROGRESSION.md`'s stated
+        3–4. The profiles were flattering too (a "regular" player at depth 10, which the
+        probe says is near a *geared* greedy ceiling). Curve and profiles both fixed —
+        **3.5 weeks now**, level 12 after one week.
+  - [x] Shards **and** XP bank in **one** CAS write. Two would be two conflict windows and
+        a partial failure that banked one and not the other.
+- [ ] Class — **Endless only**, never reaching `simulateRun`.
       Classes are archetype+school **weights** on `issuedPoolForDay`, plus one numeric
-      signature field each — not three separate ability lists.
+      signature field each — not three separate ability lists. **Evolution and talents are
+      Stage 7**, so this is the three BASE classes only.
+  - [ ] `RunSnapshot` gains `class`/`spec`/`level`, which is a **stored-shape change**:
+        `STORED_HERO_VERSION` 3 → 4, a migration step, and a fixture test. The empty
+        `class`/`spec`/`level`/`xp` keys on the hero itself shipped at v3 and are a fill.
+  - [ ] Level's **stat growth is per-class** (`PROGRESSION.md`), so it lands here rather
+        than with the curve above — a generic growth would have to be un-shipped.
 - [x] The hero stores a **spec id**, not an enum position, so evolution tiers stay a
       data addition — the key shipped at 6b-1's v3, empty, because its *shape* was
       settled and only its contents were pending

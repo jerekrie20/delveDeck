@@ -183,10 +183,59 @@ export const TUNING = {
     rerollShare: 0.8,
     ascendShare: 1.5,
 
-    /** The stash **grows**, it does not sit at a cap (`GEAR.md`, override #4). Levels
-     *  arrive with classes, so today every delver is level 1 and holds the base. */
+    /** The stash **grows**, it does not sit at a cap (`GEAR.md`, override #4). */
     stashBase: 24,
     stashPerLevel: 2,
+  },
+
+  // ---- levels and XP — ENDLESS-FED, and it never reaches the Daily's sim ----------
+  //
+  // `PROGRESSION.md` owns the shape and this owns the numbers. Two rules from that doc
+  // decide every value here, and neither is negotiable by tuning:
+  //
+  //  1. **XP comes from DEPTH, not from kills.** Killing depth 3's enemy on your fortieth
+  //     run is not an achievement; reaching depth 25 is. Per-kill XP would reward farming
+  //     shallow depths, which is the exact grind this game must not have.
+  //  2. **The cap is a REAL cap**, not an asymptote. A maxed delver is a *finished
+  //     character*, and finished characters are what make talent choices matter. The
+  //     endgame is depth-gated gear, not a paragon track — one was declined by name.
+  //
+  // The curve is deliberately SOFT: this is a daily game with a ~4-minute session, and a
+  // treadmill that takes months to feel is a treadmill nobody stays on. Levels arrive
+  // often early and taper. Target: **a regular player finishes a delver in ~3–4 weeks**,
+  // which is the number `scratchpad/progression.ts` measures rather than assumes.
+  hero: {
+    /** A real cap, and **20 rather than a bigger number on purpose**: 3–4 weeks is the
+     *  target, so a higher cap only buys levels that arrive more than once a day and mean
+     *  less each. It is also a talent budget — one point per level against three shallow
+     *  branches (`PROGRESSION.md` § Talents) — and twenty points fill those. */
+    levelCap: 20,
+    /** XP to go from level 1 to 2. Every later level costs this scaled by the curve.
+     *  Sized so the FIRST level lands inside a player's first real run. */
+    xpBase: 25,
+    /** How much each level's cost compounds. Soft on purpose — at 1.15 the last level
+     *  costs about twelve times the first, which a single deep run still covers. */
+    xpGrowth: 1.15,
+
+    /** The bulk of it, per depth CLEARED — so one deep run beats ten shallow ones and
+     *  farming depth 3 is never the efficient line. */
+    xpPerDepth: 9,
+    /** …and it compounds with depth, so "one more depth" pays more the deeper it is.
+     *  This is the *"one more depth"* reward that is not shards. */
+    xpPerDepthGrowth: 0.04,
+    /** A one-time bonus per new personal best, on top of the depths themselves. */
+    xpNewRecord: 120,
+    /** Surfacing rather than dying does NOT change the XP — a death keeps its depth
+     *  record, so it keeps what that record earned. `GEAR.md`'s asymmetry is about the
+     *  HAUL: you move sideways, never backwards. XP is the "never backwards" half, and
+     *  making it conditional would quietly turn a death into a step back. */
+
+    /** The Daily's contribution: flat, small, and paid on submit. The Daily feeds the
+     *  meta without the meta ever feeding the Daily — and it is deliberately poor for the
+     *  same reason Daily shards are (`ECONOMY.md` § Sources): if the Daily were the
+     *  efficient way to level, players would optimise their one comparable run for
+     *  currency instead of for depth. */
+    xpDailyRun: 25,
   },
 } as const;
 

@@ -52,8 +52,44 @@ depths, which is the exact grind this game should not have.
 | First clear of a stratum boss | Once each, ever. |
 | Daily completion | A flat, small amount — the Daily feeds the meta without the meta feeding the Daily. |
 
+**What shipped at Stage 6b-2:** depths cleared (compounding, so deeper pays better *per
+depth*), the new-record bonus, and the flat Daily amount. **First-clear-of-a-boss is not
+built** — it needs a per-boss "ever" flag on the hero, which is a stored-shape change, and
+it belongs with the stage that adds one rather than on its own migration.
+
+> **XP IS PAID ON A DEATH, and that is a rule rather than a number.** A death keeps its
+> depth record, so it keeps what that record earned — `xpForEndlessRun` takes no outcome
+> argument at all, and a test pins that absence. What a death costs is the **haul**
+> ([GEAR.md](GEAR.md)). XP that evaporated would make a death a step *backwards*, which is
+> the one thing [MODES.md](MODES.md) promises the mode is not, and the receipt prints the
+> number beside the kept record so the promise is legible exactly when it hurts.
+
+**The level is derived from lifetime XP, never incremented.** `hero.level` is written, but
+as a *cache* of the derivation, recomputed on every award — so retuning the curve moves
+every player together instead of stranding whatever number was written at the old rate.
+That is § The hero object's *"store nothing derivable"* applied to the one field most
+tempting to step by one.
+
 **Target: a regular player finishes a delver in ~3–4 weeks.** That is the number the
 curve is tuned to, and it decides everything else in this file.
+
+> **It is MEASURED, not asserted — `scratchpad/progression.ts` (Stage 6b-2).** That
+> sentence is a gate in exactly the way the fork ratio is, and it fails silently in both
+> directions: a curve nobody finishes and a curve everybody finishes on Tuesday look
+> identical from inside the code. The instrument prints weeks-to-cap for three modelled
+> players and fails the regular row outside 3–4.
+>
+> **It caught a 33-week curve on its first run**, and a second problem underneath it: the
+> modelled "regular" player was reaching depth 10, which the probe's own GATE 5 puts near
+> a *geared* greedy ceiling. A flattering profile hides a slow curve. The depths in that
+> file now come from the probe.
+>
+> Two things it deliberately does **not** do. It runs no simulation — it is arithmetic
+> over the curve against modelled play, and `scratchpad/probe.ts` remains the instrument
+> for anything that changes what happens inside a run. And its weeks are **steady-state**:
+> a real week-one delver has no gear and no record, so every row is optimistic. The heavy
+> row capping inside a week is that artefact plus this file's own position — *the level
+> curve is the on-ramp, not the game*. **Do not chase it with tuning.**
 
 **The curve is soft.** This is a daily game with a ~4 minute session; a levelling
 treadmill that takes months to feel is a treadmill nobody stays on. Levels arrive
