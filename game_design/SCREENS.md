@@ -158,11 +158,36 @@ one tap from a feed. It is also the same rule the sim uses to resolve a mid-run 
 inside a verified choice list, so there is one implementation and the screen cannot
 promise a slot the server then fills differently.
 
-### 04 · the class strip lives here, and there is no screen 05 for it
+### The class is CHOSEN at the Endless door and CHANGED on screen 04
 
-Classes arrived at 6b-2 with no screen of their own drawn anywhere in the mockup, and two
-obvious homes were both wrong. A fifth camp tile is forbidden by the section above. A
-dedicated screen is a decision a player has to make before they can play.
+Classes arrived at 6b-2 with no screen of their own drawn anywhere in the mockup. The
+first attempt put the whole thing on screen 04 — and **playing it found the hole
+immediately: a player who never opened the GEAR tile never met their own class.** That is
+the one decision the Endless is built around, so it cannot be behind a tile.
+
+**Owner call (2026-08-06): the first choice is a prompt on the way into the first Endless
+run, and every change after it is the strip on screen 04.** Two surfaces, one decision
+each, and neither is a fifth camp tile.
+
+> **It fires while `hero.class` is null, which is at most once per delver, ever.** Not a
+> setting, not a screen you can get back to — after it, opening the Endless goes straight
+> to the loadout as it always did.
+
+**At level 1 there is one live option and two locked, and that is the screen working
+rather than failing.** It is [GAME_DESIGN.md](GAME_DESIGN.md)'s THE CLASS beat said out
+loud — *"You are a Warden. Here is what that means in one line"* — with the other two
+visible and carrying the level that opens them. Past level 5 the same screen becomes a
+real choice, which is why it is one screen and not two.
+
+**The chips STACK here and sit three-across on 04.** Same chips, two jobs: on 04 it is a
+control you already understand and three across is a row you scan; here it is the
+explanation, and at 320px a 91px column wraps *"Out-tempos. A hit taken charges you twice
+over."* into four lines of the smallest type in the game.
+
+### 04 · the class strip, and there is no screen 05 for it
+
+A fifth camp tile is forbidden by the section above, and a dedicated *settings* screen is
+a menu item this game does not have — so switching lives where the rest of the build does.
 
 **Decided: a strip at the top of screen 04, and the screen's own heading generalises.**
 This is already the answer to *what is my delver* — four stats, eleven slots, a stash —
@@ -178,9 +203,37 @@ unlit-threat-slot rule again, and the same shape the `ASCEND D35` chip already u
 class, because a stat that disagreed with the run would be the one number on this screen
 nobody could trust.
 
+**A delver with no class yet says so**, rather than lighting the default and implying a
+decision nobody made: the strip's header reads *chosen on your first Endless delve* and
+no chip is marked. That state is reachable — a Daily-only player has genuinely never
+needed a class.
+
 **Nothing here is a colour nobody has seen before.** A chip paints from the accent of the
 archetype its class leans on — the Warden is the colour of the `guard` tiles a Warden gets
 issued — so no third copy of the palette exists to drift.
+
+### 07 · the tutorial is offered once per ACCOUNT, not once per browser
+
+The coached first run was guarded by a `localStorage` key from Stage 3. **It does not
+survive a Devvit feed iframe**: the write succeeds and the partition is then discarded
+between sessions, so the tutorial offered itself every single time the game was opened.
+Found by the owner on a real subreddit, which is the only place it reproduces — every
+local preview and the whole visual gate see a browser that keeps its storage.
+
+**Owner call (2026-08-06): the flag moves to the account, and storage stays underneath
+it.** `hero.unlocked` gains `tutorial:seen`, which needed **no migration** — that array is
+the hero's flag bag and shipped empty at v1 for exactly this shape of fact.
+
+**Both are consulted and either one suppresses the offer**, because they cover different
+failures: the account covers a wiped browser and a second device, storage covers a
+logged-out player and a server that could not be reached. Every uncertain case resolves to
+*do not open by itself* — a tutorial that reappears forever is worse than one that never
+volunteers, and HOW TO PLAY is on the camp either way.
+
+> **It is the one write in the app that creates a delver for somebody who has not played
+> yet**, and that was the accepted cost: the flag has to outlive a session and the account
+> is the only thing here that does. The write is fire-and-forget — losing it costs one
+> extra offer, and nothing about being taught the game should wait on a round trip.
 
 ### 14 · the receipt itemises, and a worn item is still on the list
 

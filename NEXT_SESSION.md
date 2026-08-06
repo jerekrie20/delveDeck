@@ -160,43 +160,86 @@ count cannot say *which*, and *"once each, ever"* needs the name). **Endless onl
 Daily meets the same bosses at 4, 8 and 12, and paying there — or even *marking* there —
 would make the day's shaft the efficient way to level.
 
-### Where the class lives on screen
+### Where the class lives on screen — **chosen at the door, changed on 04**
 
-**A strip at the top of screen 04, and no fifth camp tile.** The camp has four tiles and
-`SCREENS.md` says it should keep having four; a dedicated screen is a decision a player has
-to make before they can play. Screen 04 is already the answer to *what is my delver*, so
-its heading generalised from WHAT YOU ARE WEARING to **WHAT YOU ARE**.
+The first pass put the whole thing on screen 04 and **playing it found the hole
+immediately: a player who never opened the GEAR tile never met their own class**, which is
+the decision this mode is built around. Owner call, 2026-08-06:
 
-Three chips. A locked one prints **the level that opens it** — the unlit-threat-slot rule
-again, and the same shape as the `ASCEND D35` chip. The camp head reads `WARDEN · LVL 12`,
-falling back to `DELVER` for somebody who has never opened the Endless, which is honest
-rather than a placeholder: they genuinely have no class.
+- **The first choice is a PROMPT on the way into the first Endless run.** It fires only
+  while `hero.class` is null — at most once per delver, ever — and after it the door goes
+  straight to the loadout as it always did.
+- **Every change after it is the strip on screen 04**, whose heading generalised from WHAT
+  YOU ARE WEARING to **WHAT YOU ARE**. Still no fifth camp tile.
+
+At level 1 the prompt has one live option and two locked, **and that is it working**: it
+is `GAME_DESIGN.md`'s THE CLASS beat said out loud — *"You are a Warden. Here is what that
+means in one line"* — with the other two carrying the level that opens them. Past level 5
+the same screen becomes a real choice.
+
+The camp head reads `WARDEN · LVL 12`, falling back to `DELVER` for somebody who has never
+opened the Endless. A delver with no class yet **says so on 04** rather than lighting the
+default and implying a decision nobody made.
 
 **No new colour was written.** A chip paints from the accent of the archetype its class
 leans on — a Warden chip is the colour of the `guard` tiles a Warden gets issued — so no
 third copy of the palette exists for `art.test.ts` to have to guard.
 
-### What playing it caught, again
+### The tutorial is once per ACCOUNT now, and the bug is worth knowing
+
+**`localStorage` does not survive a Devvit feed iframe.** The write succeeds and the
+partition is discarded between sessions, so the coached run offered itself **every single
+time the game was opened**. Owner report from a real subreddit — and it does not reproduce
+locally or in the visual gate, both of which see a browser that keeps its storage. That is
+the shape of every bug this class of guard has.
+
+`tutorial:seen` lives in `hero.unlocked` now, which needed **no migration**: that array is
+the hero's flag bag and shipped empty at v1 for exactly this. Storage stays underneath as
+the fallback, and **either flag suppresses the offer** — the account covers a wiped browser
+and a second device, storage covers a logged-out player and an unreachable server. It is
+the one write in the app that creates a delver for somebody who has not played yet, and
+that was the accepted cost.
+
+### The client split twice, by subject
+
+`endless.ts` was at 381 code lines and a new screen would not fit. Two splits rather than
+an exemption, both on seams that already existed:
+
+- **`delver.ts`** — *who you are*: the class strip and the first-entry prompt, off
+  `gear.ts`, which is *what you are wearing*. They render on one screen and change for
+  entirely different reasons.
+- **`receipt.ts`** — *what a settled run left you* (screen 14), off `endless.ts`, which
+  owns the run itself. The banner and the offline flag are **passed in**, so the screen
+  never reaches back into the module driving it.
+
+Everything is comfortably under 400 again: endless 348, gear 293, receipt 84, delver 70.
+
+### What playing it caught, twice
 
 **The three chips' price lines floated at three different heights.** *"Out-damages…"* wraps
 to four lines where *"Outlasts…"* wraps to three, so inside three equal boxes the tails
 landed at 302, 316 and 316px — three chips reading as three states. The chip is a flex
-column with the tail on `margin-top: auto` now. Same lesson the ability tile learned at
-Stage 2: anchor the row that has to line up. Verified by hand at 320×568 and 1920×1080.
+column with the tail on `margin-top: auto` now.
+
+**And the prompt was three-across when it should stack.** Same chips, two jobs: on 04 it is
+a row you scan, on the prompt it is the explanation — and at 320px a 91px column wrapped
+*"Out-tempos. A hit taken charges you twice over."* to four lines of the smallest type in
+the game. Stacked it is one line each, and the screen still fits 568px exactly with DELVE
+AS WARDEN at 558. Verified by hand at 320×568 and 1920×1080.
 
 
 ## STATE
 
 - On **`main`**. Working tree clean. Stages 3, 4, 5, 6a, **6b-1** and the first three
   slices of **6b-2** merged.
-- **297 checks green** — 273 tsx (`tests/all.ts`) + 24 vitest (`--project server`).
+- **298 checks green** — 274 tsx (`tests/all.ts`) + 24 vitest (`--project server`).
   `npm run test` runs both; don't "simplify" it to one, that has silently skipped a whole
   suite before. **Plus `npm run test:visual`**, a fourth command and a real gate, green at
   all three viewports with **`KNOWN_FINDINGS` still empty** — keep it that way.
 - `tests/` is fourteen files. **`sim.test.ts` (30) owns the RULES**, **`content.test.ts`
   (16) the ROWS**, **`classes.test.ts` (18) what a CLASS IS**, **`share.test.ts` (13) the
   artifact that LEAVES the game**, **`hero.test.ts` (34) the first thing that OUTLIVES A
-  DAY**, **`camp.test.ts` (21) what the CAMP does to a delver**, **`progression.test.ts`
+  DAY**, **`camp.test.ts` (22) what the CAMP does to a delver**, **`progression.test.ts`
   (10) the CURVE**, **`endless.test.ts` (18) the FORK**, **`endlessRun.test.ts` (17) the
   run that outlives a TAB**, and **`items.test.ts` (30) the GEAR MODEL.** Plus
   `server.test.ts` (30), `art.test.ts` (22), `tutorial.test.ts` (14), and `tests/visual/`.
@@ -279,10 +322,16 @@ Three from last session stand unchanged (`rerollShare`/`ascendShare`, the level 
    has not opened should refuse and print the depth that would open it.
 5. **Play two days and watch the level climb.** The camp head should move only on a
    **submit** or a **settle**, never mid-delve.
-6. **NEW — open the gear screen and look at the class strip.** It should read
-   `WARDEN · DELVING AS`, with HUNTER and ADEPT dimmed and printing `LVL 5` and `LVL 10`.
-   Level past 5, come back, and the Hunter chip should be live — **switch to it and
-   confirm the camp head follows.** Then start an Endless run, go back to the camp,
-   switch class *while the run is open*, and resume: **the run must not change** — same
-   nine abilities, same max HP. That is the snapshot doing its job, and it is the one
-   thing here only a real Redis can confirm end to end.
+6. **NEW — open the Endless door.** The class prompt should be the first thing you see,
+   reading `YOU BEGIN AS A WARDEN` with HUNTER and ADEPT stacked below it, dimmed and
+   printing `LVL 5` and `LVL 10`. Confirm, and **it must never appear again** — the second
+   delve goes straight to the loadout. Then check screen 04: the strip should say
+   `WARDEN · DELVING AS` and the camp head `WARDEN · LVL n`. Level past 5, come back, and
+   the Hunter chip should be live — **switch to it and confirm the camp head follows.**
+   Then start an Endless run, go back to the camp, switch class *while the run is open*,
+   and resume: **the run must not change** — same nine abilities, same max HP. That is the
+   snapshot doing its job, and it is the one thing here only a real Redis can confirm.
+7. **NEW — close the game and open it again.** The tutorial must **not** offer itself a
+   second time. That is the whole point of the account flag, and the feed iframe is the
+   only place the old `localStorage` guard failed — so it is the only place this can be
+   confirmed.

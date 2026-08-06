@@ -31,15 +31,22 @@
 // than only type-checked.
 
 import {
-  affixText, itemName, issuedKitForDay, seedForDay, simulateEndless, TUNING, xpForEndlessRun,
-  type ForkView, type IssuedKit, type Item, type RunChoice, type RunResult,
+  DEFAULT_CLASS_ID, classById, itemName, issuedKitForDay, seedForDay,
+  simulateEndless, TUNING, xpForEndlessRun,
+  type ForkView, type IssuedKit, type RunChoice, type RunResult,
 } from '../shared/sim';
 import type { EndlessSummary } from '../server/core/endless';
 import { loadoutScreen } from './camp';
 import { combatScreen } from './combat';
-import { rarityClass } from './gear';
+import {
+  classChoiceScreen, commitClass, pendingClass, pickClass, resetClassChoice, type DelverView,
+} from './delver';
+import { affixSummary, rarityClass } from './gear';
 import { boonScreen, descentScreen } from './interlude';
-import { loadEndlessState, settleEndless, startEndless, stepEndless } from './session';
+import { outcomeScreen } from './receipt';
+import {
+  loadEndlessState, setDelverClass, settleEndless, startEndless, stepEndless,
+} from './session';
 import { escapeHtml, fillPercent, inShell } from './shell';
 
 /** The selections `main.ts` holds for the shared screens. They are not game state and
@@ -60,7 +67,10 @@ interface LiveRun {
   offline: boolean;
 }
 
-type Phase = 'closed' | 'opening' | 'resume' | 'playing' | 'settling' | 'settled';
+/** `class` is the once-per-delver gate on the way in — it fires only while `delver.class`
+ *  is null, which is at most once and never again on that account. */
+type Phase =
+  | 'closed' | 'class' | 'opening' | 'resume' | 'playing' | 'settling' | 'settled';
 
 let phase: Phase = 'closed';
 let run: LiveRun | null = null;
@@ -82,6 +92,14 @@ let deepestSeen = 0;
  *  and a counter so a preview session is reproducible — `Math.random` here would make
  *  the visual gate a different game on every run. */
 let offlineRuns = 0;
+/**
+ * Who is delving. **`class: null` is what opens the prompt**, and the defaults here are
+ * what a delver who has never opened the Endless actually has — so an offline session
+ * meets the same screen a first-time player does rather than skipping it. That is the
+ * same call the offline stash and the offline run already make, and it is what lets the
+ * visual gate measure a screen that only exists once per account.
+ */
+let delver: DelverView = { class: null, unlocked: [DEFAULT_CLASS_ID], level: 1 };
 
 // ---- what the camp shows ----------------------------------------------------------
 
@@ -128,7 +146,12 @@ export async function loadEndless(): Promise<void> {
   best = state.best;
   bankedTotal = state.shards;
   stored = state.run;
+  delver = { class: state.class, unlocked: state.unlocked, level: state.level };
 }
+
+/** The class the camp head prints, once this mode has heard one. Null before that, and
+ *  after a fresh delver's first read — which is honest: they have not chosen yet. */
+export const endlessClassId = (): string | null => delver.class;
 
 // ---- opening, resuming, abandoning ------------------------------------------------
 
@@ -158,7 +181,34 @@ function depthOfView(result: RunResult): number {
 export function openEndless(day: string, rerender: () => void): void {
   notice = null;
   if (run || stored) { phase = 'resume'; rerender(); return; }
+  // **The class is chosen HERE, before the first run, and only ever once** (owner call,
+  // 2026-08-06). The strip on screen 04 was the first home and it was the wrong one for
+  // the FIRST time: a player who never opened the gear tile never met their own class,
+  // which is the decision this whole mode is built around. Afterwards the class is set
+  // and this branch never fires again — switching lives on 04 forever.
+  if (!classById(delver.class)) {
+    resetClassChoice(delver);
+    phase = 'class';
+    rerender();
+    return;
+  }
   void beginRun(day, rerender);
+}
+
+/** Confirm the choice, then open the shaft. The server's answer is what sticks — offline
+ *  there is none, and the local value is the only answer there is, which the run itself
+ *  already says out loud. */
+async function confirmClass(day: string, rerender: () => void): Promise<void> {
+  const chosen = pendingClass() ?? DEFAULT_CLASS_ID;
+  commitClass(chosen);
+  const result = await setDelverClass(chosen);
+  // A refusal is not a dead end: `ensureClass` stamps the default inside the run's own
+  // transaction, so a delve can always start. The notice says what happened and the run
+  // goes ahead rather than stranding somebody at a screen they cannot leave forward.
+  if ('error' in result) notice = result.error;
+  else delver = { class: result.class, unlocked: result.unlocked, level: result.level };
+  if (!classById(delver.class)) delver = { ...delver, class: chosen };
+  await beginRun(day, rerender);
 }
 
 /**
@@ -349,6 +399,8 @@ export function endlessAction(
     case 'endless-new':
     case 'endless-again': void beginRun(day, rerender); return true;
     case 'endless-retry': void settle(rerender); return true;
+    case 'class-pick': pickClass(delver, index); rerender(); return true;
+    case 'class-confirm': void confirmClass(day, rerender); return true;
     default: break;
   }
   if (!endlessActive()) return false;
@@ -366,8 +418,11 @@ export function endlessAction(
 // ---- the screens ------------------------------------------------------------------
 
 export function endlessScreen(pending: EndlessPending): string {
+  if (phase === 'class') return classChoiceScreen(delver);
   if (phase === 'resume') return resumeScreen();
-  if (phase === 'settled' && summary) return outcomeScreen(summary);
+  if (phase === 'settled' && summary) {
+    return outcomeScreen(summary, { banner: banner(), offline: offlineNow });
+  }
   if (phase === 'opening' || !run) {
     return waitScreen('OPENING THE SHAFT', 'The dark is being measured.');
   }
@@ -520,112 +575,3 @@ function haulPane(view: ForkView): string {
     + `<div class="haullist">${rows}</div></div>`;
 }
 
-const affixSummary = (item: Item): string =>
-  item.affixes.map((affix) => affixText(affix)).filter(Boolean).join(' · ').replace(/&minus;/g, '−');
-
-/**
- * The haul, itemised — **and it is the same list on both faces of the receipt.**
- *
- * `GAME_DESIGN.md` § The second cliff calls THE LOSS the beat that decides whether
- * players stay, and what makes it a receipt rather than a scold is that it is specific:
- * not *"you lost your haul"* but *"you lost the Rare Coat you found at 14 and were
- * wearing."* A death strikes every row through, including the worn ones, because wearing
- * one never saved it — and saying so here is cheaper than a player discovering it.
- *
- * **The mockup's *"gear is always kept"* is overridden and does not appear**
- * (`MODES.md` § The haul).
- */
-function itemReceipt(receipt: EndlessSummary, died: boolean): string {
-  if (receipt.items.length === 0) return '';
-  const rows = receipt.items.map((item, i) => {
-    const worn = receipt.itemsWorn[i] === true;
-    return `<div class="haulrow ${rarityClass(item)}${died ? ' gone' : ''}">`
-      + `<span class="n">${escapeHtml(itemName(item))}</span>`
-      + `<span class="d">${escapeHtml(affixSummary(item))}</span>`
-      + `<span class="w">${worn ? 'WORN' : `D${item.depth}`}</span></div>`;
-  }).join('');
-  const scrapped = receipt.overflowed > 0
-    ? `<div class="dnote">${receipt.overflowed} would not fit your stash and `
-      + `<b>scrapped for ${receipt.overflowShards} shards</b>.</div>`
-    : '';
-  return `<div class="${died ? 'lost' : 'kept'}">`
-    + `<div class="k">${receipt.items.length} `
-    + `${receipt.items.length === 1 ? 'ITEM' : 'ITEMS'} `
-    + `${died ? 'LOST &mdash; WORN OR NOT' : 'BANKED TO YOUR STASH'}</div>`
-    + `<div class="haullist">${rows}</div>${scrapped}</div>`;
-}
-
-/**
- * Screen 14 — the death, and its mirror for the run that got out.
- *
- * **This is the screen that decides whether players stay.** It is an itemised receipt of
- * what burned and what was kept, because the mode's actual promise is *you moved
- * sideways, not backwards* — and a promise is only worth something if it is legible at
- * the moment it costs you. Not a scold.
- *
- * At 6a the haul is shards only. The item half lands at 6b: the rule does not change,
- * the list it applies to does. **The mockup's "gear is always kept" is overridden** and
- * does not appear here (`MODES.md` § The haul).
- */
-/**
- * What the run earned toward the delver. Offline it names the number and says plainly
- * that nothing received it — the same contract the shard line above keeps, and for the
- * same reason: printing `LVL 1` for a delver that does not exist is the one kind of lie
- * the offline fallback is built to avoid.
- */
-function xpReceipt(receipt: EndlessSummary): string {
-  const label = offlineNow
-    ? 'XP EARNED &mdash; NO DELVER TO KEEP IT'
-    : receipt.levelledUp ? `LEVEL ${receipt.level} &mdash; LEVELLED UP` : `LEVEL ${receipt.level}`;
-  return `<div class="kept"><div class="v">&plus;${receipt.xpEarned} XP</div>`
-    + `<div class="k">${label}</div></div>`;
-}
-
-function outcomeScreen(receipt: EndlessSummary): string {
-  const died = receipt.outcome === 'died';
-  // A surfacing that did not reach the total is an OFFLINE one, and the line says so
-  // rather than printing `+0` beside a haul the player is looking at. It is written as
-  // a general rule instead of an offline flag because a partial bank is exactly what a
-  // future "a portion of the haul survives" affix produces (`MODES.md` § The haul).
-  const unbanked = !died && receipt.banked < receipt.haul;
-  const burned = died
-    ? `<div class="lost"><div class="v">${receipt.haul}</div>`
-      + '<div class="k">SHARDS LOST &mdash; NEVER BANKED</div></div>'
-    : `<div class="kept"><div class="v">&plus;${unbanked ? receipt.haul : receipt.banked}</div>`
-      + `<div class="k">SHARDS ${unbanked ? 'SURFACED &mdash; NOT BANKED' : 'BANKED'}</div></div>`;
-  const items = itemReceipt(receipt, died);
-  const again = died
-    ? `SURFACE AT ${Math.max(1, receipt.cleared)} NEXT TIME?`
-    : 'THE SHAFT IS STILL THERE';
-  const total = unbanked
-    ? 'Your delver is unchanged. Nothing was written down &mdash; there is no server '
-      + 'behind this one.'
-    : `Your delver is unchanged and <b>${receipt.shardTotal} banked shards</b> are `
-      + `untouched. ${died ? 'The dark keeps only what you were carrying.'
-        : 'The haul is yours.'}`;
-  const body = banner() + '<div class="deathwrap">'
-    + `<div><div class="eyebrow">${died ? 'THE LANTERN WENT OUT AT' : 'YOU CAME BACK UP FROM'}`
-    + `</div><div class="big${died ? '' : ' out'}">DEPTH ${receipt.depth}</div></div>`
-    + burned
-    + items
-    // **The record and the XP are a PAIR, side by side, and on both faces of the screen.**
-    // A death burns the haul and keeps the record — so it keeps what that record earned.
-    // Together they are the line that makes *"you moved sideways, not backwards"* a number
-    // rather than a claim, printed at exactly the moment it is hardest to believe.
-    //
-    // They share a row rather than stacking because this screen is the tallest in the
-    // game: at 320×568 a seventh stacked block put DELVE AGAIN eight pixels below the
-    // fold, and a receipt whose only forward action needs a scroll is a receipt that reads
-    // as an ending (`CODING_BIBLE` §6).
-    + '<div class="keptrow">'
-    + `<div class="kept"><div class="v">D${receipt.best} `
-    + `&middot; ${receipt.newRecord ? 'NEW' : 'KEPT'}</div>`
-    + '<div class="k">DEPTH RECORD</div></div>'
-    + xpReceipt(receipt)
-    + '</div>'
-    + `<div class="dnote">${total}</div></div>`
-    + '<div class="act"><button class="btn small" data-action="camp">CAMP</button>'
-    + '<button class="btn go" data-action="endless-again">DELVE AGAIN'
-    + `<span class="sub">${again}</span></button></div>`;
-  return inShell({ shell: 'abyss' }, body);
-}

@@ -28,9 +28,9 @@ forward; its combat model does not.
 | **M3** — the art | 25 bespoke images | 8 portraits kept, **1 hero portrait added**, 3 backdrops parked (the stage is a CSS gradient), **14 card illustrations deleted** at Stage 2. |
 | **M3.5** — tutorial | 15 steps, templated copy, separate choice list | **Deleted at Stage 1** with the deck it was written against. **Rebuilt as 5 beats at Stage 3**, on a guarantee that already held: both invariants are a 2,000-seed sweep in `content.test.ts`. |
 
-**297 checks green** after Stage 6b-2's third slice — 273 tsx + 24 vitest. `tests/`:
+**298 checks green** after Stage 6b-2's third slice — 274 tsx + 24 vitest. `tests/`:
 `sim.test.ts` (30), `content.test.ts` (16), `server.test.ts` (30), `art.test.ts` (22),
-`tutorial.test.ts` (14), `share.test.ts` (13), `hero.test.ts` (34), `camp.test.ts` (21),
+`tutorial.test.ts` (14), `share.test.ts` (13), `hero.test.ts` (34), `camp.test.ts` (22),
 `progression.test.ts` (10), `classes.test.ts` (18), `endless.test.ts` (18),
 `endlessRun.test.ts` (17), `items.test.ts` (30), plus the server vitest project.
 
@@ -1188,8 +1188,18 @@ probe, before a progression curve rests on it.
   - [x] **First-clear-of-a-stratum-boss XP** rode in on the v4 step rather than buying a
         migration of its own — `bossKills` on the hero, `RunResult.bossesSlain` from the
         sim, Endless-only, and paid on a death like everything else that is not the haul.
-  - [x] `tests/classes.test.ts` (18) owns the class model; the class strip is measured by
-        the visual gate in all three of its states.
+  - [x] **The class is CHOSEN at the Endless door and CHANGED on screen 04** (owner call,
+        2026-08-06). The first pass put both on 04 and playing it found the hole at once:
+        a player who never opened the GEAR tile never met their own class. The prompt
+        fires only while `hero.class` is null — at most once per delver, ever.
+  - [x] `tests/classes.test.ts` (18) owns the class model; the strip and the prompt are
+        both measured by the visual gate in every state they have.
+- [x] **The tutorial is offered once per ACCOUNT.** Its `localStorage` guard does not
+      survive a Devvit feed iframe — the write lands and the partition is discarded
+      between sessions, so the coached run offered itself every time the game was opened
+      (owner report from a real subreddit; it does not reproduce locally). `tutorial:seen`
+      goes in `hero.unlocked`, which needed **no migration**. Storage stays underneath as
+      the fallback for a logged-out player, and either flag suppresses the offer.
 - [x] The hero stores a **spec id**, not an enum position, so evolution tiers stay a
       data addition — the key shipped at 6b-1's v3, empty, because its *shape* was
       settled and only its contents were pending

@@ -2437,6 +2437,23 @@ body {
   padding: 6px;
 }
 
+/* The first-entry prompt STACKS them, and screen 04's strip does not. Same chips, two
+   jobs: on 04 it is a control you already understand and three across is a row you scan;
+   here it is the explanation, and at 320px a 91px column wraps "Out-tempos. A hit taken
+   charges you twice over." to four lines of the smallest type in the game. Full width
+   gives each line room to be a line. The confirm bar is sticky, so the taller column
+   costs a scroll and never the primary action. */
+.cstrip.tall {
+  grid-template-columns: 1fr;
+  text-align: left;
+  padding: 6px 6px 9px;
+}
+
+.cstrip.tall .cchip { padding: 10px 11px; }
+.cstrip.tall .cchip .cn { text-align: left; }
+.cstrip.tall .cchip .cl { margin-top: 5px; }
+.cstrip.tall .cchip .ct { text-align: left; padding-top: 8px; }
+
 .cchip {
   --accent: var(--archetype-accent, #5c6577);
   padding: 9px 6px;

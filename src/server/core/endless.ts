@@ -37,7 +37,7 @@
 // conflict replays them.
 
 import {
-  ceilingForRecord, endlessKitFor, gearedKit, levelForXp, simulateEndless, TUNING,
+  CLASS_LIST, ceilingForRecord, endlessKitFor, gearedKit, levelForXp, simulateEndless, TUNING,
   type IssuedKit, type Item, type RunChoice, type RunResult,
 } from '../../shared/sim';
 import type { RunSnapshot, StoredEndlessRun, StoredHero } from './heroSchema';
@@ -162,6 +162,12 @@ export interface EndlessState {
   /** Deepest depth ever CLEARED. Death keeps it; abandoning keeps it too. */
   best: number;
   shards: number;
+  /** What the delver is, and what they may be. **`null` is what opens the class prompt**
+   *  — a delver who has never delved the Endless has never needed a class, so the door
+   *  asks before the first run rather than stamping one behind their back. */
+  class: string | null;
+  unlocked: string[];
+  level: number;
 }
 
 /** What the client echoes back on every call after the first. */
@@ -327,10 +333,17 @@ export async function readEndlessState(
   nowMs: number,
 ): Promise<EndlessState> {
   const hero = await readHero(client, userId, nowMs);
+  const level = levelForXp(hero?.xp ?? 0);
   return {
     run: hero?.run ? resumable(hero.run) : null,
     best: endlessBestOf(hero),
     shards: hero?.shards ?? 0,
+    // Still a pure READ: `class` is reported as it stands, `null` included. `ensureClass`
+    // is what writes one, and it runs inside `beginEndlessRun`'s mutator — so asking the
+    // camp what your class is never creates a delver, and never picks one for you.
+    class: hero?.class ?? null,
+    unlocked: CLASS_LIST.filter((row) => level >= row.unlockLevel).map((row) => row.id),
+    level,
   };
 }
 

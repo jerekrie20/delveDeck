@@ -175,11 +175,16 @@ second axis should arrive only once the probe has measured it.
 
 ### Unlocking a class
 
-**Warden is default**, stamped the first time a delver opens the Endless and never at
-account creation — a player who has only ever run the Daily has no class, because the Daily
-reads none. **Hunter and Adept are level gates** (`PROGRESSION.md` § Unlocks), and the gate
-is a **hero flag** rather than a computed threshold, so the level can be retuned without
-taking a class back off somebody who already has it.
+**Warden is default**, and the first Endless run is where a delver picks one — a player who
+has only ever run the Daily has no class, because the Daily reads none. **Hunter and Adept
+are level gates** (`PROGRESSION.md` § Unlocks), and the gate is a **hero flag** rather than
+a computed threshold, so the level can be retuned without taking a class back off somebody
+who already has it.
+
+**The choice is a PROMPT on the way in, made once, and never a screen you go looking for**
+(owner call, 2026-08-06 — see [SCREENS.md](SCREENS.md)). The first attempt put the whole
+thing on screen 04 and playing it found the hole: a player who never opened the gear tile
+never met their own class, which is the one decision this mode is built around.
 
 **Switching between unlocked classes is free and always available.** The design's paid,
 permanent choice is the *evolution* below — and even that is respec-able, on the argument

@@ -28,13 +28,18 @@ import {
   type EquippedGear, type GearSlot, type GearStats, type Item, type Rarity,
 } from '../shared/sim';
 import { createRng } from '../shared/rng';
+import { classStrip, commitClass, sessionClassId, type DelverView } from './delver';
 import {
   ascendGear, equipGear, loadGearState, rerollGear, salvageGear, setDelverClass, unequipGear,
 } from './session';
 import { escapeHtml, inShell } from './shell';
 
-/** What the server last said. Null until the screen has been opened once. */
-interface GearView {
+/** What the server last said. Null until the screen has been opened once.
+ *
+ *  It **extends `DelverView`** rather than restating it, so the strip and the slots are
+ *  fed from one object — screen 04 answers *what you are* and *what you are wearing*, and
+ *  two copies of the first half is how they would come to disagree. */
+interface GearView extends DelverView {
   gear: EquippedGear;
   stash: Item[];
   shards: number;
@@ -42,13 +47,6 @@ interface GearView {
   /** The rarity the delver's depth record has opened. Reported by the server so the
    *  ascend chip can say WHY it is locked rather than disappearing. */
   ceiling: Rarity;
-  /** What the delver is, what they may become, and the level that decides. All three are
-   *  the server's — the strip draws a locked class rather than hiding it, so it needs to
-   *  be told which are locked rather than deriving a rule the flag exists to make
-   *  movable (`CODING_BIBLE` §1.4 in class clothing). */
-  class: string | null;
-  unlocked: string[];
-  level: number;
 }
 
 let open = false;
@@ -95,11 +93,16 @@ function offlineStash(): GearView {
   // through — and the off state carries the longer string.
   //
   // **Level 7 for the same reason**, and it is not a round number by accident: it opens
-  // the Hunter and leaves the Adept locked, so the strip carries a chosen chip, a takeable
-  // chip and a locked one at once. All three states, on the screen the gate measures.
+  // the Hunter and leaves the Adept locked, so the strip carries a takeable chip and a
+  // locked one at once. All three chip states, on the screen the gate measures.
+  //
+  // The class is **whatever this session chose at the Endless door**, not a hardcoded
+  // Warden: offline there is no server to agree with, so `delver.ts` holds the one answer
+  // and both screens read it. Null before that door is opened, which is honest — the strip
+  // then says NOT YET SET, which is exactly what a real first-time delver sees.
   return {
     gear: {}, stash, shards: 640, capacity: 24, ceiling: 'epic',
-    class: DEFAULT_CLASS_ID,
+    class: sessionClassId(),
     unlocked: CLASS_LIST.filter((row) => row.unlockLevel <= 7).map((row) => row.id),
     level: 7,
   };
@@ -206,15 +209,24 @@ export function gearAction(action: string, index: number, rerender: () => void):
       }
       return true;
     }
-    case 'gear-class': {
-      const row = CLASS_LIST[index];
-      if (row && view && view.unlocked.includes(row.id) && view.class !== row.id) {
-        void write(() => setDelverClass(row.id), (state) => { state.class = row.id; }, rerender);
-      }
-      return true;
-    }
+    case 'gear-class': switchClass(index, rerender); return true;
     default: return false;
   }
+}
+
+/** Switching class from the strip. Its own function rather than a case body because the
+ *  dispatch above is at its 80-line limit, and a switch arm is the wrong place to grow. */
+function switchClass(index: number, rerender: () => void): void {
+  const row = CLASS_LIST[index];
+  if (!row || !view) return;
+  if (!view.unlocked.includes(row.id) || view.class === row.id) return;
+  void write(() => setDelverClass(row.id), (state) => {
+    state.class = row.id;
+    // Offline only — `write` runs the local fold in no other case. `delver.ts` holds the
+    // session's one answer, so the Endless door does not then ask a question this screen
+    // has already answered.
+    commitClass(row.id);
+  }, rerender);
 }
 
 /** Whether the banked total covers a price. Checked here only so a tap that cannot
@@ -265,6 +277,16 @@ export const itemGlyph = (item: Item): string => {
 
 const affixLines = (item: Item): string =>
   item.affixes.map((affix) => affixText(affix)).filter(Boolean).join(' &middot; ');
+
+/** The same list as one PLAIN-TEXT line, for the two places an item appears inside a
+ *  narrow row rather than on its own plate — the fork's haul pane and the receipt. It
+ *  lives beside `affixLines` rather than in either of them because *how an item reads* is
+ *  this module's subject, and two copies of it would drift the first time an affix gained
+ *  a symbol. The `&minus;` unwind is why it cannot simply be `affixLines`: this string is
+ *  escaped by its callers, so an entity would be printed literally. */
+export const affixSummary = (item: Item): string =>
+  item.affixes.map((affix) => affixText(affix)).filter(Boolean).join(' · ')
+    .replace(/&minus;/g, '−');
 
 function itemRow(item: Item, tail: string, action: string, index: number): string {
   return `<div class="rowitem ${rarityClass(item)}" data-action="${action}" data-index="${index}">`
@@ -321,43 +343,6 @@ function statBlock(stats: GearStats, classHp: number): string {
       + `<div class="k">${label}</div>`
       + `<div class="d${tone}">${sign ? `${sign}${suffix}` : '&nbsp;'}</div></div>`;
   }).join('')}</div>`;
-}
-
-/**
- * The class strip — **screen 04's, and there is deliberately no screen 05 for it.**
- *
- * `SCREENS.md` has no class screen and the camp *"has four tiles and should keep having
- * four"*, so a fifth door for one decision would be a menu item the design refuses. This
- * screen is already the answer to *what is my delver* — four stats, eleven slots, a stash
- * — and a class is the largest thing on that list. It goes at the top because it is the
- * one thing here the gear underneath is chosen *for*.
- *
- * **A locked class is drawn, never hidden**, and it names the level that opens it — the
- * same rule as the unlit threat slot and the `ASCEND D35` chip. A class that only appeared
- * once you could have it would teach nobody that it exists.
- */
-function classStrip(state: GearView): string {
-  const chips = CLASS_LIST.map((row, index) => {
-    const chosen = state.class === row.id;
-    const open = state.unlocked.includes(row.id);
-    const attrs = open && !chosen ? ` data-action="gear-class" data-index="${index}"` : '';
-    // The tail carries the state's reason: what it is worth if you can have it, what
-    // would open it if you cannot. Never a bare LOCKED.
-    const tail = open
-      ? `${chosen ? 'DELVING AS' : 'SWITCH'} &middot; `
-        + `${TUNING.startingHp + classHpBonus(row.id, state.level)} HP`
-      : `LVL ${row.unlockLevel}`;
-    return `<div class="cchip a-${row.accentArchetype}${chosen ? ' on' : ''}`
-      + `${open ? '' : ' off'}"${attrs}>`
-      + `<div class="cn">${escapeHtml(row.name.toUpperCase())}</div>`
-      + `<div class="cl">${escapeHtml(row.line)}</div>`
-      + `<div class="ct">${tail}</div></div>`;
-  }).join('');
-  return '<div class="pane" style="margin-top:9px"><div class="rowitem head">'
-    + '<div class="gm"><div class="gk">YOUR CLASS &middot; ENDLESS ONLY &nbsp;&nbsp;'
-    + `LVL ${state.level}</div></div>`
-    + '<div class="gtail">FREE TO SWITCH</div></div>'
-    + `<div class="cstrip">${chips}</div></div>`;
 }
 
 export function gearScreen(): string {

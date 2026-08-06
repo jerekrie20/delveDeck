@@ -38,8 +38,8 @@ import {
 import { campScreen, loadoutScreen, type DailyState } from './camp';
 import { combatScreen } from './combat';
 import {
-  applyEndlessChoice, endlessAction, endlessActive, endlessDoor, endlessScreen,
-  endlessShardTotal, leaveEndless, loadEndless,
+  applyEndlessChoice, endlessAction, endlessActive, endlessClassId, endlessDoor,
+  endlessScreen, endlessShardTotal, leaveEndless, loadEndless,
 } from './endless';
 import {
   gearAction, gearActive, gearClassId, gearScreen, gearShardTotal, leaveGear,
@@ -48,7 +48,9 @@ import { boonScreen, descentScreen } from './interlude';
 import { mountScreen } from './mount';
 import { replayTransport } from './replay';
 import { resultScreen, type ResultContext } from './result';
-import { loadBoard, loadInit, loadReplay, session, submitRun } from './session';
+import {
+  loadBoard, loadInit, loadReplay, markTutorialSeenOnServer, session, submitRun,
+} from './session';
 import { commentError, commentPhase, shareAction } from './sharing';
 import { tutorialLoadout, tutorialScreen } from './tutorial';
 
@@ -143,11 +145,23 @@ function endDescent(): void {
 
 const TUTORIAL_SEEN_KEY = 'delvedeck.tutorial.seen';
 
-/** Storage is partitioned inside a feed iframe on some browsers, so this can throw.
- *  A failed read means "do not open by itself" rather than "open every time": a
- *  tutorial that reappears on every load is worse than one that never volunteers, and
- *  HOW TO PLAY is on the camp forever either way. */
+/**
+ * **The ACCOUNT is the memory, and `localStorage` is the fallback under it.**
+ *
+ * Storage was the only guard through Stage 6b-2 and it does not survive a Devvit feed
+ * iframe: the write succeeds, the partition is discarded between sessions, and the
+ * tutorial then offers itself every single time the game is opened — reported from a real
+ * subreddit, which is the only place it reproduces. `ServerInit.tutorialSeen` is the flag
+ * that actually outlives a session.
+ *
+ * Both are consulted and **either one suppresses it**, because they cover different
+ * failures: the account covers a wiped browser and a second device, and storage covers a
+ * logged-out player and a server that could not be reached. A tutorial that reappears
+ * forever is worse than one that never volunteers, and HOW TO PLAY is on the camp either
+ * way — so every uncertain case here resolves to "do not open by itself".
+ */
 function shouldOfferTutorial(): boolean {
+  if (session.init?.tutorialSeen) return false;
   try {
     return window.localStorage.getItem(TUTORIAL_SEEN_KEY) === null;
   } catch {
@@ -155,11 +169,14 @@ function shouldOfferTutorial(): boolean {
   }
 }
 
+/** Write both. The server call is fire-and-forget — losing it costs one extra offer, and
+ *  nothing about being taught the game should wait on a round trip. */
 function markTutorialSeen(): void {
+  void markTutorialSeenOnServer();
   try {
     window.localStorage.setItem(TUTORIAL_SEEN_KEY, '1');
   } catch {
-    return; // offered again next session; not worth a broken boot
+    return; // the account flag is the durable one; this is the fallback
   }
 }
 
@@ -308,10 +325,11 @@ function screenFor(result: RunResult): string {
       // not earned until it settles, so a level that climbed mid-delve would have to snap
       // back — the same trap the shard total above is written the way it is to avoid.
       xp: session.init?.xp ?? 0,
-      // The gear screen's answer wins when it has one, exactly like the shard total above:
-      // switching class on screen 04 and coming back to a head still reading WARDEN would
-      // be the camp disagreeing with the screen one tap away from it.
-      class: gearClassId() ?? session.init?.class ?? null,
+      // Whichever screen last heard one wins, exactly like the shard total above: the
+      // gear screen is where a class CHANGES and the Endless door is where it is first
+      // CHOSEN, so a head still reading DELVER after either would be the camp disagreeing
+      // with the screen one tap away from it.
+      class: gearClassId() ?? endlessClassId() ?? session.init?.class ?? null,
       endless: endlessDoor(),
     });
   }

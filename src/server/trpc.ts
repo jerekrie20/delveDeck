@@ -4,7 +4,8 @@ import { transformer } from '../shared/transformer';
 import type { Context } from './context';
 import { context, reddit } from '@devvit/web/server';
 import {
-  dayKey, seedForDay, CLASS_LIST, GEAR_SLOTS, MAX_RUN_CHOICES, TUNING, type GearSlot,
+  dayKey, seedForDay, CLASS_LIST, DEFAULT_CLASS_ID, GEAR_SLOTS, MAX_RUN_CHOICES, TUNING,
+  type GearSlot,
 } from '../shared/sim';
 import { submitRun, getBoard, getRun, hasSubmitted, isSubmittableDay } from './core/run';
 import {
@@ -13,8 +14,8 @@ import {
 import { readDayStats } from './core/stats';
 import { postRunComment } from './core/comment';
 import {
-  ascendStashItem, bankRunShards, equipFromStash, readCampTotals, readGearState,
-  rerollStashItem, salvageFromStash, setHeroClass, unequipSlot,
+  ascendStashItem, bankRunShards, equipFromStash, markTutorialSeen, readCampTotals,
+  readGearState, rerollStashItem, salvageFromStash, setHeroClass, unequipSlot,
   type DailyAward, type GearState,
 } from './core/hero';
 import { CAS_ATTEMPTS, updateHero } from './core/heroStore';
@@ -177,7 +178,7 @@ export const appRouter = t.router({
       const userId = currentUserId();
       const totals = userId
         ? await readCampTotals(redisHeroClient, userId, Date.now())
-        : { shards: 0, xp: 0, class: null };
+        : { shards: 0, xp: 0, class: null, tutorialSeen: false };
       return { day, seed, username, subreddit, alreadyPlayed, stats, ...totals };
     }),
   }),
@@ -286,7 +287,12 @@ export const appRouter = t.router({
      *  hero for somebody who has never delved. */
     state: publicProcedure.query(async () => {
       const userId = currentUserId();
-      if (!userId) return { run: null, best: 0, shards: 0 };
+      // A logged-out reader gets the shape a brand-new delver has, not a narrower one:
+      // `class: null` with the default unlocked is exactly true of them, and it is what
+      // lets the door's class prompt render rather than crash on a missing field.
+      if (!userId) {
+        return { run: null, best: 0, shards: 0, class: null, unlocked: [DEFAULT_CLASS_ID], level: 1 };
+      }
       return await readEndlessState(redisHeroClient, userId, Date.now());
     }),
 
@@ -354,6 +360,33 @@ export const appRouter = t.router({
      * one screen and a screen that re-rendered half of itself from a guess is the bug
      * that door exists to prevent.
      */
+    /**
+     * Remember that this account has been offered the coached first run.
+     *
+     * **It takes no input at all**, which is the whole shape of it: there is nothing a
+     * client could say here except *"it happened"*, and it happened because the client is
+     * the only thing that knows a tutorial was opened. The worst a hostile caller can do
+     * is suppress their own tutorial.
+     *
+     * It is the one write in this router that **creates a delver for somebody who has not
+     * played yet**, and that is deliberate and was the owner's call: the flag has to
+     * outlive a session and the account is the only thing here that does. A silent
+     * failure is fine — the client keeps its `localStorage` guard as a fallback, and the
+     * cost of losing this write is a tutorial offered once more.
+     */
+    seenTutorial: publicProcedure.mutation(async () => {
+      const userId = currentUserId();
+      if (!userId) return { ok: false as const };
+      const now = Date.now();
+      const allowed = await consumeRateLimit(
+        redisRateLimitClient, 'gear', userId,
+        RATE_LIMITS.gear.limit, RATE_LIMITS.gear.windowSeconds, now,
+      );
+      if (!allowed) return { ok: false as const };
+      await updateHero(redisHeroClient, userId, now, markTutorialSeen(), CAS_ATTEMPTS.hero);
+      return { ok: true as const };
+    }),
+
     setClass: publicProcedure
       .input(z.object({ classId: z.enum(CLASS_IDS) }))
       .mutation(async ({ input }) => await writeGear(

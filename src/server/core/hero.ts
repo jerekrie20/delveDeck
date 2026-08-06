@@ -116,13 +116,22 @@ export async function readCampTotals(
   client: Pick<HeroRedisLike, 'get'>,
   userId: string,
   nowMs: number,
-): Promise<{ shards: number; xp: number; class: string | null }> {
+): Promise<{ shards: number; xp: number; class: string | null; tutorialSeen: boolean }> {
   const hero = await readHero(client, userId, nowMs);
   // `class` rides along for the same reason `xp` does: the camp head prints it beside the
   // level in one line, and a second round trip for half of one line would render DELVER
   // and then pop to WARDEN. `null` is honest — a delver who has never opened the Endless
   // has no class, and the head says DELVER.
-  return { shards: hero?.shards ?? 0, xp: hero?.xp ?? 0, class: hero?.class ?? null };
+  //
+  // `tutorialSeen` rides along because the tutorial is decided at BOOT, before anything is
+  // rendered — a second round trip for it would mean the coached run either flashes up and
+  // vanishes or arrives late over a screen the player has already started using.
+  return {
+    shards: hero?.shards ?? 0,
+    xp: hero?.xp ?? 0,
+    class: hero?.class ?? null,
+    tutorialSeen: hasSeenTutorial(hero),
+  };
 }
 
 // ---- the Endless run (Stage 6a) ---------------------------------------------------
@@ -322,6 +331,37 @@ function openClassesFor(hero: StoredHero, level: number): void {
     const flag = classUnlockFlag(row.id);
     if (!hero.unlocked.includes(flag)) hero.unlocked.push(flag);
   }
+}
+
+// ---- the tutorial flag -------------------------------------------------------------
+
+/**
+ * *"This account has been offered the coached first run."*
+ *
+ * It lives in `unlocked` rather than in a key of its own, and that is the whole reason it
+ * needed no migration: `unlocked` is the hero's flag bag and shipped empty at v1 for
+ * exactly this shape of fact.
+ *
+ * **It exists because `localStorage` is not durable here.** The client's guard was a
+ * storage key, and Devvit partitions storage inside a feed iframe — the write succeeds
+ * and the storage is then discarded between sessions, so the tutorial offered itself
+ * every single time somebody opened the game. The account is the only thing in this
+ * product that reliably outlives a session.
+ */
+export const TUTORIAL_FLAG = 'tutorial:seen';
+
+export const hasSeenTutorial = (hero: StoredHero | null): boolean =>
+  hero?.unlocked.includes(TUTORIAL_FLAG) ?? false;
+
+/** Pure and idempotent, like every flag write here: a compare-and-set replay adds nothing
+ *  twice. Returns whether this call is the one that set it — the caller has no use for
+ *  that today, and a mutator that reported nothing would be one nothing could test. */
+export function markTutorialSeen(): (hero: StoredHero) => boolean {
+  return (hero) => {
+    if (hero.unlocked.includes(TUTORIAL_FLAG)) return false;
+    hero.unlocked.push(TUTORIAL_FLAG);
+    return true;
+  };
 }
 
 /** Which classes this delver may be right now. Derived from the flags rather than from the

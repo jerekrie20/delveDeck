@@ -56,6 +56,11 @@ export interface ServerInit {
    *  reason `xp` does — it is half of one line on the landing screen. `null` for a delver
    *  who has never opened the Endless, logged out, and under `npm run preview`. */
   class: string | null;
+  /** Whether this ACCOUNT has been offered the coached first run. It rides along because
+   *  the decision is made at boot, before anything renders — and it is on the account
+   *  rather than in `localStorage` because Devvit partitions storage inside a feed
+   *  iframe, which is what made the tutorial reappear every session. */
+  tutorialSeen: boolean;
 }
 
 interface SessionState {
@@ -276,6 +281,18 @@ export async function ascendGear(itemId: string): Promise<GearState | { error: s
     return gearResult(await trpc.hero.ascend.mutate({ itemId }));
   } catch {
     return { error: 'Your delver could not be reached.' };
+  }
+}
+
+/** Remember that this account has been offered the tutorial. **Fire-and-forget by
+ *  design**: a failure costs one extra offer, and there is no version of "the tutorial
+ *  could not be recorded" worth putting in front of a player who is about to be taught
+ *  the game. It follows this file's contract anyway and reports failure as `false`. */
+export async function markTutorialSeenOnServer(): Promise<boolean> {
+  try {
+    return (await trpc.hero.seenTutorial.mutate()).ok;
+  } catch {
+    return false;
   }
 }
 

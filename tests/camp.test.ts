@@ -21,7 +21,8 @@ import {
 } from '../src/server/core/heroSchema';
 import {
   ascendStashItem, bankDailyRun, endEndlessRun, ensureClass, equipFromStash, rerollStashItem,
-  salvageFromStash, setHeroClass, stashCapacity, unequipSlot, unlockedClasses,
+  hasSeenTutorial, markTutorialSeen, salvageFromStash, setHeroClass, stashCapacity, unequipSlot,
+  unlockedClasses, TUTORIAL_FLAG,
 } from '../src/server/core/hero';
 import {
   CLASS_LIST, DEFAULT_CLASS_ID, GEAR_SLOTS, TUNING, classById, classUnlockFlag, fitsSlot,
@@ -390,4 +391,37 @@ await check('the class the camp reports is a real row, or nothing at all', () =>
   assert.equal(classById(null), undefined);
   assert.equal(classById('reaver'), undefined, 'specs are Stage 7 and are not base classes');
   assert.ok(classById(DEFAULT_CLASS_ID));
+});
+
+await check('THE TUTORIAL FLAG LIVES ON THE ACCOUNT, and it is idempotent', () => {
+  // The client's `localStorage` guard does not survive a Devvit feed iframe — the write
+  // succeeds and the partition is then discarded between sessions, so the coached run
+  // offered itself every single time the game was opened. Reported from a real subreddit,
+  // which is the only place it reproduces.
+  //
+  // It rides in `unlocked` rather than in a key of its own, which is why it needed no
+  // migration: that array is the hero's flag bag and shipped empty at v1.
+  const hero = newStoredHero(NOW);
+  assert.equal(hasSeenTutorial(hero), false, 'a fresh delver has not been offered it');
+  assert.equal(hasSeenTutorial(null), false, 'and neither has somebody with no hero at all');
+
+  const mark = markTutorialSeen();
+  assert.equal(mark(hero), true, 'the first call is the one that sets it');
+  assert.equal(hasSeenTutorial(hero), true);
+  assert.equal(mark(hero), false, 'and a compare-and-set replay adds nothing twice');
+  assert.deepEqual(
+    hero.unlocked.filter((flag) => flag === TUTORIAL_FLAG), [TUTORIAL_FLAG],
+    'exactly one flag, however many times the mutator runs',
+  );
+
+  // Pure: nothing carried from the first hero to the second.
+  const other = newStoredHero(NOW);
+  assert.equal(hasSeenTutorial(other), false);
+  // …and it does not tread on the class flags sharing the array.
+  const levelled = newStoredHero(NOW);
+  levelled.xp = xpToReachLevel(TUNING.hero.levelCap);
+  bankDailyRun(0)(levelled);
+  markTutorialSeen()(levelled);
+  assert.ok(levelled.unlocked.includes(classUnlockFlag(DEFAULT_CLASS_ID)));
+  assert.ok(hasSeenTutorial(levelled), 'both kinds of flag live in the same bag');
 });

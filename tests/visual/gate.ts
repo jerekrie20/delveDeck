@@ -135,6 +135,9 @@ function currentScreen(): string {
   // marker unique to it would report the wrong screen — which is the exact failure
   // `measureAt` was written for.
   if (has('.gstats')) return 'gear';
+  // Before `camp` for the same reason the gear screen is: the class prompt stands on the
+  // surface palette too, and its own marker is the confirm button nothing else carries.
+  if (has('[data-action="class-confirm"]')) return 'class';
   if (has('.camphead')) return 'camp';
   if (has('[data-action="pick-ult"]')) return 'loadout';
   if (has('[data-action="skip-descent"]')) return 'descent';
@@ -361,6 +364,17 @@ function playGreedyTurn(): void {
 async function endlessLeg(screens: ScreenReport[]): Promise<void> {
   tap('[data-action="enter-endless"]');
   await wait(700);
+  // **The class prompt, and it only exists once per delver** — so this is the only place
+  // in the gate that can measure it. `.cchip.off` is required for the same reason the
+  // locked ascend chip is on the gear leg: the offline delver is level 1 here, so the two
+  // gated classes are drawn locked with the level that opens them, and that is the longer
+  // string. Then a switch, so the chosen state is measured too.
+  screens.push(measureAt('class', 'class prompt (first entry)', '.cchip.off'));
+  tap('[data-action="class-pick"][data-index="0"]');
+  await wait(300);
+  screens.push(measureAt('class', 'class prompt (a class chosen)', '.cchip.on'));
+  tap('[data-action="class-confirm"]');
+  await wait(900);
   screens.push(measureAt('loadout', 'endless loadout'));
   takeBarAndDescend();
   await wait(700);
@@ -461,12 +475,12 @@ async function gearLeg(screens: ScreenReport[]): Promise<void> {
   // state going unmeasured the day somebody "tidies" the preview stash.
   screens.push(measureAt('gear', 'gear (stash full of deep rolls)', '.gsalv.off'));
 
-  // The class strip (Stage 6b-2), and it is required to be carrying a LOCKED chip for
-  // exactly the same reason: the offline delver is level 7, which opens the Hunter and
-  // leaves the Adept locked, so all three chip states — chosen, takeable, locked with the
-  // level that opens it — are on the screen at once. The locked one carries its own
-  // string and a strip that could only reach the happy path would leave it unmeasured.
-  screens.push(measureAt('gear', 'gear (class strip, one chip locked)', '.cchip.off'));
+  // The class strip (Stage 6b-2). It is required to be carrying BOTH a locked chip and a
+  // chosen one: the offline delver is level 7, which opens the Hunter and leaves the Adept
+  // locked, and the Endless leg above has already chosen a class — so all three chip
+  // states are on the screen at once. The locked one carries the longer string, and a
+  // strip that could only reach the happy path would leave it unmeasured.
+  screens.push(measureAt('gear', 'gear (class strip, chosen + locked)', '.cchip.off'));
   tap('[data-action="gear-class"][data-index="1"]');
   await wait(300);
   screens.push(measureAt('gear', 'gear (class switched)', '.cchip.on'));
@@ -558,8 +572,12 @@ export async function run(): Promise<GateResult> {
     shardsText: document.querySelector('.shards')?.textContent?.trim() ?? 'MISSING',
   });
 
-  await gearLeg(screens);
+  // **The Endless leg runs FIRST from Stage 6b-2, and the order is load-bearing.** The
+  // class prompt only exists while a delver has no class, so it has to be met before
+  // anything else can set one — and screen 04's strip only has a *chosen* chip to measure
+  // once it has been. Both legs end at the camp, so the swap costs nothing else.
   await endlessLeg(screens);
+  await gearLeg(screens);
 
   const failed = screens.filter(
     (s) => s.real.length || s.under9.length || s.hOverflow > 0 || s.escaped.length,
