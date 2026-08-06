@@ -106,6 +106,24 @@ export interface IssuedKit {
    *  affix tiers are gated on depth record). Resolved once at run start and carried
    *  here, so nothing mid-run can move it and the Daily never reads it at all. */
   dropCeiling: Rarity;
+
+  // ---- the class signatures (Stage 6b-2) — Endless only, 0 in the Daily forever -----
+  //
+  // Three numeric fields, one per base class, each read at exactly ONE place in `sim.ts`.
+  // They are not `AbilityMod` rows and could not be: every one of them changes what a
+  // TURN does rather than what a row does, and there is no row to fold them into. See
+  // `ClassSignature` in `classes.ts` for the full reasoning, including which sentence in
+  // `CLASSES.md` each one is.
+  //
+  // The Daily sets all three to 0 and there is no argument to `simulateRun` through which
+  // anything else could arrive — the same trick the two-argument signature plays.
+
+  /** WARDEN. Percent of unspent block that survives into the next turn. */
+  blockCarryPct: number;
+  /** HUNTER. Extra rage when an enemy attack lands on HP. */
+  rageOnHitBonus: number;
+  /** ADEPT. Extra cooldown ticks after a turn that spent no energy. */
+  idleCooldownTick: number;
 }
 
 // ---- what the player is looking at ---------------------------------------------
@@ -282,6 +300,18 @@ export interface RunResult {
   haulWorn: boolean[];
   /** SEAM: the Codex. Enemy ids met, in order of first meeting. */
   seen: string[];
+  /**
+   * SEAM: first-clear XP. **Boss ids this run actually FELLED**, in order — which is a
+   * different list from `seen`, because meeting a boss and getting past it are the two
+   * things this award has to tell apart.
+   *
+   * `facts.bossesFelled` counts them and cannot name them, and *"once each, ever"*
+   * (`PROGRESSION.md`) needs the name. It is emitted by the sim rather than re-derived
+   * server-side from `(seed, cleared)` for the reason `CODING_BIBLE` §1.4 gives: the
+   * server re-deriving which encounter stood at a depth would be a second copy of
+   * `buildEncounter`'s rules, drifting silently.
+   */
+  bossesSlain: string[];
   /** SEAM: deeds and titles. */
   facts: RunFacts;
   /** Choice index at which each depth began — the replay scrubber's segments. */
@@ -317,10 +347,18 @@ export interface SimState {
   ultimate: string;
   cds: number[];
   energy: number;
+  /** Energy spent so far THIS turn, reset at the turn boundary. It exists so the Adept's
+   *  *"a turn you spend no energy"* is a fact the loop recorded rather than one inferred
+   *  from a leftover balance — an ability that refunds energy (`Ability.energy`, in the
+   *  model since Stage 1) could restore a turn to full after spending, and a signature
+   *  that mis-fires on the one row it was never tested against is the quiet kind of bug. */
+  energySpent: number;
   rage: number;
   boons: string[];
   heroStatuses: StatusApplication[];
   seen: string[];
+  /** Boss ids felled, in order. See `RunResult.bossesSlain`. */
+  bossesSlain: string[];
   shards: number;
   facts: RunFacts;
   log: string[];

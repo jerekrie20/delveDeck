@@ -22,38 +22,57 @@
 import type { EquippedGear, Item, Rarity, RunChoice } from '../../shared/sim';
 
 /** Current write version. See the header before bumping it. */
-export const STORED_HERO_VERSION = 3;
+export const STORED_HERO_VERSION = 4;
 
 /**
- * The gear and class a run was STARTED with — the thing `kitForRun` derives from.
+ * The gear, class and level a run was STARTED with — the thing `kitForRun` derives from.
  *
  * **It is stored on the run rather than read off the hero, and that is the whole point.**
- * Resuming must never read *current* gear: change your loadout in the camp mid-run and
- * a kit-from-current-gear stops replaying the choice list that was played against the
- * old one. A run is `{seed, choices}` plus the kit those choices were made under, and
- * this is that kit's source.
+ * Resuming must never read *current* state: change your loadout — or your class — in the
+ * camp mid-run and a kit built from *current* state stops replaying the choice list that
+ * was played against the old one. A run is `{seed, choices}` plus the kit those choices
+ * were made under, and this is that kit's source.
  *
- * `class`, `spec` and `level` are absent because nothing derives a kit from them yet —
- * the same rule that kept `gear` out of v2. They join this shape at the stage that
- * reads them, and `kitForRun` is the one place that will have to change.
+ * **`class`, `spec` and `level` joined it at v4**, which is the stage that derives a kit
+ * from them — the same rule that kept `gear` out of v2 and let it in at v3. A class
+ * decides the issued nine and one turn-loop number; a level decides max HP. Freezing all
+ * three here is what makes a resumed run the run that was played rather than the run the
+ * delver could play today.
  */
 export interface RunSnapshot {
   gear: EquippedGear;
   /** The deepest rarity this delver's record had opened when the run began. Frozen here
    *  so a record set mid-run cannot retroactively improve a drop already rolled. */
   dropCeiling: Rarity;
+  /** The class id the run is being played as, or `null` for a run played classless —
+   *  which every run written before v4 was. `null` is a real, replayable state and not a
+   *  stand-in for Warden: `endlessKitFor(seed, null, …)` returns the issued kit byte for
+   *  byte, which is exactly what those runs were played on. */
+  class: string | null;
+  /** The specialisation id. **Always `null` at v4** — evolution is Stage 7. The key is
+   *  here because its shape is settled (an id, never an enum position) and only its
+   *  contents are pending, which is this file's own "ship a key empty" rule. */
+  spec: string | null;
+  /** The delver's level when the run began. Frozen for the same reason gear is: levelling
+   *  mid-run must not change the max HP a fight already resolved against. */
+  level: number;
 }
 
 /**
- * A delver with nothing worn and no record.
+ * A delver with nothing worn, no class and no record.
  *
  * It is also **exactly what a run played before Stage 6b was played under**, which is
- * why the v2 → v3 migration stamps it rather than dropping the run: a hero at v2 had no
- * gear to wear, so this is the truth about that run and not a default standing in for
- * one. `MODES.md`'s *"a run waits as long as you do"* is an owner answer, and a
- * migration that quietly voided one would break it.
+ * why the v2 → v3 and v3 → v4 migrations stamp it rather than dropping the run: a hero at
+ * v2 had no gear to wear and a hero at v3 had no class to be, so this is the truth about
+ * those runs and not a default standing in for one. `MODES.md`'s *"a run waits as long as
+ * you do"* is an owner answer, and a migration that quietly voided one would break it.
+ *
+ * `level: 1` is the truth as well rather than a floor: at v3 the level moved no number in
+ * a run, and `endlessKitFor` ignores the level entirely when the class is `null`.
  */
-export const bareSnapshot = (): RunSnapshot => ({ gear: {}, dropCeiling: 'rare' });
+export const bareSnapshot = (): RunSnapshot => ({
+  gear: {}, dropCeiling: 'rare', class: null, spec: null, level: 1,
+});
 
 /**
  * The in-progress Endless run — `PROGRESSION.md`'s `run{ ... }` key, arriving at
@@ -155,12 +174,38 @@ export interface StoredHero {
   /** Everything surfaced with and not yet worn or scrapped. **Grows with level**
    *  (`GEAR.md` override #4); overflow auto-salvages rather than blocking a bank. */
   stash: Item[];
-  /** Class and specialisation ids, never enum positions, so a third evolution tier stays
-   *  a data addition (`PROGRESSION.md` § The seam rule). Empty until 6b's second half. */
+  /**
+   * Class and specialisation ids, never enum positions, so a third evolution tier stays a
+   * data addition (`PROGRESSION.md` § The seam rule).
+   *
+   * **`class` is filled from v4** — stamped the first time a delver opens the Endless, and
+   * changeable in the camp among whatever `unlocked` holds. `null` means "has never
+   * delved the Endless", which is a real state and not a missing Warden: the Daily never
+   * reads either field, so a Daily-only player genuinely has no class.
+   *
+   * **`spec` is still empty and that is Stage 7.** Evolution is a level gate plus sharper
+   * weights plus an upgraded signature, and none of it is authored.
+   */
   class: string | null;
   spec: string | null;
   level: number;
   xp: number;
+
+  // ---- v4: the delver you ARE (Stage 6b-2) ----------------------------------------
+
+  /**
+   * Stratum-boss ids this delver has **ever** felled.
+   *
+   * `PROGRESSION.md` prices first-clear-of-a-stratum-boss XP at *"once each, ever"*, and
+   * "ever" is a fact no run can carry — so it is a flag on the hero, exactly like
+   * `unlocked`. It rides in on the v4 step rather than buying a migration of its own,
+   * which is the only reason it is here at the stage that added classes: the shape change
+   * was already being paid for (`TODO.md` § Stage 6b-2).
+   *
+   * A LIST rather than a count, for the same reason `unlocked` is: a count cannot say
+   * which, so a count could pay twice for one boss and never for another.
+   */
+  bossKills: string[];
 }
 
 /** A brand-new delver. `nowMs` is injected so this is pure and replay-safe — it is
@@ -184,6 +229,7 @@ export function newStoredHero(nowMs: number): StoredHero {
     spec: null,
     level: 1,
     xp: 0,
+    bossKills: [],
   };
 }
 
@@ -266,11 +312,53 @@ const migrateV2toV3: MigrationStep = (blob) => {
   return out;
 };
 
+/**
+ * v3 → v4. Stage 6b-2 gave the delver a class, so `RunSnapshot` gained `class`, `spec` and
+ * `level`, and the hero gained `bossKills`.
+ *
+ * **The in-progress run is STAMPED, not dropped**, and the stamp is the truth rather than
+ * a default. A v3 run was played classless: there was no class to be, no per-class HP, and
+ * no signature — and `endlessKitFor(seed, null, level)` returns `issuedKitForDay(seed)`
+ * byte for byte, which is exactly the kit those choices were made under. So a run
+ * mid-shaft on the day classes shipped resumes on the nine it was issued, at the HP it was
+ * fighting on, and nothing about it moves. The v2 → v3 step is the model, and it is the
+ * model because *"a run waits as long as you do"* is an owner answer.
+ *
+ * `level: 1` on that stamp is not a floor. With `class: null` the level multiplies
+ * nothing, so any number would replay identically; 1 is the one that says "this run had no
+ * class to grow" rather than implying a level that never applied.
+ *
+ * Reached defensively, like the step before it: this reader may be handed a partial write
+ * or a hand-edited key, and a migration must never throw (see the header).
+ */
+const migrateV3toV4: MigrationStep = (blob) => {
+  const out = { ...blob };
+  if (out['bossKills'] === undefined) out['bossKills'] = [];
+  const run = out['run'];
+  if (run && typeof run === 'object' && !Array.isArray(run)) {
+    const stored: Record<string, unknown> = { ...(run as Record<string, unknown>) };
+    const snapshot = stored['snapshot'];
+    const bare = bareSnapshot();
+    if (snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)) {
+      const shot: Record<string, unknown> = { ...(snapshot as Record<string, unknown>) };
+      for (const key of ['class', 'spec', 'level'] as const) {
+        if (shot[key] === undefined) shot[key] = bare[key];
+      }
+      stored['snapshot'] = shot;
+    } else {
+      stored['snapshot'] = bare;
+    }
+    out['run'] = stored;
+  }
+  return out;
+};
+
 /** Keyed by the version a step migrates FROM (vN → vN+1). */
 const MIGRATIONS: Record<number, MigrationStep> = {
   0: migrateV0toV1,
   1: migrateV1toV2,
   2: migrateV2toV3,
+  3: migrateV3toV4,
 };
 
 /**

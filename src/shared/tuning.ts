@@ -225,6 +225,12 @@ export const TUNING = {
     xpPerDepthGrowth: 0.04,
     /** A one-time bonus per new personal best, on top of the depths themselves. */
     xpNewRecord: 120,
+    /** First clear of a stratum boss, **once each, ever** (`PROGRESSION.md`). There are
+     *  four stratum bosses, so this is a lifetime ceiling of `4 ×` — an on-ramp, not an
+     *  income. **Endless only**, and deliberately: the Daily meets the same bosses at
+     *  depths 4, 8 and 12, and paying there would make the day's shaft the efficient way
+     *  to level, which is the one thing every XP number here is shaped to prevent. */
+    xpFirstBoss: 150,
     /** Surfacing rather than dying does NOT change the XP — a death keeps its depth
      *  record, so it keeps what that record earned. `GEAR.md`'s asymmetry is about the
      *  HAUL: you move sideways, never backwards. XP is the "never backwards" half, and

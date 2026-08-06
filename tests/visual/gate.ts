@@ -461,6 +461,16 @@ async function gearLeg(screens: ScreenReport[]): Promise<void> {
   // state going unmeasured the day somebody "tidies" the preview stash.
   screens.push(measureAt('gear', 'gear (stash full of deep rolls)', '.gsalv.off'));
 
+  // The class strip (Stage 6b-2), and it is required to be carrying a LOCKED chip for
+  // exactly the same reason: the offline delver is level 7, which opens the Hunter and
+  // leaves the Adept locked, so all three chip states — chosen, takeable, locked with the
+  // level that opens it — are on the screen at once. The locked one carries its own
+  // string and a strip that could only reach the happy path would leave it unmeasured.
+  screens.push(measureAt('gear', 'gear (class strip, one chip locked)', '.cchip.off'));
+  tap('[data-action="gear-class"][data-index="1"]');
+  await wait(300);
+  screens.push(measureAt('gear', 'gear (class switched)', '.cchip.on'));
+
   // The two sinks (`TODO.md` § Stage 6b-2), played BEFORE the equip legs so the taps land
   // on a known row: index 0 of the untouched preview stash is shallow, so it is both
   // affordable and below the record ceiling — the one row where each chip is live.

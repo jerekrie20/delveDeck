@@ -52,6 +52,10 @@ export interface ServerInit {
    *  (`PROGRESSION.md` § The hero object: store nothing derivable). 0 logged out and
    *  under `npm run preview`. */
   xp: number;
+  /** What the delver is, for the camp head's identity line. Rides along for the same
+   *  reason `xp` does — it is half of one line on the landing screen. `null` for a delver
+   *  who has never opened the Endless, logged out, and under `npm run preview`. */
+  class: string | null;
 }
 
 interface SessionState {
@@ -270,6 +274,18 @@ export async function rerollGear(itemId: string): Promise<GearState | { error: s
 export async function ascendGear(itemId: string): Promise<GearState | { error: string }> {
   try {
     return gearResult(await trpc.hero.ascend.mutate({ itemId }));
+  } catch {
+    return { error: 'Your delver could not be reached.' };
+  }
+}
+
+/** Change class. **Only the id goes up** — whether it is unlocked is the server's own
+ *  flag, so there is no parameter here through which a locked class could be argued into.
+ *  It comes back through the same door and with the same shape as every other camp write,
+ *  because the strip and the slots are one screen. */
+export async function setDelverClass(classId: string): Promise<GearState | { error: string }> {
+  try {
+    return gearResult(await trpc.hero.setClass.mutate({ classId }));
   } catch {
     return { error: 'Your delver could not be reached.' };
   }

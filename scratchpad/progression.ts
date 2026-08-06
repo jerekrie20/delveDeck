@@ -70,6 +70,20 @@ line(
   + `  ${deepPerDepth > shallowPerDepth ? '✓ deeper pays better' : '✗ FARMING SHALLOW IS THE LINE'}`,
 );
 
+/**
+ * First-clear-of-a-stratum-boss XP (Stage 6b-2). **A one-time on-ramp, and it is gated on
+ * DEPTH rather than on time**, which is why it is modelled per profile rather than added
+ * to everybody: bosses stand at every fourth depth, there are four distinct stratum
+ * bosses, and a regular player who tops out at depth 7 has met exactly one of them.
+ *
+ * That is the design working. The award is *"go deeper to be paid once"*, so a light
+ * player collects a quarter of it and a heavy player collects most of it, and neither
+ * collects any of it twice.
+ */
+const STRATUM_BOSSES = 4;
+const firstBossXp = (depth: number): number =>
+  Math.min(STRATUM_BOSSES, Math.floor(depth / 4)) * TUNING.hero.xpFirstBoss;
+
 line();
 line('TIME TO A FINISHED DELVER — the gate is 3–4 weeks for the REGULAR row');
 line();
@@ -81,7 +95,10 @@ for (const profile of PROFILES) {
   const perWeek = profile.dailies * TUNING.hero.xpDailyRun
     + profile.runs * xpForEndlessRun(profile.depth, false)
     + profile.runs * 0.25 * TUNING.hero.xpNewRecord;
-  const weeks = total / perWeek;
+  // The one-time award comes off the TOTAL rather than being added to a week, because it
+  // is collected once — folding it into `perWeek` would pay it every week forever, which
+  // is the exact mis-model this file exists to catch.
+  const weeks = Math.max(0, total - firstBossXp(profile.depth)) / perWeek;
   line(
     `  ${profile.name.padEnd(36)}${String(Math.round(perWeek)).padStart(8)}`
     + `${weeks.toFixed(1).padStart(8)}`
@@ -101,8 +118,14 @@ const regular = PROFILES[1]!;
 const regularWeek = regular.dailies * TUNING.hero.xpDailyRun
   + regular.runs * xpForEndlessRun(regular.depth, false)
   + regular.runs * 0.25 * TUNING.hero.xpNewRecord;
-const regularWeeks = total / regularWeek;
+const regularWeeks = Math.max(0, total - firstBossXp(regular.depth)) / regularWeek;
 line();
+line(
+  `  first clears: a delver at depth ${regular.depth} meets `
+  + `${Math.min(STRATUM_BOSSES, Math.floor(regular.depth / 4))} of ${STRATUM_BOSSES} stratum `
+  + `bosses, worth ${firstBossXp(regular.depth)} XP ONCE `
+  + `(${(firstBossXp(regular.depth) / total * 100).toFixed(0)}% of a whole delver)`,
+);
 line(
   regularWeeks >= 3 && regularWeeks <= 4
     ? `  ✓ the regular player finishes in ${regularWeeks.toFixed(1)} weeks — inside the 3–4 target`

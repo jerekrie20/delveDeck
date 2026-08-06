@@ -22,14 +22,14 @@
 //     ~40 base sprites are Stage 7, after the model has been played.
 
 import {
-  GEAR_SLOTS, RARITY_LABEL, SLOT_LABEL, TUNING, affixText, ascendCost, ascendItem, gearStats,
-  itemName, itemStats, nextRarity, rarityRank, recordForRarity, rerollCost, rerollItem,
-  rollItem, salvageValue, slotForItem,
+  CLASS_LIST, DEFAULT_CLASS_ID, GEAR_SLOTS, RARITY_LABEL, SLOT_LABEL, TUNING, affixText,
+  ascendCost, ascendItem, classHpBonus, gearStats, itemName, itemStats, nextRarity,
+  rarityRank, recordForRarity, rerollCost, rerollItem, rollItem, salvageValue, slotForItem,
   type EquippedGear, type GearSlot, type GearStats, type Item, type Rarity,
 } from '../shared/sim';
 import { createRng } from '../shared/rng';
 import {
-  ascendGear, equipGear, loadGearState, rerollGear, salvageGear, unequipGear,
+  ascendGear, equipGear, loadGearState, rerollGear, salvageGear, setDelverClass, unequipGear,
 } from './session';
 import { escapeHtml, inShell } from './shell';
 
@@ -42,6 +42,13 @@ interface GearView {
   /** The rarity the delver's depth record has opened. Reported by the server so the
    *  ascend chip can say WHY it is locked rather than disappearing. */
   ceiling: Rarity;
+  /** What the delver is, what they may become, and the level that decides. All three are
+   *  the server's — the strip draws a locked class rather than hiding it, so it needs to
+   *  be told which are locked rather than deriving a rule the flag exists to make
+   *  movable (`CODING_BIBLE` §1.4 in class clothing). */
+  class: string | null;
+  unlocked: string[];
+  level: number;
 }
 
 let open = false;
@@ -54,6 +61,10 @@ export const gearActive = (): boolean => open;
 /** The banked total this screen has heard, so the camp does not print a number a
  *  salvage has already moved. Null when it has not been told one. */
 export const gearShardTotal = (): number | null => view?.shards ?? null;
+
+/** …and the class it has heard, for the same reason: the camp head prints it, and this
+ *  screen is the only place it can change. Null when the screen has never been opened. */
+export const gearClassId = (): string | null => view?.class ?? null;
 
 export function leaveGear(): void {
   open = false;
@@ -82,7 +93,16 @@ function offlineStash(): GearView {
   // locked behind a record and prints the depth that opens it. A preview that could only
   // ever reach the happy path is a preview the visual gate cannot measure the off state
   // through — and the off state carries the longer string.
-  return { gear: {}, stash, shards: 640, capacity: 24, ceiling: 'epic' };
+  //
+  // **Level 7 for the same reason**, and it is not a round number by accident: it opens
+  // the Hunter and leaves the Adept locked, so the strip carries a chosen chip, a takeable
+  // chip and a locked one at once. All three states, on the screen the gate measures.
+  return {
+    gear: {}, stash, shards: 640, capacity: 24, ceiling: 'epic',
+    class: DEFAULT_CLASS_ID,
+    unlocked: CLASS_LIST.filter((row) => row.unlockLevel <= 7).map((row) => row.id),
+    level: 7,
+  };
 }
 
 async function refresh(rerender: () => void): Promise<void> {
@@ -186,6 +206,13 @@ export function gearAction(action: string, index: number, rerender: () => void):
       }
       return true;
     }
+    case 'gear-class': {
+      const row = CLASS_LIST[index];
+      if (row && view && view.unlocked.includes(row.id) && view.class !== row.id) {
+        void write(() => setDelverClass(row.id), (state) => { state.class = row.id; }, rerender);
+      }
+      return true;
+    }
     default: return false;
   }
 }
@@ -273,9 +300,12 @@ function slotRow(slot: GearSlot, index: number, gear: EquippedGear): string {
  * `STRIKE DMG` and `GUARD BLOCK` are **ATTACK** and **BLOCK** here — override #2, and it
  * is not cosmetic: on most days the ability those labels named was not even issued.
  */
-function statBlock(stats: GearStats): string {
+function statBlock(stats: GearStats, classHp: number): string {
   const rows: [string, number, number][] = [
-    ['MAX HP', TUNING.startingHp + stats.maxHp, stats.maxHp],
+    // The class's HP is in the VALUE and not in the delta, because the delta column is
+    // "what gear is doing" and a class is not gear. A MAX HP that ignored the class would
+    // be the one number on this screen that disagreed with the run.
+    ['MAX HP', TUNING.startingHp + classHp + stats.maxHp, stats.maxHp],
     ['ATTACK', stats.attack, stats.attack],
     ['BLOCK', stats.block, stats.block],
     // Foresight is the one the lantern does not move upward: three slots is structural
@@ -293,9 +323,47 @@ function statBlock(stats: GearStats): string {
   }).join('')}</div>`;
 }
 
+/**
+ * The class strip — **screen 04's, and there is deliberately no screen 05 for it.**
+ *
+ * `SCREENS.md` has no class screen and the camp *"has four tiles and should keep having
+ * four"*, so a fifth door for one decision would be a menu item the design refuses. This
+ * screen is already the answer to *what is my delver* — four stats, eleven slots, a stash
+ * — and a class is the largest thing on that list. It goes at the top because it is the
+ * one thing here the gear underneath is chosen *for*.
+ *
+ * **A locked class is drawn, never hidden**, and it names the level that opens it — the
+ * same rule as the unlit threat slot and the `ASCEND D35` chip. A class that only appeared
+ * once you could have it would teach nobody that it exists.
+ */
+function classStrip(state: GearView): string {
+  const chips = CLASS_LIST.map((row, index) => {
+    const chosen = state.class === row.id;
+    const open = state.unlocked.includes(row.id);
+    const attrs = open && !chosen ? ` data-action="gear-class" data-index="${index}"` : '';
+    // The tail carries the state's reason: what it is worth if you can have it, what
+    // would open it if you cannot. Never a bare LOCKED.
+    const tail = open
+      ? `${chosen ? 'DELVING AS' : 'SWITCH'} &middot; `
+        + `${TUNING.startingHp + classHpBonus(row.id, state.level)} HP`
+      : `LVL ${row.unlockLevel}`;
+    return `<div class="cchip a-${row.accentArchetype}${chosen ? ' on' : ''}`
+      + `${open ? '' : ' off'}"${attrs}>`
+      + `<div class="cn">${escapeHtml(row.name.toUpperCase())}</div>`
+      + `<div class="cl">${escapeHtml(row.line)}</div>`
+      + `<div class="ct">${tail}</div></div>`;
+  }).join('');
+  return '<div class="pane" style="margin-top:9px"><div class="rowitem head">'
+    + '<div class="gm"><div class="gk">YOUR CLASS &middot; ENDLESS ONLY &nbsp;&nbsp;'
+    + `LVL ${state.level}</div></div>`
+    + '<div class="gtail">FREE TO SWITCH</div></div>'
+    + `<div class="cstrip">${chips}</div></div>`;
+}
+
 export function gearScreen(): string {
   const state: GearView = view ?? {
     gear: {}, stash: [], shards: 0, capacity: 0, ceiling: 'rare',
+    class: null, unlocked: [DEFAULT_CLASS_ID], level: 1,
   };
   const stats = gearStats(state.gear);
   const worn = GEAR_SLOTS.map((slot, i) => slotRow(slot, i, state.gear)).join('');
@@ -311,9 +379,10 @@ export function gearScreen(): string {
   }).join('');
 
   const body = (notice ? `<div class="unsaved">${escapeHtml(notice)}</div>` : '')
-    + '<div class="hd"><span class="eyebrow">the camp &middot; gear</span>'
-    + '<div class="h">WHAT YOU ARE WEARING</div></div>'
-    + statBlock(stats)
+    + '<div class="hd"><span class="eyebrow">the camp &middot; delver</span>'
+    + '<div class="h">WHAT YOU ARE</div></div>'
+    + statBlock(stats, classHpBonus(state.class, state.level))
+    + classStrip(state)
     + `<div class="pane" style="margin-top:9px">${worn}</div>`
     + '<div class="pane" style="margin-top:9px"><div class="rowitem head">'
     + `<div class="gm"><div class="gk">STASH &middot; ${state.stash.length} / `

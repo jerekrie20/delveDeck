@@ -189,6 +189,52 @@ await check('A RUN STARTED BEFORE GEAR RESUMES AFTER IT — v3 stamps, it does n
   assert.equal(migrated.class, null, 'a spec ID, not an enum position — and not one yet');
 });
 
+await check('A RUN STARTED BEFORE CLASSES RESUMES AFTER THEM — v4 stamps, it does not void', () => {
+  // Exactly the v2 → v3 argument, one version on. A v3 run was played CLASSLESS: there
+  // was no class to be, no per-class HP, and no signature — so `class: null` describes
+  // that run rather than standing in for a Warden, and `endlessKitFor(seed, null, …)`
+  // returns the issued kit byte for byte (a check in `classes.test.ts` sweeps it). A run
+  // mid-shaft on the day classes shipped resumes on the nine it was issued.
+  const snapshot = { gear: {}, dropCeiling: 'rare' };
+  const run = {
+    version: 1, runId: 'r', seed: 5, choices: [{ k: 'end' }], startedAt: 1, updatedAt: 1, snapshot,
+  };
+  const migrated = migrateStoredHero(
+    { v: 3, shards: 40, xp: 900, level: 7, gear: {}, stash: [], run }, NOW,
+  );
+
+  assert.equal(migrated.v, STORED_HERO_VERSION);
+  assert.equal(migrated.run?.snapshot.class, null, 'a v3 run was played classless');
+  assert.equal(migrated.run?.snapshot.spec, null, 'and evolution is Stage 7');
+  assert.equal(migrated.run?.snapshot.level, 1, 'a level that multiplied nothing');
+  assert.deepEqual(migrated.run?.snapshot.gear, {}, 'and the v3 half of it is untouched');
+  assert.equal(migrated.run?.snapshot.dropCeiling, 'rare');
+  assert.deepEqual(migrated.run?.choices, [{ k: 'end' }], 'the choice list is not rewritten');
+  assert.deepEqual(migrated.bossKills, [], 'and the first-clear flag arrives empty');
+  assert.equal(migrated.xp, 900, 'nothing on the way past is disturbed');
+  assert.equal(migrated.shards, 40);
+});
+
+await check('a v3 hero with no run at all still gains the v4 key', () => {
+  const migrated = migrateStoredHero({ v: 3, shards: 5, run: null }, NOW);
+  assert.deepEqual(migrated.bossKills, []);
+  assert.equal(migrated.run, null, 'and nothing invents one');
+});
+
+await check('a v3 blob whose SNAPSHOT is nonsense is not a reason to throw', () => {
+  // Same rule as the run below: a migration meets partial writes and hand-edited keys,
+  // and it must never throw. A snapshot that is not an object is replaced wholesale with
+  // the bare one, because there is nothing in it to back-fill around.
+  for (const nonsense of [42, 'gear', [], null]) {
+    const run = {
+      version: 1, runId: 'r', seed: 5, choices: [], startedAt: 1, updatedAt: 1, snapshot: nonsense,
+    };
+    const migrated = migrateStoredHero({ v: 3, shards: 7, run }, NOW);
+    assert.equal(migrated.shards, 7, `a snapshot of ${JSON.stringify(nonsense)} ate the blob`);
+    assert.deepEqual(migrated.run?.snapshot, bareSnapshot());
+  }
+});
+
 await check('a v3 blob whose run is nonsense is not a reason to throw', () => {
   // Migrations meet partial writes and hand-edited keys, and bricking an account is
   // worse than any bug a migration was written to fix (this file's header).

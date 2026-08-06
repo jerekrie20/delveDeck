@@ -19,8 +19,9 @@
 // forever (`AGENTS.md` rule 2).
 
 import {
-  GEAR_SLOTS, RARITY_LABEL, TUNING, ascendCost, ascendItem, ceilingForRecord, fitsSlot,
-  levelForXp, nextRarity, rarityRank, rerollCost, rerollItem, salvageValue, xpForEndlessRun,
+  CLASS_LIST, DEFAULT_CLASS_ID, GEAR_SLOTS, RARITY_LABEL, TUNING, ascendCost, ascendItem,
+  ceilingForRecord, classById, classUnlockFlag, fitsSlot, levelForXp, nextRarity, rarityRank,
+  rerollCost, rerollItem, salvageValue, xpForEndlessRun,
   type EquippedGear, type GearSlot, type Item, type Rarity, type RunChoice,
 } from '../../shared/sim';
 import type { HeroRedisLike } from './heroStore';
@@ -115,9 +116,13 @@ export async function readCampTotals(
   client: Pick<HeroRedisLike, 'get'>,
   userId: string,
   nowMs: number,
-): Promise<{ shards: number; xp: number }> {
+): Promise<{ shards: number; xp: number; class: string | null }> {
   const hero = await readHero(client, userId, nowMs);
-  return { shards: hero?.shards ?? 0, xp: hero?.xp ?? 0 };
+  // `class` rides along for the same reason `xp` does: the camp head prints it beside the
+  // level in one line, and a second round trip for half of one line would render DELVER
+  // and then pop to WARDEN. `null` is honest — a delver who has never opened the Endless
+  // has no class, and the head says DELVER.
+  return { shards: hero?.shards ?? 0, xp: hero?.xp ?? 0, class: hero?.class ?? null };
 }
 
 // ---- the Endless run (Stage 6a) ---------------------------------------------------
@@ -209,6 +214,10 @@ export interface EndlessSettlement {
   level: number;
   /** True when this run crossed a level boundary — the receipt says so, once. */
   levelledUp: boolean;
+  /** Stratum bosses this run felled for the FIRST time ever, in order. Named rather than
+   *  counted so the receipt can say which — *"first clear: the Broodmother"* is a moment
+   *  and *"+150 XP"* on its own is a number. Empty on almost every run, by design. */
+  firstBosses: string[];
   /** Items that reached the stash. **Empty on a death**, for the same reason `banked`
    *  is 0: the haul is unbanked until you walk out with it. */
   kept: Item[];
@@ -238,9 +247,11 @@ export function endEndlessRun(
   banked: number,
   cleared: number,
   haul: readonly Item[] = [],
+  bossesSlain: readonly string[] = [],
 ): (hero: StoredHero) => EndlessSettlement | null {
   const safe = Number.isFinite(banked) && banked > 0 ? Math.floor(banked) : 0;
   const carried = [...haul];
+  const felled = [...bossesSlain];
   return (hero) => {
     if (hero.run?.runId !== runId) return null;
     hero.run = null;
@@ -250,14 +261,22 @@ export function endEndlessRun(
     // The record is raised BEFORE the XP is priced, because beating it is worth a bonus
     // and `keepRecord` is the only thing that knows whether this run did.
     const record = keepRecord(hero, cleared);
+    // …and the first clears are marked before it too, for the same reason: the award has
+    // to know which of them this run was the first of, and that is only true once.
+    const firstBosses = markFirstBosses(hero, felled);
+    const earned = xpForEndlessRun(cleared, record.newRecord)
+      + firstBosses.length * TUNING.hero.xpFirstBoss;
     return {
       banked: safe,
       shardTotal: hero.shards,
       kept,
       overflowed,
       overflowShards,
+      firstBosses,
       ...record,
-      ...awardXp(hero, xpForEndlessRun(cleared, record.newRecord)),
+      // ONE award call, so the level lands once and `levelledUp` is the truth about the
+      // whole settle rather than about whichever half was written last.
+      ...awardXp(hero, earned),
     };
   };
 }
@@ -281,7 +300,99 @@ function awardXp(
   hero.xp = (hero.xp ?? 0) + earned;
   const level = levelForXp(hero.xp);
   hero.level = level;
+  openClassesFor(hero, level);
   return { xpEarned: earned, level, levelledUp: level > before };
+}
+
+// ---- classes (Stage 6b-2) ----------------------------------------------------------
+
+/**
+ * Write the unlock FLAG for every class this level has opened.
+ *
+ * **A flag, never a computed threshold** (`PROGRESSION.md` § Unlocks) — so `unlockLevel`
+ * can be retuned tomorrow without taking a class back off somebody who already picked it,
+ * and a delver who levelled past a gate keeps what it opened even if the gate moves.
+ *
+ * Pure and idempotent: it reads only the hero it is handed and adds nothing twice, so a
+ * compare-and-set replay writes the same list.
+ */
+function openClassesFor(hero: StoredHero, level: number): void {
+  for (const row of CLASS_LIST) {
+    if (level < row.unlockLevel) continue;
+    const flag = classUnlockFlag(row.id);
+    if (!hero.unlocked.includes(flag)) hero.unlocked.push(flag);
+  }
+}
+
+/** Which classes this delver may be right now. Derived from the flags rather than from the
+ *  level, which is the whole reason the flags exist. */
+export const unlockedClasses = (hero: StoredHero | null): string[] =>
+  CLASS_LIST.filter((row) => hero?.unlocked.includes(classUnlockFlag(row.id))).map((r) => r.id);
+
+/**
+ * **You are a Warden** — stamped the first time a delver opens the Endless, never at
+ * account creation.
+ *
+ * `ABILITIES.md` § Open says Warden is the default and `GAME_DESIGN.md`'s THE CLASS beat
+ * says the line out loud. A hero who has only ever played the Daily keeps `class: null`,
+ * because the Daily reads no class and inventing one for them would put account state in
+ * front of a mode whose whole promise is that it has none.
+ *
+ * Returns the class the run should be snapshotted with. Pure — it reads and writes only
+ * the hero it is handed, so a replay stamps the same thing.
+ */
+export function ensureClass(hero: StoredHero): string {
+  openClassesFor(hero, levelForXp(hero.xp ?? 0));
+  if (classById(hero.class)) return hero.class!;
+  hero.class = DEFAULT_CLASS_ID;
+  return hero.class;
+}
+
+/**
+ * Change class in the camp. Returns an error string, or null on success.
+ *
+ * **Free, and always available among what is unlocked.** The design's paid, permanent
+ * choice is the *evolution* (`CLASSES.md` § Rules), and even that is respec-able for
+ * shards on the argument that a permanent lock-in in a game whose content rotates daily
+ * means everyone picks the safe branch and never sees the others. A base class is one tier
+ * below that decision, so charging for it would be charging more for less.
+ *
+ * **An open run does not move**, and nothing here has to arrange that: `RunSnapshot` froze
+ * the class the run began under, and `kitForRun` reads the snapshot. It is the same
+ * guarantee a mid-run gear swap already has, from the same field.
+ */
+export function setHeroClass(classId: string): (hero: StoredHero) => string | null {
+  return (hero) => {
+    const row = classById(classId);
+    if (!row) return 'There is no such class.';
+    openClassesFor(hero, levelForXp(hero.xp ?? 0));
+    if (!hero.unlocked.includes(classUnlockFlag(row.id))) {
+      return `Reach level ${row.unlockLevel} to delve as a ${row.name}.`;
+    }
+    hero.class = row.id;
+    return null;
+  };
+}
+
+/**
+ * First clear of a stratum boss — **once each, ever** (`PROGRESSION.md` § Levels and XP).
+ *
+ * Returns the ids this run is the first clear of, and marks them. There are four stratum
+ * bosses, so this is a lifetime ceiling of four awards: an on-ramp, not an income.
+ *
+ * **Endless only, because only the Endless calls it.** The Daily meets the same bosses at
+ * depths 4, 8 and 12, and paying there — or even *marking* there — would either make the
+ * day's shaft the efficient way to level or silently spend an award the Endless was
+ * supposed to hand out. Neither is a thing to discover later.
+ */
+function markFirstBosses(hero: StoredHero, slain: readonly string[]): string[] {
+  const first: string[] = [];
+  for (const id of slain) {
+    if (hero.bossKills.includes(id) || first.includes(id)) continue;
+    first.push(id);
+    hero.bossKills.push(id);
+  }
+  return first;
 }
 
 
@@ -449,6 +560,15 @@ export interface GearState {
    *  the record here rather than in `client/`, which is rule 4: if a screen needs a
    *  derived number, the layer that owns the rule reports it. */
   ceiling: Rarity;
+  /** What the delver is. `null` until they first open the Endless. */
+  class: string | null;
+  /** Which class ids they may switch to — **the flags, resolved here**, not the level.
+   *  The strip draws a locked class rather than hiding it, so it needs to know which are
+   *  locked; deriving that from the level in `client/` would be a second copy of a rule
+   *  the flag exists to make movable. */
+  unlocked: string[];
+  /** The DERIVED level, so a locked chip can say which one opens it. */
+  level: number;
 }
 
 export async function readGearState(
@@ -457,6 +577,7 @@ export async function readGearState(
   nowMs: number,
 ): Promise<GearState> {
   const hero = await readHero(client, userId, nowMs);
+  const level = levelForXp(hero?.xp ?? 0);
   return {
     gear: hero?.gear ?? {},
     stash: hero?.stash ?? [],
@@ -464,5 +585,13 @@ export async function readGearState(
     capacity: stashCapacity(hero?.level ?? 1),
     slots: GEAR_SLOTS,
     ceiling: ceilingForRecord(endlessBestOf(hero)),
+    class: hero?.class ?? null,
+    // Derived from the level on this READ path rather than read off the flags, and the
+    // two cannot disagree: `setHeroClass` runs `openClassesFor` before it checks, so
+    // anything this offers the write path will have flagged by the time it is asked. It
+    // is written this way because a delver with no hero blob at all still has level 1 and
+    // still has to be shown a Warden — reading flags off `null` would show them nothing.
+    unlocked: CLASS_LIST.filter((row) => level >= row.unlockLevel).map((row) => row.id),
+    level,
   };
 }

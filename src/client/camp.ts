@@ -15,7 +15,7 @@
 // owns the bar like everything else. Nothing on this screen may outlive that commit.
 
 import { ABILITIES } from '../shared/abilities';
-import { TUNING, levelProgress, type LoadoutView } from '../shared/sim';
+import { TUNING, classById, levelProgress, type LoadoutView } from '../shared/sim';
 import { abilityClass, abilityGlyph, HERO_ART } from './art';
 import type { EndlessDoor } from './endless';
 import { escapeHtml, fillPercent, inShell } from './shell';
@@ -43,6 +43,10 @@ export interface CampInfo {
    *  copy of a derived value is a copy that will drift (`PROGRESSION.md`), and here it
    *  would drift the moment the curve is retuned. 0 under `npm run preview`. */
   xp: number;
+  /** The class id, or null for a delver who has never opened the Endless — which is a
+   *  real state and not a missing Warden. The head reads DELVER then, and that is the
+   *  honest version of the line rather than a placeholder. */
+  class: string | null;
   /** The Endless door's state: a run to resume, its unbanked haul, the depth record. */
   endless: EndlessDoor;
 }
@@ -148,14 +152,16 @@ function shardCount(shards: number): string {
 
 export function campScreen(info: CampInfo): string {
   const who = info.username ? `u/${escapeHtml(info.username)}` : 'u/you';
-  // The identity line is where a CLASS goes when there is one (`WARDEN · LVL 12`). Until
-  // then it reads DELVER, which is the honest version of the same line rather than a
-  // placeholder — and the level beside it is real from today.
+  // The identity line, and it reads `WARDEN · LVL 12` from Stage 6b-2. It falls back to
+  // DELVER for somebody who has never opened the Endless, which is the honest version of
+  // the same line rather than a placeholder: there genuinely is no class yet, because the
+  // Daily has never needed one.
   const progress = levelProgress(info.xp);
+  const identity = classById(info.class)?.name.toUpperCase() ?? 'DELVER';
   const body = '<div class="camphead">'
     + `<div class="hport big"><img src="${HERO_ART}" alt="" width="32" height="32"></div>`
     + `<div class="chid"><div class="chname">${who}</div>`
-    + `<div class="chclass">DELVER &middot; LVL ${progress.level}</div>`
+    + `<div class="chclass">${identity} &middot; LVL ${progress.level}</div>`
     + `<div class="chnext">${escapeHtml(info.day)} &middot; `
     + `${untilNextDelve(info.msToReset)}</div></div>`
     + `<div class="shards"><div class="v">${shardCount(info.shards)}</div>`

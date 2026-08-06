@@ -28,8 +28,8 @@
 // failure mode — it fails silently and in both directions. See the foot of this file.
 
 import {
-  EMPTY_GEAR, GEAR_SLOTS, TUNING, fitsSlot, gearedKit, issuedKitForDay, issuedPoolForDay,
-  rollItem, seedForDay, simulateEndless, simulateRun,
+  CLASS_LIST, EMPTY_GEAR, GEAR_SLOTS, TUNING, endlessKitFor, fitsSlot, gearedKit,
+  issuedKitForDay, issuedPoolForDay, rollItem, seedForDay, simulateEndless, simulateRun,
   type CombatView, type EquippedGear, type ForkView, type IssuedKit, type Rarity,
   type RunChoice, type RunResult,
 } from '../src/shared/sim';
@@ -506,6 +506,14 @@ const GEARED_DEPTH_CAP = 30;
  *  endgame one — the point is to reach forks that cost something, not to prove that a
  *  maxed hero can. */
 const GEARED_AT = 15;
+/**
+ * The level sweep C's class is played at. **The CAP, deliberately** — this row exists to
+ * measure the strongest delver the game can issue, because that is where a signature is
+ * most likely to have stopped being a decision and started being a free win. A row at
+ * level 5 would measure a delver who is barely classed and report that classes changed
+ * nothing, which is the flattering answer rather than the true one.
+ */
+const CLASSED_AT_LEVEL = TUNING.hero.levelCap;
 
 /** Greedy play, with the fork answered by `decide`. Reuses `greedyTurn` — the fight is
  *  not what is being measured here, the decision after it is. */
@@ -585,10 +593,49 @@ function gearedDelver(seed: number, depth: number, ceiling: Rarity): EquippedGea
   return gear;
 }
 
+/**
+ * A delver the fork sweep can play: a kit, and the median loadout for THAT kit.
+ *
+ * The two travel together from Stage 6b-2 because a class changes the POOL, not just the
+ * numbers folded over it — so a bar of pool indices ranked against the Daily's nine is a
+ * different set of abilities entirely once a Warden is drawing. Ranking a classed pool
+ * with the Daily's ranking would have been a sweep quietly measuring a random legal bar.
+ */
+interface Delver {
+  kit: IssuedKit;
+  loadout: Loadout;
+  /** For the per-group split under a pooled sweep. Omit when the sweep is homogeneous. */
+  group?: string;
+}
+
+/**
+ * The median loadout for an arbitrary kit, memoised on a caller-supplied key.
+ *
+ * `sweepLoadouts` cannot serve this: it plays `simulateRun`, which is the Daily and takes
+ * no kit — correctly and permanently. This plays the same 1,008 loadouts through
+ * `simulateEndless` against the kit in hand, stopped at the Daily's depth so the two
+ * rankings are measuring comparable runs.
+ */
+const kitSweepCache = new Map<string, Loadout>();
+
+function medianLoadoutFor(seed: number, kit: IssuedKit, key: string): Loadout {
+  const cached = kitSweepCache.get(key);
+  if (cached) return cached;
+  const scored = allLoadouts().map((loadout) => {
+    const run = simulateEndless(seed, endlessGreedy(seed, kit, loadout, (view) =>
+      (view.depth >= TUNING.depths ? 'surface' : 'descend')), kit);
+    return { loadout, score: run.score };
+  });
+  scored.sort((a, b) => a.score - b.score);
+  const median = scored[Math.floor(scored.length / 2)]!.loadout;
+  kitSweepCache.set(key, median);
+  return median;
+}
+
 /** One nerve sweep over one kind of delver. */
 function forkSweep(
   label: string,
-  kitFor: (seed: number) => IssuedKit,
+  delverFor: (seed: number, index: number) => Delver,
   depthCap: number,
 ): { surfaced: number; died: number; capped: number; depths: number[] } {
   console.log(`\n  ${label}`);
@@ -597,6 +644,7 @@ function forkSweep(
   let died = 0;
   let capped = 0;
   const allDepths: number[] = [];
+  const groups = new Map<string, { surfaced: number; died: number; depths: number[] }>();
 
   for (const level of NERVES) {
     let rowSurfaced = 0;
@@ -606,11 +654,11 @@ function forkSweep(
 
     for (let i = 0; i < FORK_SEEDS; i++) {
       const seed = seedForDay(`2026-09-${pad(i + 1, 2).replace(' ', '0')}`);
-      const kit = kitFor(seed);
       // The median loadout, so the fork is measured against a normal build rather than
       // an optimised one — the same reason the FLOOR is greedy-on-median.
-      const sorted = sweepLoadouts(seed);
-      const loadout = sorted[Math.floor(sorted.length / 2)]!.loadout;
+      const { kit, loadout, group } = delverFor(seed, i);
+      const tally = group === undefined ? undefined : groups.get(group)
+        ?? groups.set(group, { surfaced: 0, died: 0, depths: [] }).get(group)!;
 
       let hitCap = false;
       const run = simulateEndless(seed, endlessGreedy(seed, kit, loadout, (view) => {
@@ -619,11 +667,12 @@ function forkSweep(
       }), kit);
 
       depths.push(run.cleared);
+      tally?.depths.push(run.cleared);
       // A capped run is EXCLUDED, not counted as a surface. It never made the decision
       // this gate is about — the instrument made it for it.
       if (hitCap) rowCapped++;
-      else if (run.outcome === 'surfaced') rowSurfaced++;
-      else if (run.outcome === 'died') rowDied++;
+      else if (run.outcome === 'surfaced') { rowSurfaced++; if (tally) tally.surfaced++; }
+      else if (run.outcome === 'died') { rowDied++; if (tally) tally.died++; }
     }
 
     surfaced += rowSurfaced;
@@ -639,32 +688,70 @@ function forkSweep(
   console.log(`  → ${surfaced}/${died} = ${(ratio * 100).toFixed(0)}/` +
     `${(100 - ratio * 100).toFixed(0)} over depths 1-${Math.max(...allDepths)}` +
     `${capped > 0 ? `, ${capped} capped and excluded` : ''}`);
+  // A pooled sweep prints its parts. A class that is an outlier is invisible inside a
+  // pool, and "the three agree" is the finding this sweep exists to produce — the same
+  // reason sweeps A and B are printed apart rather than only pooled.
+  for (const [name, tally] of groups) {
+    const total = tally.surfaced + tally.died;
+    const share = total === 0 ? 0 : tally.surfaced / total;
+    console.log(`      ${name.padEnd(8)} ${pad(tally.surfaced, 3)}/${pad(tally.died, 3)} = ` +
+      `${(share * 100).toFixed(0)}/${(100 - share * 100).toFixed(0)}   ` +
+      `mean depth ${mean(tally.depths).toFixed(1)}   n=${total}`);
+  }
+  // **The split is a direction, not a gate, and the sample size says so out loud.**
+  // Splitting one sweep three ways leaves ~14 decided runs per row, and a single seed
+  // flipping is worth 7 points there — a retune that chased one of these lines would be
+  // tuning noise. The POOLED ratio is the gate; these exist to surface an outlier worth
+  // investigating with more seeds, never to be corrected toward.
+  if (groups.size > 0) {
+    console.log(`      (a split of one sweep — n per row is small, so read the direction, ` +
+      `not the number)`);
+  }
   return { surfaced, died, capped, depths: allDepths };
 }
 
 console.log(`\nGATE 5 — THE FORK RATIO · ${NERVES.length} risk appetites × ` +
-  `${FORK_SEEDS} shafts × 2 delvers`);
+  `${FORK_SEEDS} shafts × 3 delvers`);
 
 // Note the kit: `gearedKit(issued, …)` and NOT `issuedKitForDay` on its own, so the
 // probe measures the kit `core/endless.ts` actually derives — including the rarity
 // ceiling, which is the thing a depth record opens.
 const bare = forkSweep(
-  'A · NOTHING WORN (a first run, and every player’s first week)',
-  (seed) => gearedKit(issuedKitForDay(seed), EMPTY_GEAR, 'rare'),
+  'A · NOTHING WORN, NO CLASS (the control, and every run written before v4)',
+  (seed) => ({
+    kit: gearedKit(issuedKitForDay(seed), EMPTY_GEAR, 'rare'),
+    loadout: sweepLoadouts(seed)[Math.floor(sweepLoadouts(seed).length / 2)]!.loadout,
+  }),
   FORK_DEPTH_CAP,
 );
 const geared = forkSweep(
   `B · GEARED (one item per slot @ depth ${GEARED_AT}, ceiling epic, cap ${GEARED_DEPTH_CAP})`,
-  (seed) => gearedKit(
-    issuedKitForDay(seed), gearedDelver(seed, GEARED_AT, 'epic'), 'epic',
-  ),
+  (seed) => ({
+    kit: gearedKit(issuedKitForDay(seed), gearedDelver(seed, GEARED_AT, 'epic'), 'epic'),
+    loadout: sweepLoadouts(seed)[Math.floor(sweepLoadouts(seed).length / 2)]!.loadout,
+  }),
+  GEARED_DEPTH_CAP,
+);
+// C · the delver the game actually issues from Stage 6b-2 on, and the axis this gate was
+// re-run for. **All three classes share the seed pool** rather than getting a sweep each:
+// three separate sweeps would triple the most expensive row in the instrument, and the
+// question here is whether the three AGREE — which a pooled sweep with a printed split
+// answers directly. A class that is an outlier shows up in its own line.
+const classed = forkSweep(
+  `C · GEARED + CLASSED @ level ${CLASSED_AT_LEVEL} (the endgame delver, cap ${GEARED_DEPTH_CAP})`,
+  (seed, index) => {
+    const row = CLASS_LIST[index % CLASS_LIST.length]!;
+    const gear = gearedDelver(seed, GEARED_AT, 'epic');
+    const kit = gearedKit(endlessKitFor(seed, row.id, CLASSED_AT_LEVEL), gear, 'epic');
+    return { kit, loadout: medianLoadoutFor(seed, kit, `${seed}:${row.id}`), group: row.id };
+  },
   GEARED_DEPTH_CAP,
 );
 
-const surfaced = bare.surfaced + geared.surfaced;
-const died = bare.died + geared.died;
-const capped = bare.capped + geared.capped;
-const allDepths = [...bare.depths, ...geared.depths];
+const surfaced = bare.surfaced + geared.surfaced + classed.surfaced;
+const died = bare.died + geared.died + classed.died;
+const capped = bare.capped + geared.capped + classed.capped;
+const allDepths = [...bare.depths, ...geared.depths, ...classed.depths];
 const forkTotal = surfaced + died;
 const forkRatio = forkTotal === 0 ? 0 : surfaced / forkTotal;
 console.log(`\n  pooled: ${surfaced} surfaced / ${died} died ` +
@@ -693,12 +780,24 @@ if (deepest < TUNING.lanternStrainDepths[0]!) {
   console.log(`  ⚠ no run reached the first lantern strain (depth ` +
     `${TUNING.lanternStrainDepths[0]}), so the strain is UNMEASURED here`);
 }
-const bareRatio = bare.surfaced / Math.max(1, bare.surfaced + bare.died);
-const gearedRatio = geared.surfaced / Math.max(1, geared.surfaced + geared.died);
+const ratioOf = (row: { surfaced: number; died: number }): number =>
+  row.surfaced / Math.max(1, row.surfaced + row.died);
+const bareRatio = ratioOf(bare);
+const gearedRatio = ratioOf(geared);
+const classedRatio = ratioOf(classed);
 if (Math.abs(bareRatio - gearedRatio) > FORK_TOLERANCE * 2) {
-  console.log(`  ⚠ the two delvers disagree by ` +
+  console.log(`  ⚠ A and B disagree by ` +
     `${Math.round(Math.abs(bareRatio - gearedRatio) * 100)} points — gear is moving the ` +
     `DECISION, not just the depth`);
+}
+// The same test one axis over, and the finding this gate was re-run for. A class that
+// moved the ratio would be a class that had stopped being an identity and started being
+// a difficulty setting — which is `CLASSES.md`'s *"never a power ladder"* failing in the
+// one place the design cannot see it.
+if (Math.abs(gearedRatio - classedRatio) > FORK_TOLERANCE * 2) {
+  console.log(`  ⚠ B and C disagree by ` +
+    `${Math.round(Math.abs(gearedRatio - classedRatio) * 100)} points — a CLASS is moving ` +
+    `the decision, not just the depth`);
 }
 console.log(Math.abs(forkRatio - FORK_TARGET) <= FORK_TOLERANCE
   ? '  ✓ the fork is a decision — the loss is real and the mode is not punishing you'

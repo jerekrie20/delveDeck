@@ -37,14 +37,14 @@
 // conflict replays them.
 
 import {
-  ceilingForRecord, gearedKit, issuedKitForDay, simulateEndless, TUNING,
+  ceilingForRecord, endlessKitFor, gearedKit, levelForXp, simulateEndless, TUNING,
   type IssuedKit, type Item, type RunChoice, type RunResult,
 } from '../../shared/sim';
 import type { RunSnapshot, StoredEndlessRun, StoredHero } from './heroSchema';
 import type { HeroRedisLike } from './heroStore';
 import { CAS_ATTEMPTS, readHero, updateHero } from './heroStore';
 import {
-  beginEndlessRun, endEndlessRun, endlessBestOf, saveEndlessProgress,
+  beginEndlessRun, endEndlessRun, endlessBestOf, ensureClass, saveEndlessProgress,
   type EndlessSettlement,
 } from './hero';
 import { STORED_RUN_VERSION } from './run';
@@ -55,27 +55,49 @@ import { findSettledRun, recordSettledRun, type RunDedupeRedisLike } from './run
 /**
  * **The kit, derived server-side from the run's START state.**
  *
- * `run.snapshot` is that start state — the gear the delver walked in wearing and the
- * rarity ceiling their record had opened — and it is read **instead of current gear, not
- * as a shortcut to it.** Change your loadout in the camp mid-run and a kit built from
- * *current* gear would stop replaying the choice list that was played under the old one:
- * a resumable run would silently become a wrong one, and every number the server
- * verifies with it would be wrong too.
+ * `run.snapshot` is that start state — the gear the delver walked in wearing, the class
+ * they walked in as, the level they walked in at, and the rarity ceiling their record had
+ * opened — and it is read **instead of current state, not as a shortcut to it.** Change
+ * your loadout or your class in the camp mid-run and a kit built from *current* state
+ * would stop replaying the choice list that was played under the old one: a resumable run
+ * would silently become a wrong one, and every number the server verifies with it would
+ * be wrong too.
  *
- * This is still the only place in the project a kit is derived. Classes, levels and
- * talents join `RunSnapshot` at the stage that reads them, and this function is the one
- * line that has to change.
+ * **This is still the one line in the project that derives a kit**, and it is still one
+ * line. Classes arrived by widening what `endlessKitFor` reads, not by adding a second
+ * derivation beside it. Talents join the same way at Stage 7.
+ *
+ * A snapshot with `class: null` — which is every run written before v4 — derives exactly
+ * `issuedKitForDay(seed)` folded over its gear, i.e. the kit it was actually played on.
  */
 export function kitForRun(run: Pick<StoredEndlessRun, 'seed' | 'snapshot'>): IssuedKit {
-  const { gear, dropCeiling } = run.snapshot;
-  return gearedKit(issuedKitForDay(run.seed), gear, dropCeiling);
+  const { gear, dropCeiling, class: classId, level } = run.snapshot;
+  return gearedKit(endlessKitFor(run.seed, classId ?? null, level ?? 1), gear, dropCeiling);
 }
 
-/** What a run about to start would be played under. Pure, and read INSIDE the
- *  compare-and-set mutator so a concurrent equip cannot stamp a run with gear the blob
- *  no longer holds. */
+/**
+ * What a run about to start would be played under. Pure, and read INSIDE the
+ * compare-and-set mutator so a concurrent equip cannot stamp a run with gear the blob no
+ * longer holds.
+ *
+ * **`ensureClass` is what makes "you are a Warden" true**, and it happens here rather than
+ * at account creation: opening the Endless is the moment a delver first needs a class, and
+ * a Daily-only player never does. It writes to the hero it is handed, which is legal for
+ * the same reason everything in `core/hero.ts` is — the mutator this runs inside is
+ * replayed against a fresh blob, and stamping the same default twice is stamping it once.
+ */
 export function snapshotOfHero(hero: StoredHero): RunSnapshot {
-  return { gear: hero.gear ?? {}, dropCeiling: ceilingForRecord(endlessBestOf(hero)) };
+  return {
+    gear: hero.gear ?? {},
+    dropCeiling: ceilingForRecord(endlessBestOf(hero)),
+    class: ensureClass(hero),
+    // Always null at 6b-2 — evolution is Stage 7. Frozen here anyway so the day a spec
+    // exists it is already part of what a run was played under.
+    spec: hero.spec ?? null,
+    // The DERIVED level, never the cached field: `hero.level` is a cache of
+    // `levelForXp(hero.xp)` and a snapshot is forever, so it reads the source.
+    level: levelForXp(hero.xp ?? 0),
+  };
 }
 
 /** Replay a stored run exactly as the server will verify it. */
@@ -401,7 +423,14 @@ export async function settleEndlessRun(
     // **The items go in on the same terms as the shards, including the ones being
     // worn.** Wearing a drop never saved it, so a death hands in an empty haul and a
     // surfacing hands in all of it — the asymmetry `GEAR.md` says must not erode.
-    endEndlessRun(sent.runId, surfaced ? haul : 0, replay.cleared, surfaced ? replay.haul : []),
+    // The bosses go in on DIFFERENT terms from the haul, and that is the design rather
+    // than an inconsistency: a first clear is a thing that happened, and `MODES.md`'s
+    // promise is that a death moves you sideways rather than backwards. You felled it
+    // either way, so it pays either way — exactly like the depth record and the XP.
+    endEndlessRun(
+      sent.runId, surfaced ? haul : 0, replay.cleared,
+      surfaced ? replay.haul : [], replay.bossesSlain,
+    ),
     CAS_ATTEMPTS.runResult,
   );
   if (!result) return fail('That run has already been settled.');

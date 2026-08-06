@@ -41,7 +41,9 @@ import {
   applyEndlessChoice, endlessAction, endlessActive, endlessDoor, endlessScreen,
   endlessShardTotal, leaveEndless, loadEndless,
 } from './endless';
-import { gearAction, gearActive, gearScreen, gearShardTotal, leaveGear } from './gear';
+import {
+  gearAction, gearActive, gearClassId, gearScreen, gearShardTotal, leaveGear,
+} from './gear';
 import { boonScreen, descentScreen } from './interlude';
 import { mountScreen } from './mount';
 import { replayTransport } from './replay';
@@ -306,6 +308,10 @@ function screenFor(result: RunResult): string {
       // not earned until it settles, so a level that climbed mid-delve would have to snap
       // back — the same trap the shard total above is written the way it is to avoid.
       xp: session.init?.xp ?? 0,
+      // The gear screen's answer wins when it has one, exactly like the shard total above:
+      // switching class on screen 04 and coming back to a head still reading WARDEN would
+      // be the camp disagreeing with the screen one tap away from it.
+      class: gearClassId() ?? session.init?.class ?? null,
       endless: endlessDoor(),
     });
   }

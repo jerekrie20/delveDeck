@@ -31,6 +31,12 @@ await import('./camp.test');
 // pays better per depth. Its own file because it fails when the curve changes and nothing
 // else does; the PACING it is tuned to is measured by `scratchpad/progression.ts`.
 await import('./progression.test');
+// `classes` owns what a CLASS is — the three rows, their draw weights, their one numeric
+// signature each, and the wall that keeps every bit of it out of the Daily. Its own file
+// because it fails when a weight or a signature changes and nothing else does; the turn
+// loop those signatures hook into is `sim.test`'s, and the curve their HP is paid along
+// is `progression.test`'s.
+await import('./classes.test');
 // `endless` owns the SECOND MODE — the fork, the lantern strain, the haul, and the
 // wall that keeps all three away from the Daily. It fails when the fork changes and
 // nothing else does, which is exactly why it is not part of `sim.test`.

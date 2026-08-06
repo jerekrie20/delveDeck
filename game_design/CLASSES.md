@@ -129,6 +129,65 @@ interpreter, no per-class code branch.
 block wearing a hat. All three above pass that test, and it is the bar every future
 class has to clear.
 
+### What Stage 6b-2 built, and the two sentences it had to resolve
+
+**The base classes shipped as weights plus one number, and nothing else.** No
+class-locked ability rows are authored yet — the six named above are Stage 7, with
+evolution — but `Ability.class` exists and the Endless draw already filters on it, so
+adding one is a data edit rather than a change to the draw.
+
+Two signature lines needed a reading before they could be a field. Both are recorded here
+so they are not re-argued, and both are reversible in one number.
+
+- **Warden — *"block above your max"* means block you did not spend.** This model has no
+  block maximum: `block` resets to 0 at the start of every turn and has no ceiling, so
+  "above your max" has no referent in it. The line's own next column does: *over-blocking
+  stops being waste.* Unspent block is exactly that waste, so a fraction of what is still
+  standing at the end of your turn survives into the next one. It is a **fraction rather
+  than a hoard** on purpose — carry half of a leftover twice and you have a quarter, so
+  block stays a decision about *this* turn.
+- **Hunter — *"rage charges faster"* means a landed hit is worth more.** Several readings
+  were honest; this is the one that also satisfies the column beside it, *when to take a
+  hit on purpose.* A flat bonus per cast would charge faster while changing nothing about
+  that decision, and a shorter rage bar would be the ultimate getting cheaper rather than
+  rage arriving sooner. Taking the hit is where a Hunter's rage comes from, so that is
+  where the number goes.
+- **Adept** needed no interpretation and is the doc's sentence exactly.
+
+### Stat growth is HP, and only HP
+
+`PROGRESSION.md` says a level's stat growth is *"small, automatic, per-class"*, and the
+class table above names exactly one stat. So per-class growth is **a flat HP offset and an
+HP-per-level**, and nothing else.
+
+Attack and block were tried and left out. Both are **per-hit** in this engine — `+1` attack
+is `+3` on a three-hit `tempo` row and `+9` on some ultimates, and block compounds over a
+turn's casts. A growth stat that multiplies is not small, and small is the requirement. A
+second axis should arrive only once the probe has measured it.
+
+> **The first draft of the growth failed GATE 5, and the finding is worth keeping.** At
+> `+46` max HP by the cap, a classed delver's fork ratio came back **38/62** against a
+> geared delver's 62/38 — a 24-point swing, which is a class moving the *decision* rather
+> than the depth, and *"never a power ladder"* failing in the one place the design cannot
+> see it. **Pure defensive growth is what did it**: HP pushes a run deeper without helping
+> it fight, so it arrives at depths it cannot win and the fraction-of-max nerve rule keeps
+> descending. Cut to `+23 / +11 / +2` by the cap, all three delvers agree within ten points.
+
+### Unlocking a class
+
+**Warden is default**, stamped the first time a delver opens the Endless and never at
+account creation — a player who has only ever run the Daily has no class, because the Daily
+reads none. **Hunter and Adept are level gates** (`PROGRESSION.md` § Unlocks), and the gate
+is a **hero flag** rather than a computed threshold, so the level can be retuned without
+taking a class back off somebody who already has it.
+
+**Switching between unlocked classes is free and always available.** The design's paid,
+permanent choice is the *evolution* below — and even that is respec-able, on the argument
+that a permanent lock-in in a game whose content rotates daily means everyone picks the
+safe branch. A base class is one tier below that decision, so charging for it would be
+charging more for less. **An open Endless run does not move**: the run's snapshot froze the
+class it began under, the same field a mid-run gear swap already rides on.
+
 ---
 
 ## Part 3 · Evolution

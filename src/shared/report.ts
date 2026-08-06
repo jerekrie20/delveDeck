@@ -138,6 +138,7 @@ export function finish(
       : state.haul.map((item) => ({ ...item, affixes: item.affixes.map((a) => ({ ...a })) })),
     haulWorn: outcome === 'invalid' ? [] : [...state.haulWorn],
     seen: [...state.seen],
+    bossesSlain: [...state.bossesSlain],
     facts: { ...state.facts, castsByArchetype: { ...state.facts.castsByArchetype } },
     depthMarks: [...depthMarks],
     depthBands: [...depthBands],

@@ -52,10 +52,19 @@ depths, which is the exact grind this game should not have.
 | First clear of a stratum boss | Once each, ever. |
 | Daily completion | A flat, small amount — the Daily feeds the meta without the meta feeding the Daily. |
 
-**What shipped at Stage 6b-2:** depths cleared (compounding, so deeper pays better *per
-depth*), the new-record bonus, and the flat Daily amount. **First-clear-of-a-boss is not
-built** — it needs a per-boss "ever" flag on the hero, which is a stored-shape change, and
-it belongs with the stage that adds one rather than on its own migration.
+**All four shipped at Stage 6b-2.** Depths cleared (compounding, so deeper pays better
+*per depth*), the new-record bonus and the flat Daily amount landed with the curve;
+**first-clear-of-a-stratum-boss** landed with classes, because that is the slice that was
+already paying for a stored-shape change and the flag needed one. It rode the v3 → v4 step
+rather than buying a migration of its own.
+
+> **First clear is gated on DEPTH, not on time, and it is Endless-only.** Four stratum
+> bosses, one award each, ever — so a delver who tops out at depth 7 has collected one of
+> the four and the rest is *"go deeper to be paid once"*. The Daily meets the same bosses
+> at depths 4, 8 and 12 and pays nothing for them: paying there would make the day's shaft
+> the efficient way to level, and even *marking* there would silently spend an award the
+> Endless was supposed to hand out. `RunResult.bossesSlain` names them — `facts.bossesFelled`
+> counts them and *"once each"* needs the name.
 
 > **XP IS PAID ON A DEATH, and that is a rule rather than a number.** A death keeps its
 > depth record, so it keeps what that record earned — `xpForEndlessRun` takes no outcome
@@ -190,7 +199,7 @@ threshold, so the unlock rule can change without stranding anyone.
 
 | Unlock | Gated by |
 |---|---|
-| Hunter, Adept | Level |
+| Hunter, Adept | Level — **5 and 10**, decided at Stage 6b-2 and living in the class rows |
 | Specialisations | Level |
 | Relic slot | Endless depth record |
 | **Gear rarity tiers** (`epic`, `legendary`) | **Endless depth record** — see the endgame below |
@@ -375,6 +384,27 @@ Two more rules the settle path had to decide:
 - **A full stash auto-salvages the overflow into shards** rather than refusing the bank.
   Overflow is income ([ECONOMY.md](ECONOMY.md)), and a bank that blocked would strand a
   haul at the one moment the mode promises it is safe.
+
+### Version 4 (Stage 6b-2) — a delver you ARE
+
+| Key | v4 value | Why now |
+|---|---|---|
+| `run.snapshot.class` · `.spec` · `.level` | the class, `null`, and the level a run BEGAN at | 6b-2 is the stage that derives a kit from them |
+| `bossKills` | `[]` — stratum boss ids ever felled | *"once each, ever"* is a fact no run can carry |
+
+**`class` on the hero itself stops being empty**, filled the first time a delver opens the
+Endless. `spec` stays `null` — evolution is Stage 7.
+
+**The v3 → v4 step STAMPS an in-progress run, exactly as v2 → v3 did.** A v3 run was played
+*classless*: there was no class to be, no per-class HP and no signature. So `class: null` on
+that snapshot is the truth about it rather than a Warden standing in, and it is load-bearing
+that the kit derivation agrees — `endlessKitFor(seed, null, level)` returns the issued kit
+byte for byte, so a run mid-shaft on the day classes shipped resumes on the nine it was
+issued at the HP it was fighting on. A test sweeps that identity rather than trusting it.
+
+**`bossKills` rode along rather than buying its own migration.** Its shape was settled and
+only its contents were pending, which is the "ship a key empty" rule — but a key that
+arrives on a step somebody else is already paying for is strictly cheaper than a v5.
 
 ### The CAS contract, and the trap under it
 

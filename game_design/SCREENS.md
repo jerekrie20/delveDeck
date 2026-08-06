@@ -158,6 +158,30 @@ one tap from a feed. It is also the same rule the sim uses to resolve a mid-run 
 inside a verified choice list, so there is one implementation and the screen cannot
 promise a slot the server then fills differently.
 
+### 04 · the class strip lives here, and there is no screen 05 for it
+
+Classes arrived at 6b-2 with no screen of their own drawn anywhere in the mockup, and two
+obvious homes were both wrong. A fifth camp tile is forbidden by the section above. A
+dedicated screen is a decision a player has to make before they can play.
+
+**Decided: a strip at the top of screen 04, and the screen's own heading generalises.**
+This is already the answer to *what is my delver* — four stats, eleven slots, a stash —
+and a class is the largest thing on that list. It sits at the top because the gear
+underneath is chosen *for* it. The heading went from WHAT YOU ARE WEARING to **WHAT YOU
+ARE**, which is the honest title for a screen that now answers both.
+
+Three chips, and there are three forever: evolution adds a **spec** beside a class rather
+than a fourth column. Each carries the class name, its one line, and a tail — what it is
+worth in HP if you can have it, **the level that opens it if you cannot**. That is the
+unlit-threat-slot rule again, and the same shape the `ASCEND D35` chip already uses:
+*locked, with the reason, never invisible.* MAX HP in the stat block above includes the
+class, because a stat that disagreed with the run would be the one number on this screen
+nobody could trust.
+
+**Nothing here is a colour nobody has seen before.** A chip paints from the accent of the
+archetype its class leans on — the Warden is the colour of the `guard` tiles a Warden gets
+issued — so no third copy of the palette exists to drift.
+
 ### 14 · the receipt itemises, and a worn item is still on the list
 
 The mockup's *"Cryptweave Coat was found at 16 — gear is always kept"* is overridden

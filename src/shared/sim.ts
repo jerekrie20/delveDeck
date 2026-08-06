@@ -158,10 +158,12 @@ function runDepths(
       ultimate: '',
       cds: [],
       energy: 0,
+      energySpent: 0,
       rage: 0,
       boons: [],
       heroStatuses: [],
       seen: [],
+      bossesSlain: [],
       shards: 0,
       facts: emptyFacts(),
       log: [],
@@ -186,7 +188,13 @@ function runDepths(
 
     run.cleared++;
     run.state.shards += TUNING.shardsPerDepth;
-    if (enc.template.bossOf) run.state.facts.bossesFelled++;
+    if (enc.template.bossOf) {
+      run.state.facts.bossesFelled++;
+      // Named as well as counted, and only on the far side of the clear — walking into a
+      // boss is not felling one. `PROGRESSION.md`'s first-clear XP is *"once each, ever"*,
+      // and "each" needs an id.
+      run.state.bossesSlain.push(enc.template.id);
+    }
     if (mode === 'endless') takeDrop(run.state, seed, depth);
     markBand(run, depth, bandFor(run.state.hero));
     run.state.log.push(`cleared depth ${depth}`);
@@ -253,6 +261,12 @@ function beginDepth(run: Run, depth: number): Encounter {
   state.heroStatuses = [];
   state.cds = state.bar.map(() => 0);
   state.rage = 0;
+  // Block resets HERE as well as at every turn start, and that line is load-bearing from
+  // Stage 6b-2 rather than belt-and-braces: the Warden carries a fraction of unspent block
+  // across a turn boundary, and a depth boundary is not a turn boundary. Without this, a
+  // Warden who over-blocked the last hit of depth 9 would walk into depth 10 already
+  // guarded — which is the "fresh puzzle" rule broken by a class, quietly.
+  state.hero.block = 0;
   state.log.push(
     `— depth ${depth} (${stratumForDepth(depth)}): ${enc.template.name} (${enc.hp} hp)`,
   );
@@ -266,6 +280,12 @@ function fightDepth(run: Run, enc: Encounter, depth: number): Step {
   const damageRamp = damageRampAt(depth, state.kit.rampScale);
   const stratum = stratumForDepth(depth);
 
+  // Whether the PREVIOUS turn spent no energy — the Adept's signature is the only thing
+  // that reads it, and it is a local rather than a `SimState` field because nothing
+  // outside this loop has any business knowing it. False on the first turn of a depth:
+  // there is no previous turn to have been idle.
+  let wasIdle = false;
+
   for (let turn = 0; enc.hp > 0 && state.hero.hp > 0; turn++) {
     if (turn >= TUNING.turnsPerDepth) {
       // The dark catches up. See `TUNING.turnsPerDepth` — this is what stops a
@@ -277,9 +297,20 @@ function fightDepth(run: Run, enc: Encounter, depth: number): Step {
 
     // Start of the player's turn, in this exact order. Block is a decision about THIS
     // turn, never a stockpile — the mockup's own tutorial copy says so.
-    state.hero.block = 0;
+    //
+    // **The WARDEN is the one exception, and it is a fraction rather than a hoard.** What
+    // survives is a percentage of what was left standing, so over-blocking stops being
+    // waste without block ever becoming a stockpile: carry 50% of a leftover twice and
+    // you have a quarter, so the decision is still about THIS turn. See
+    // `ClassSignature.blockCarryPct` for why "unspent" is what `CLASSES.md`'s "above your
+    // max" resolves to in a model with no block maximum.
+    state.hero.block = Math.floor(state.hero.block * state.kit.blockCarryPct / 100);
     state.energy = state.kit.maxEnergy;
-    for (let i = 0; i < state.cds.length; i++) state.cds[i] = Math.max(0, state.cds[i]! - 1);
+    state.energySpent = 0;
+    // The ADEPT ticks further on the turn after an idle one. Clamped at 0 like any other
+    // tick, so a long cooldown banked over two empty turns simply arrives ready.
+    const tick = 1 + (wasIdle ? state.kit.idleCooldownTick : 0);
+    for (let i = 0; i < state.cds.length; i++) state.cds[i] = Math.max(0, state.cds[i]! - tick);
     const regen = statusMagnitude(state.heroStatuses, 'regen');
     if (regen > 0) state.hero.hp = Math.min(state.hero.maxHp, state.hero.hp + regen);
     tickStatuses(state.heroStatuses);
@@ -287,6 +318,7 @@ function fightDepth(run: Run, enc: Encounter, depth: number): Step {
 
     const cast = playerTurn(run, enc, depth, stratum, damageRamp, turn);
     if (cast.k !== 'go') return cast;
+    wasIdle = state.energySpent === 0;
     if (state.hero.hp <= 0 || enc.hp <= 0) break;
 
     enemyTurn(run, enc, damageRamp);
@@ -334,6 +366,7 @@ function playerTurn(
     if (row.cost > state.energy) return INVALID;
 
     state.energy -= row.cost;
+    state.energySpent += row.cost;
     state.cds[slot] = row.cd;
     castAbility(state, enc, row);
     state.log.push(`cast ${row.name}`);
@@ -399,7 +432,12 @@ function resolveAttack(run: Run, enc: Encounter, intent: Intent, damageRamp: num
     // +1 rage when an attack lands on HP. Fully blocked means no rage — TAKING THE HIT
     // IS HOW YOU CHARGE, which is the tension the ultimate is built on. Once per
     // attack, not per hit, exactly like a cast.
-    state.rage = Math.min(state.kit.maxRage, state.rage + 1);
+    //
+    // **The HUNTER'S signature is the `+ ... rageOnHitBonus` on this line and nowhere
+    // else**, which is exactly why it goes here rather than on the cast: the class's own
+    // row says it changes *when to take a hit on purpose*, so it has to be worth more
+    // where a hit is what earns it. 0 for everybody else, including the whole Daily.
+    state.rage = Math.min(state.kit.maxRage, state.rage + 1 + state.kit.rageOnHitBonus);
     const thorns = statusMagnitude(state.heroStatuses, 'thorns');
     if (thorns > 0) {
       enc.hp -= thorns;
@@ -504,7 +542,17 @@ function settle(run: Run, step: Step): RunResult {
 // single file had, where everything was one import away.
 
 export { TUNING, MAX_RUN_CHOICES } from './tuning';
-export { dayKey, depthRng, issuedKitForDay, issuedPoolForDay, seedForDay } from './daily';
+export {
+  dayKey, depthRng, endlessKitFor, endlessPoolFor, issuedKitForDay, issuedPoolForDay, seedForDay,
+} from './daily';
+// Classes (Stage 6b-2). Endless-only and structurally so: the weights reach the draw
+// through `endlessPoolFor`, the signature reaches the turn loop through three numeric kit
+// fields, and neither has a door into `simulateRun`.
+export {
+  CLASSES, CLASS_LIST, DEFAULT_CLASS_ID, classById, classHpBonus, classSignature,
+  classUnlockFlag, classWeightFor,
+} from './classes';
+export type { ClassSignature, DelverClass } from './classes';
 export { damageRampAt, difficultyAt, enemyForDepth, litSlotsAt } from './encounter';
 export { effectiveAbility, resolveIntent } from './combat';
 export { scoreRun } from './report';

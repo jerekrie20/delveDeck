@@ -2419,6 +2419,84 @@ body {
 .gstat .d.up { color: var(--ok); }
 .gstat .d.down { color: var(--atk); }
 
+/* ── the class strip (screen 04) ───────────────────────────────────────────────────
+   Three chips, and there are three forever — `CLASSES.md` ships Warden, Hunter and
+   Adept, and evolution adds a SPEC beside a class rather than a fourth column. A grid
+   rather than a scroller for exactly that reason: a row that can never grow does not
+   need to be able to.
+
+   Each chip wears an `.a-<archetype>` class and paints from `--archetype-accent`, so the
+   Warden chip is literally the colour of the `guard` tiles it will be issued. **No hex is
+   written here at all**, and that is the point: a per-class palette would be a third copy
+   of one `art.test.ts` already guards two copies of, and the two would drift the first
+   time a tile colour was retuned. `DelverClass.accentArchetype` names which. */
+.cstrip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 6px;
+}
+
+.cchip {
+  --accent: var(--archetype-accent, #5c6577);
+  padding: 9px 6px;
+  text-align: center;
+  cursor: pointer;
+  /* A flex column so the tail can be pushed to the BOTTOM. The three lines wrap to
+     different heights at 320px — "Out-damages…" takes four lines where "Outlasts…" takes
+     three — and without this the three price lines float at three different heights
+     inside three equal boxes, which reads as three chips in three states. Same lesson the
+     ability tile learned at Stage 2: anchor the row that has to line up. */
+  display: flex;
+  flex-direction: column;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 12%, #20252f), #161a22);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 9%), inset 0 0 0 1px #000;
+}
+
+.cchip:active { transform: translateY(2px); }
+
+/* The one you are. A ring rather than a tick, because the chip is already the label —
+   and a ring reads at a glance across three columns where a word has to be found. */
+.cchip.on {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 14%),
+    inset 0 0 0 2px color-mix(in srgb, var(--accent) 78%, transparent);
+  cursor: default;
+}
+
+/* Locked is never invisible and never merely LOCKED: the tail prints the level that
+   opens it, in the game's own register, exactly like the ascend chip prints the depth.
+   Darkened rather than thinned — `opacity` composites the chip's fill against the pane
+   scrolling behind it, which is the bug `.btn[disabled]` shipped once. */
+.cchip.off {
+  cursor: default;
+  filter: saturate(0.25) brightness(0.68);
+}
+
+.cchip .cn {
+  font: 400 var(--px-2)/1 var(--px);
+  letter-spacing: 0.12em;
+  color: var(--accent);
+}
+
+.cchip .cl {
+  font-size: var(--ui-1);
+  line-height: 1.35;
+  color: var(--dim);
+  margin-top: 6px;
+}
+
+.cchip .ct {
+  font: 400 var(--px-1)/1.3 var(--px);
+  letter-spacing: 0.08em;
+  color: var(--faint);
+  margin-top: auto;
+  padding-top: 7px;
+}
+
+.cchip.on .ct { color: var(--ok); }
+
 /* An empty slot is a slot, not a gap. It keeps its label so the eleven read as a body
    with holes in it rather than as a short list. */
 .rowitem.empty {

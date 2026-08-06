@@ -20,12 +20,12 @@ import {
   bareSnapshot, newStoredHero, type StoredEndlessRun,
 } from '../src/server/core/heroSchema';
 import {
-  ascendStashItem, bankDailyRun, endEndlessRun, equipFromStash, rerollStashItem,
-  salvageFromStash, stashCapacity, unequipSlot,
+  ascendStashItem, bankDailyRun, endEndlessRun, ensureClass, equipFromStash, rerollStashItem,
+  salvageFromStash, setHeroClass, stashCapacity, unequipSlot, unlockedClasses,
 } from '../src/server/core/hero';
 import {
-  GEAR_SLOTS, TUNING, fitsSlot, levelForXp, rerollCost, salvageValue, xpForEndlessRun,
-  xpToReachLevel, type Item,
+  CLASS_LIST, DEFAULT_CLASS_ID, GEAR_SLOTS, TUNING, classById, classUnlockFlag, fitsSlot,
+  levelForXp, rerollCost, salvageValue, xpForEndlessRun, xpToReachLevel, type Item,
 } from '../src/shared/sim';
 
 describe('camp — the stash and the forge');
@@ -262,4 +262,132 @@ await check('a WORN item cannot be reforged — the stash is the one door', () =
   assert.ok(ascendStashItem('worn', 1)(hero));
   assert.deepEqual(hero.gear[slot], item, 'and the worn item is untouched');
   assert.equal(hero.shards, 1_000_000);
+});
+
+// ---- the class strip (Stage 6b-2) ------------------------------------------------
+//
+// Screen 04 gained a third thing a tap can do: change what your delver IS. It lands here
+// rather than in `classes.test.ts` for the same reason the forge does — that file owns the
+// class MODEL (weights, signatures, growth), and this one owns what a tap costs.
+
+await check('YOU ARE A WARDEN — stamped on first entry, never at account creation', () => {
+  // `ABILITIES.md` § Open, and the THE CLASS beat says the line out loud. A delver who has
+  // only ever played the Daily keeps `class: null`, because the Daily reads no class and
+  // inventing one for them would put account state in front of the one mode whose whole
+  // promise is that it has none.
+  const hero = newStoredHero(NOW);
+  assert.equal(hero.class, null, 'a fresh delver has no class — they have never needed one');
+
+  assert.equal(ensureClass(hero), DEFAULT_CLASS_ID);
+  assert.equal(hero.class, DEFAULT_CLASS_ID, 'and it sticks');
+  assert.ok(hero.unlocked.includes(classUnlockFlag(DEFAULT_CLASS_ID)), 'with its flag');
+
+  // Pure and replay-safe: a compare-and-set conflict re-runs it and stamps the same thing.
+  const again = { ...hero, unlocked: [...hero.unlocked] };
+  assert.equal(ensureClass(again), DEFAULT_CLASS_ID);
+  assert.deepEqual(again.unlocked, hero.unlocked, 'and it does not double-write the flag');
+});
+
+await check('a class you have not reached is REFUSED, and the refusal names the level', () => {
+  // Disabled is never invisible, and never merely LOCKED — the same rule the ascend chip
+  // follows. The error is what screen 04 prints, so it has to say what would open it.
+  const hero = newStoredHero(NOW);
+  const gated = CLASS_LIST.find((row) => row.unlockLevel > 1)!;
+
+  const refusal = setHeroClass(gated.id)(hero);
+  assert.ok(refusal, 'a level-1 delver cannot simply be a Hunter');
+  assert.ok(refusal!.includes(String(gated.unlockLevel)), `it must name the level: ${refusal}`);
+  assert.equal(hero.class, null, 'and nothing was written');
+
+  assert.ok(setHeroClass('bulwark')(hero), 'a spec is not a base class — Stage 7');
+  assert.ok(setHeroClass('')(hero), 'and neither is nothing');
+});
+
+await check('LEVELLING OPENS THE FLAG, and switching is then free', () => {
+  // `PROGRESSION.md` § Unlocks: a hero FLAG, never a computed threshold. It is written on
+  // the award, so the rule can be retuned tomorrow without taking a class back off
+  // somebody who already picked it.
+  const hero = newStoredHero(NOW);
+  const gated = CLASS_LIST.find((row) => row.unlockLevel > 1)!;
+  hero.xp = xpToReachLevel(gated.unlockLevel) - 1;
+
+  // One Daily is enough to cross it, which is what the award path actually does.
+  bankDailyRun(0)(hero);
+  assert.ok(levelForXp(hero.xp) >= gated.unlockLevel, 'the fixture has to cross the gate');
+  assert.ok(hero.unlocked.includes(classUnlockFlag(gated.id)), 'the flag lands on the award');
+  assert.ok(unlockedClasses(hero).includes(gated.id));
+
+  const before = hero.shards;
+  assert.equal(setHeroClass(gated.id)(hero), null, 'and switching costs nothing');
+  assert.equal(hero.class, gated.id);
+  assert.equal(hero.shards, before, 'a base class is free — the PAID choice is evolution');
+  assert.equal(setHeroClass(DEFAULT_CLASS_ID)(hero), null, 'and switching back is free too');
+  assert.equal(hero.class, DEFAULT_CLASS_ID);
+});
+
+await check('switching class does NOT move a run in progress', () => {
+  // The snapshot froze what the run began under, and `kitForRun` reads it. Same guarantee
+  // a mid-run gear swap already has, from the same field — and nothing in the class path
+  // had to arrange it, which is the whole point of the field existing.
+  const hero = newStoredHero(NOW);
+  hero.xp = xpToReachLevel(TUNING.hero.levelCap);
+  bankDailyRun(0)(hero);
+  ensureClass(hero);
+  const run = runFixture('open');
+  run.snapshot = { ...run.snapshot, class: DEFAULT_CLASS_ID, level: 3 };
+  hero.run = run;
+
+  const gated = CLASS_LIST.find((row) => row.unlockLevel > 1)!;
+  assert.equal(setHeroClass(gated.id)(hero), null);
+  assert.equal(hero.class, gated.id, 'the delver changed');
+  assert.equal(hero.run?.snapshot.class, DEFAULT_CLASS_ID, 'the open run did not');
+  assert.equal(hero.run?.snapshot.level, 3);
+});
+
+await check('FIRST CLEAR OF A STRATUM BOSS PAYS ONCE, EVER', () => {
+  // `PROGRESSION.md` § Levels and XP: *"once each, ever"*. It needs a per-boss flag on the
+  // hero, which is why it rode in on the v4 shape change rather than buying a migration
+  // of its own.
+  const hero = newStoredHero(NOW);
+  hero.run = runFixture('r1');
+  const first = endEndlessRun('r1', 0, 4, [], ['broodmother'])(hero);
+  assert.ok(first);
+  assert.deepEqual(first!.firstBosses, ['broodmother'], 'named, so the receipt can say which');
+  assert.deepEqual(hero.bossKills, ['broodmother'], 'and marked');
+  assert.equal(
+    first!.xpEarned, xpForEndlessRun(4, true) + TUNING.hero.xpFirstBoss,
+    'the bonus rides on the same award, so the level lands once',
+  );
+
+  hero.run = runFixture('r2');
+  const second = endEndlessRun('r2', 0, 4, [], ['broodmother'])(hero);
+  assert.ok(second);
+  assert.deepEqual(second!.firstBosses, [], 'the second time is not a first time');
+  assert.equal(second!.xpEarned, xpForEndlessRun(4, false), 'and it pays nothing extra');
+  assert.deepEqual(hero.bossKills, ['broodmother'], 'the list does not grow a duplicate');
+});
+
+await check('a DEATH still pays its first clears — you felled it either way', () => {
+  // The same rule the depth record and the XP follow: a death costs the HAUL and nothing
+  // else. A first clear that evaporated on a death would make dying a step backwards,
+  // which is the one thing `MODES.md` promises the mode is not.
+  const hero = newStoredHero(NOW);
+  hero.run = runFixture('r3');
+  // `banked: 0` and an empty haul is exactly what `settleEndlessRun` hands a death.
+  const died = endEndlessRun('r3', 0, 8, [], ['broodmother', 'theCollector'])(hero);
+  assert.ok(died);
+  assert.deepEqual(died!.firstBosses, ['broodmother', 'theCollector']);
+  assert.equal(died!.banked, 0, 'and the haul is still gone');
+  assert.equal(
+    died!.xpEarned, xpForEndlessRun(8, true) + 2 * TUNING.hero.xpFirstBoss,
+    'two bosses, two bonuses',
+  );
+});
+
+await check('the class the camp reports is a real row, or nothing at all', () => {
+  // The camp head renders `classById(class)?.name ?? 'DELVER'`, so a hero carrying an id
+  // no registry knows must read as DELVER rather than as a blank line.
+  assert.equal(classById(null), undefined);
+  assert.equal(classById('reaver'), undefined, 'specs are Stage 7 and are not base classes');
+  assert.ok(classById(DEFAULT_CLASS_ID));
 });

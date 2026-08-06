@@ -28,11 +28,21 @@ forward; its combat model does not.
 | **M3** — the art | 25 bespoke images | 8 portraits kept, **1 hero portrait added**, 3 backdrops parked (the stage is a CSS gradient), **14 card illustrations deleted** at Stage 2. |
 | **M3.5** — tutorial | 15 steps, templated copy, separate choice list | **Deleted at Stage 1** with the deck it was written against. **Rebuilt as 5 beats at Stage 3**, on a guarantee that already held: both invariants are a 2,000-seed sweep in `content.test.ts`. |
 
-**269 checks green** after Stage 6b-2's first two slices — 245 tsx + 24 vitest. `tests/`:
+**297 checks green** after Stage 6b-2's third slice — 273 tsx + 24 vitest. `tests/`:
 `sim.test.ts` (30), `content.test.ts` (16), `server.test.ts` (30), `art.test.ts` (22),
-`tutorial.test.ts` (14), `share.test.ts` (13), `hero.test.ts`, `camp.test.ts` (14),
-`progression.test.ts` (10), `endless.test.ts`, `endlessRun.test.ts`, `items.test.ts` (30),
-plus the server vitest project.
+`tutorial.test.ts` (14), `share.test.ts` (13), `hero.test.ts` (34), `camp.test.ts` (21),
+`progression.test.ts` (10), `classes.test.ts` (18), `endless.test.ts` (18),
+`endlessRun.test.ts` (17), `items.test.ts` (30), plus the server vitest project.
+
+`classes.test.ts` arrived at Stage 6b-2 and owns **what a class IS** — the three rows,
+their draw weights, their one numeric signature each, and the wall that keeps every bit of
+it out of the Daily. Its own file because it fails when a weight or a signature changes and
+nothing else does: the turn loop those signatures hook into is `sim.test`'s, the
+composition template they are drawn through is `content.test`'s, and the curve their HP is
+paid along is `progression.test`'s. None of those should fail because a Hunter got 0.2 more
+`tempo` weight. **Its three signature checks are PLAYED RUNS, not kit assertions** — a
+numeric field nothing reads type-checks perfectly and ships a class that is a name and a
+stat block.
 
 `progression.test.ts` owns **the curve** — levels, XP, the cap, and the rule that deeper
 always pays better per depth. The *pacing* it is tuned to is measured by
@@ -1151,15 +1161,35 @@ probe, before a progression curve rests on it.
         **3.5 weeks now**, level 12 after one week.
   - [x] Shards **and** XP bank in **one** CAS write. Two would be two conflict windows and
         a partial failure that banked one and not the other.
-- [ ] Class — **Endless only**, never reaching `simulateRun`.
-      Classes are archetype+school **weights** on `issuedPoolForDay`, plus one numeric
-      signature field each — not three separate ability lists. **Evolution and talents are
-      Stage 7**, so this is the three BASE classes only.
-  - [ ] `RunSnapshot` gains `class`/`spec`/`level`, which is a **stored-shape change**:
-        `STORED_HERO_VERSION` 3 → 4, a migration step, and a fixture test. The empty
-        `class`/`spec`/`level`/`xp` keys on the hero itself shipped at v3 and are a fill.
-  - [ ] Level's **stat growth is per-class** (`PROGRESSION.md`), so it lands here rather
-        than with the curve above — a generic growth would have to be un-shipped.
+- [x] Class — **Endless only**, never reaching `simulateRun`.
+      Classes are archetype+school **weights**, plus one numeric signature field each —
+      not three separate ability lists. **Evolution and talents are Stage 7**, so this is
+      the three BASE classes only and `spec` ships `null`.
+  - [x] **`endlessPoolFor(seed, class)` sits BESIDE `issuedPoolForDay`**, never as a third
+        argument on it — so the Daily's draw has no parameter through which a class could
+        arrive, and it stays flat and shared-rows-only. The composition template is
+        written ONCE and both modes run it, so the floors can never drift apart. A
+        classless pool delegates to the Daily's, byte for byte.
+  - [x] **Three signatures, three numeric fields on `IssuedKit`, three lines in the turn
+        loop.** None of them is an `AbilityMod` and none could be: each changes what a
+        TURN does rather than what a row does. Two sentences in `CLASSES.md` needed a
+        reading first (*"block above your max"* in a model with no block max, and *"rage
+        charges faster"*), and both resolutions are recorded there rather than in silence.
+  - [x] `RunSnapshot` gains `class`/`spec`/`level`: `STORED_HERO_VERSION` **3 → 4**, a
+        migration step, and a fixture test. The step **stamps** an in-progress run rather
+        than dropping it, exactly as v2 → v3 did — a v3 run was played classless, and
+        `endlessKitFor(seed, null, …)` is the issued kit byte for byte.
+  - [x] Level's **stat growth is per-class** (`PROGRESSION.md`), and it is **HP only** —
+        attack and block are per-HIT in this engine, so growth in either multiplies and
+        "small" is the requirement. Written down in `CLASSES.md`.
+  - [x] **Warden is default, Hunter and Adept are level gates (5 and 10)**, and the gate
+        is a hero FLAG rather than a computed threshold. Switching is free among what is
+        unlocked; the paid, permanent choice is evolution.
+  - [x] **First-clear-of-a-stratum-boss XP** rode in on the v4 step rather than buying a
+        migration of its own — `bossKills` on the hero, `RunResult.bossesSlain` from the
+        sim, Endless-only, and paid on a death like everything else that is not the haul.
+  - [x] `tests/classes.test.ts` (18) owns the class model; the class strip is measured by
+        the visual gate in all three of its states.
 - [x] The hero stores a **spec id**, not an enum position, so evolution tiers stay a
       data addition — the key shipped at 6b-1's v3, empty, because its *shape* was
       settled and only its contents were pending
@@ -1222,6 +1252,18 @@ probe, before a progression curve rests on it.
       bands came in and `budgetPerDepth` went 0.06 → 0.045. **Now 64/36 pooled — 67/33
       bare, 62/38 geared.** The two delvers agree within 5 points, which is the finding
       that matters: **gear moves the DEPTH (7 → 11) without moving the DECISION.**
+- [x] **GATE 5 re-read with CLASSES — and it failed first again, on the same axis.** The
+      probe grew a third sweep, **C · geared + classed at the level cap**, with all three
+      classes sharing the seed pool and their split printed. The first growth draft
+      (`+46` max HP by the cap) came back **38/62** against B's 62/38 — a 24-point swing,
+      which is the gate's own *"a class is moving the decision, not just the depth"*
+      warning firing, and `CLASSES.md`'s *"never a power ladder"* failing where the design
+      cannot see it. **Pure defensive growth is what did it**: HP pushes a run deeper
+      without helping it fight. Cut to `+23 / +11 / +2`. **Now 62/38 pooled — 67/33 bare,
+      62/38 geared, 57/43 classed**, and all three agree inside ten points. Class moves
+      the depth 11 → 15 and leaves the decision alone.
+      **The Daily half of the probe is byte-identical**: floor 6.6/12, ceiling 11.6/12,
+      gap 5.0, both tutorial invariants clean over 3,000 seeds.
 
 ### What the probe learned when gear arrived
 

@@ -258,6 +258,25 @@ export const ULTIMATES: Ability[] = Object.values(ABILITIES).filter((a) => a.ult
 export const SHARED_EQUIPPABLE: Ability[] = EQUIPPABLE.filter((a) => a.class === undefined);
 export const SHARED_ULTIMATES: Ability[] = ULTIMATES.filter((a) => a.class === undefined);
 
+/**
+ * What the ENDLESS may issue a given class: every shared row, plus the rows locked to it.
+ *
+ * **It returns exactly `SHARED_EQUIPPABLE` today, and that is the point.** No row carries
+ * a `class` yet — Stage 6b-2 ships classes as weights plus one number, and `CLASSES.md`'s
+ * locked signatures (Hold the Line, Mark, Siphon…) are Stage 7 with evolution. The filter
+ * exists NOW so that authoring one is a **data edit** rather than a change to the draw:
+ * add `class: 'warden'` to a row and it appears for Wardens, in the Endless, forever
+ * invisible to the Daily.
+ *
+ * The Daily never calls this. `issuedPoolForDay` reads `SHARED_EQUIPPABLE` directly, so
+ * there is no argument through which a locked row could reach it.
+ */
+export const endlessEquippableFor = (classId: string | null): Ability[] =>
+  EQUIPPABLE.filter((a) => a.class === undefined || a.class === classId);
+
+export const endlessUltimatesFor = (classId: string | null): Ability[] =>
+  ULTIMATES.filter((a) => a.class === undefined || a.class === classId);
+
 export const abilityById = (id: string): Ability | undefined => ABILITIES[id];
 
 /** The seven archetypes, in the order the design lists them. */

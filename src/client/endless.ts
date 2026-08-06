@@ -326,6 +326,9 @@ function offlineSummary(): EndlessSummary {
     xpEarned: xpForEndlessRun(result.cleared, beat),
     level: 1,
     levelledUp: false,
+    // Empty for the same reason `kept` is: *"once each, ever"* is a fact about an account,
+    // and offline there is no account to have felled anything before.
+    firstBosses: [],
   };
 }
 

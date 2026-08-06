@@ -3,7 +3,9 @@ import { z } from 'zod';
 import { transformer } from '../shared/transformer';
 import type { Context } from './context';
 import { context, reddit } from '@devvit/web/server';
-import { dayKey, seedForDay, GEAR_SLOTS, MAX_RUN_CHOICES, TUNING, type GearSlot } from '../shared/sim';
+import {
+  dayKey, seedForDay, CLASS_LIST, GEAR_SLOTS, MAX_RUN_CHOICES, TUNING, type GearSlot,
+} from '../shared/sim';
 import { submitRun, getBoard, getRun, hasSubmitted, isSubmittableDay } from './core/run';
 import {
   redisEndlessDedupeClient, redisHeroClient, redisRateLimitClient, redisRunStore,
@@ -12,7 +14,7 @@ import { readDayStats } from './core/stats';
 import { postRunComment } from './core/comment';
 import {
   ascendStashItem, bankRunShards, equipFromStash, readCampTotals, readGearState,
-  rerollStashItem, salvageFromStash, unequipSlot,
+  rerollStashItem, salvageFromStash, setHeroClass, unequipSlot,
   type DailyAward, type GearState,
 } from './core/hero';
 import { CAS_ATTEMPTS, updateHero } from './core/heroStore';
@@ -111,6 +113,11 @@ const itemIdSchema = z.string().min(1).max(40).regex(/^[A-Za-z0-9#_-]+$/);
  *  could drift out of the model. */
 const GEAR_SLOT_NAMES = [...GEAR_SLOTS] as [GearSlot, ...GearSlot[]];
 
+/** The same trick for class ids: one list, spelled once, straight off the registry — a
+ *  second copy here would be a class name that could drift out of the model, and the
+ *  unlock check behind it would then refuse a class the schema had already accepted. */
+const CLASS_IDS = CLASS_LIST.map((row) => row.id) as [string, ...string[]];
+
 /**
  * Every gear write shares one door: logged in, rate-limited, then the mutation — and it
  * answers with the **whole gear state** rather than a success flag, so the screen never
@@ -170,7 +177,7 @@ export const appRouter = t.router({
       const userId = currentUserId();
       const totals = userId
         ? await readCampTotals(redisHeroClient, userId, Date.now())
-        : { shards: 0, xp: 0 };
+        : { shards: 0, xp: 0, class: null };
       return { day, seed, username, subreddit, alreadyPlayed, stats, ...totals };
     }),
   }),
@@ -333,10 +340,27 @@ export const appRouter = t.router({
       if (!userId) {
         return {
           gear: {}, stash: [], shards: 0, capacity: 0, slots: GEAR_SLOTS, ceiling: 'rare' as const,
+          class: null, unlocked: [], level: 1,
         };
       }
       return await readGearState(redisHeroClient, userId, Date.now());
     }),
+
+    /**
+     * Change class. **The id is all that goes up** — the unlock is checked against the
+     * hero's own flags server-side, so there is no parameter here through which a locked
+     * class could be argued into. It answers with the whole delver state through the same
+     * `writeGear` door every other camp write uses, because the strip and the slots are
+     * one screen and a screen that re-rendered half of itself from a guess is the bug
+     * that door exists to prevent.
+     */
+    setClass: publicProcedure
+      .input(z.object({ classId: z.enum(CLASS_IDS) }))
+      .mutation(async ({ input }) => await writeGear(
+        (userId, now) => updateHero(
+          redisHeroClient, userId, now, setHeroClass(input.classId), CAS_ATTEMPTS.hero,
+        ).then(({ result }) => result),
+      )),
 
     equip: publicProcedure
       .input(z.object({ itemId: itemIdSchema, slot: z.enum(GEAR_SLOT_NAMES) }))

@@ -26,7 +26,8 @@
 import { assert, check, describe } from './helpers';
 import { endlessAtFork, endlessChoices, firstLoadout, nerve } from './policies';
 import {
-  GEAR_SLOTS, TUNING, fitsSlot, issuedKitForDay, rollItem, simulateEndless,
+  DEFAULT_CLASS_ID, GEAR_SLOTS, TUNING, classHpBonus, endlessKitFor, fitsSlot, issuedKitForDay,
+  rollItem, simulateEndless,
   type RunChoice, type RunResult,
 } from '../src/shared/sim';
 import { createRng } from '../src/shared/rng';
@@ -42,8 +43,15 @@ import { FakeRedis } from './fakes/redis';
 
 describe('endless · the persisted run');
 
-/** The kit a delver with nothing worn walks in with. */
-const kitFor = (seed: number) => issuedKitForDay(seed);
+/** The kit a delver with nothing worn walks in with. **A Warden at level 1**, because
+ *  that is what `startEndlessRun` stamps a delver who has never had a class — see
+ *  `ensureClass`. Anything else here would be testing a kit the server does not issue. */
+const kitFor = (seed: number) => endlessKitFor(seed, DEFAULT_CLASS_ID, 1);
+
+/** …and the snapshot that goes with it. `bareSnapshot()` is the CLASSLESS one — the truth
+ *  about a run written before v4 — and it stays in `hero.test.ts` where the migration
+ *  lives. A run started today is started by somebody. */
+const startedSnapshot = () => ({ ...bareSnapshot(), class: DEFAULT_CLASS_ID });
 
 // ---- the persisted run ----------------------------------------------------------
 //
@@ -98,18 +106,24 @@ await check('STARTING A RUN SNAPSHOTS THE DELVER, and the kit is derived from th
   assert.equal(started.run.seed, SEED);
   assert.deepEqual(started.run.choices, []);
   // The kit travels DOWNWARD and is the one the server will verify against. It is the
-  // issued kit folded over the run's own snapshot — for a delver with nothing worn that
-  // differs from the Daily's in exactly one field, the rarity ceiling their record has
-  // opened, which is account state and therefore Endless-only.
-  assert.deepEqual(started.run.kit, kitForRun({ seed: SEED, snapshot: bareSnapshot() }));
+  // CLASSED kit folded over the run's own snapshot — for a delver with nothing worn that
+  // differs from the Daily's in the rarity ceiling their record has opened, the class
+  // they walked in as, and what that class is worth in HP. All three are account state,
+  // and all three are Endless-only.
+  assert.deepEqual(started.run.kit, kitForRun({ seed: SEED, snapshot: startedSnapshot() }));
   assert.deepEqual(started.run.kit.gear, {}, 'a delver with nothing on wears nothing');
-  assert.equal(started.run.kit.maxHp, issuedKitForDay(SEED).maxHp);
+  assert.equal(
+    started.run.kit.maxHp,
+    issuedKitForDay(SEED).maxHp + classHpBonus(DEFAULT_CLASS_ID, 1),
+    'YOU ARE A WARDEN — stamped on the first Endless run, never at account creation',
+  );
   assert.equal(started.run.kit.dropCeiling, 'rare', 'no record yet, so no epic can drop');
 
   const hero = await readHero(redis, USER, NOW);
   assert.equal(hero?.run?.seed, SEED, 'the run must be on the hero, not in a session');
   assert.equal(hero?.run?.version, STORED_RUN_VERSION);
-  assert.deepEqual(hero?.run?.snapshot, bareSnapshot(), 'and the snapshot is stored with it');
+  assert.deepEqual(hero?.run?.snapshot, startedSnapshot(), 'and the snapshot is stored with it');
+  assert.equal(hero?.class, DEFAULT_CLASS_ID, 'and the delver keeps the class afterwards');
 });
 
 await check('A CHECKPOINT IS A DECISION — the loadout, or a fork answered', async () => {
@@ -147,7 +161,7 @@ await check('RESUMING re-derives the kit from the run’s START state', async ()
   // — the kit comes back out of the stored seed, or the choice list stops replaying.
   const state = await readEndlessState(redis, USER, NOW + 90 * 24 * 3600_000);
   assert.ok(state.run, 'NO EXPIRY: a stale run waits indefinitely (owner answer 3)');
-  assert.deepEqual(state.run.kit, kitForRun({ seed: SEED, snapshot: bareSnapshot() }));
+  assert.deepEqual(state.run.kit, kitForRun({ seed: SEED, snapshot: startedSnapshot() }));
   assert.equal(state.run.seed, SEED);
   assert.equal(state.run.choices.length, at.choices.length + 1);
 });
@@ -397,7 +411,7 @@ type Kit = ReturnType<typeof issuedKitForDay>;
 /** A stored run blob, as `startEndlessRun` would have written it. */
 function storedRun(seed: number, choices: RunChoice[], runId = 'run-1') {
   return {
-    version: STORED_RUN_VERSION, runId, seed, choices, snapshot: bareSnapshot(),
+    version: STORED_RUN_VERSION, runId, seed, choices, snapshot: startedSnapshot(),
     startedAt: NOW, updatedAt: NOW,
   };
 }

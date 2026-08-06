@@ -11,9 +11,11 @@
 
 import { createRng, randInt, type Rng } from './rng';
 import {
-  SHARED_EQUIPPABLE, SHARED_ULTIMATES, type Ability, type Archetype,
+  SHARED_EQUIPPABLE, SHARED_ULTIMATES, endlessEquippableFor, endlessUltimatesFor,
+  type Ability, type Archetype,
 } from './abilities';
 import { BOON_LIST } from './boons';
+import { classById, classHpBonus, classSignature, classWeightFor } from './classes';
 import { EMPTY_GEAR } from './items';
 import { TUNING } from './tuning';
 import type { DailyModifier, IssuedKit } from './simTypes';
@@ -63,25 +65,49 @@ function shuffleInPlace<T>(rng: Rng, arr: T[]): T[] {
 }
 
 /**
- * The day's issued pool: 9 abilities + 3 ultimates, drawn from the catalog by seed.
- *
- * **Shared rows only.** Class-locked rows are Endless-only, which is how the Daily
- * draw stays completely account-blind without ever knowing a class exists.
- *
- * The composition template — exactly 1 `strike`, exactly 1 `guard`, and 7 more with
- * at least one each of `burst` / `wall` / `counter` — is not decoration. The floors
- * stop a seed issuing nine cheap abilities with no way to break a boss's HP pool or
- * survive its biggest telegraph. A single unplayable day is a lost day for an entire
- * subreddit and there is no way to reroll it, so a test sweeps every seed for it.
+ * How a pool picks its rows. **The composition TEMPLATE is written once** (below) and both
+ * modes run it; only the chooser differs, which is what stops the Daily's floors and the
+ * Endless's floors ever drifting apart. A second copy of *"exactly 1 strike, exactly 1
+ * guard, at least one each of burst/wall/counter"* is a second thing to get wrong on the
+ * one draw a whole subreddit shares.
  */
-export function issuedPoolForDay(seed: number): { abilities: string[]; ultimates: string[] } {
+interface PoolDraw {
+  /** One row out of a same-archetype group. */
+  one: (rng: Rng, from: readonly Ability[]) => Ability | undefined;
+  /** `count` distinct rows out of everything still eligible. */
+  many: (rng: Rng, from: readonly Ability[], count: number) => Ability[];
+}
+
+/** The Daily's chooser: flat, seed-only, and account-blind by construction. */
+const UNIFORM_DRAW: PoolDraw = {
+  one: (rng, from) => from[randInt(rng, 0, from.length)],
+  many: (rng, from, count) => drawDistinct(rng, from, count),
+};
+
+/**
+ * The composition template, and the ONE place it exists.
+ *
+ * Exactly 1 `strike`, exactly 1 `guard`, and 7 more with at least one each of `burst` /
+ * `wall` / `counter`. The floors are not decoration: they stop a seed issuing nine cheap
+ * abilities with no way to break a boss's HP pool or survive its biggest telegraph. A
+ * single unplayable day is a lost day for an entire subreddit and there is no way to
+ * reroll it, so a test sweeps every seed for it — **and sweeps every class too**, because
+ * `CLASSES.md` says the floors *"still apply to every class and spec, so no weighting can
+ * produce an unplayable nine."*
+ */
+function composePool(
+  seed: number,
+  equippable: readonly Ability[],
+  ultimateRows: readonly Ability[],
+  draw: PoolDraw,
+): { abilities: string[]; ultimates: string[] } {
   const rng = createRng(seed ^ POOL_SALT);
   const byArchetype = (a: Archetype): Ability[] =>
-    SHARED_EQUIPPABLE.filter((row) => row.archetype === a);
+    equippable.filter((row) => row.archetype === a);
 
   const picked: Ability[] = [];
   const take = (from: Ability[]): void => {
-    const row = from[randInt(rng, 0, from.length)];
+    const row = draw.one(rng, from);
     if (row) picked.push(row);
   };
 
@@ -94,17 +120,28 @@ export function issuedPoolForDay(seed: number): { abilities: string[]; ultimates
 
   // Four more from everything that is neither a basic nor already taken.
   const chosen = new Set(picked.map((row) => row.id));
-  const rest = SHARED_EQUIPPABLE.filter(
+  const rest = equippable.filter(
     (row) => row.archetype !== 'strike' && row.archetype !== 'guard' && !chosen.has(row.id),
   );
-  picked.push(...drawDistinct(rng, rest, TUNING.poolSize - picked.length));
+  picked.push(...draw.many(rng, rest, TUNING.poolSize - picked.length));
 
   // Shuffled so the loadout screen is not sorted by archetype, and so "the first
   // five" is not a strategy.
   const abilities = shuffleInPlace(rng, picked.map((row) => row.id));
-  const ultimates = drawDistinct(rng, SHARED_ULTIMATES, TUNING.ultimateOffers)
-    .map((row) => row.id);
+  const ultimates = draw.many(rng, ultimateRows, TUNING.ultimateOffers).map((row) => row.id);
   return { abilities, ultimates };
+}
+
+/**
+ * The day's issued pool: 9 abilities + 3 ultimates, drawn from the catalog by seed.
+ *
+ * **Shared rows only, and a flat draw.** Class-locked rows are Endless-only and class
+ * weights are Endless-only, which is how the Daily draw stays completely account-blind
+ * without ever knowing a class exists. There is no second argument here and there is not
+ * going to be one — `endlessPoolFor` below is a separate function for exactly that reason.
+ */
+export function issuedPoolForDay(seed: number): { abilities: string[]; ultimates: string[] } {
+  return composePool(seed, SHARED_EQUIPPABLE, SHARED_ULTIMATES, UNIFORM_DRAW);
 }
 
 /**
@@ -137,7 +174,115 @@ export function issuedKitForDay(seed: number, modifier: DailyModifier = 'none'):
     lanternReach: 0,
     lanternFloor: TUNING.lanternMinLit,
     dropCeiling: 'common',
+    // No class, so no signature. Written out rather than omitted for the same reason the
+    // gear fields are: an issued kit is a kit with no class, not a kit that has never
+    // heard of one, and `sim.ts` reads all three every turn.
+    blockCarryPct: 0,
+    rageOnHitBonus: 0,
+    idleCooldownTick: 0,
     ...DAILY_MODIFIERS[modifier],
+  };
+}
+
+// ---- the ENDLESS draw — a separate function, deliberately -------------------------
+//
+// `endlessPoolFor` sits BESIDE `issuedPoolForDay` rather than adding a third argument to
+// it. That is the same trick `simulateRun.length === 2` plays one layer up: the Daily's
+// draw has no parameter through which a class could arrive, so it cannot learn one exists
+// even by accident. A weight is account state, and account state has exactly one door.
+
+/** Cumulative-weight pick. One `rng()` call, so the stream stays as predictable as the
+ *  flat draw's — and the fallback returns the last row rather than `undefined`, because a
+ *  float sum can land a hair past the total and an unissued archetype floor would be a
+ *  broken day. */
+function weightedPick(rng: Rng, rows: readonly Ability[], weightOf: (row: Ability) => number)
+  : Ability | undefined {
+  if (rows.length === 0) return undefined;
+  let total = 0;
+  for (const row of rows) total += weightOf(row);
+  if (total <= 0) return rows[0];
+  let roll = rng() * total;
+  for (const row of rows) {
+    roll -= weightOf(row);
+    if (roll < 0) return row;
+  }
+  return rows[rows.length - 1];
+}
+
+/** A class's chooser. Same retry-bounded shape as `drawDistinct` and for the same reason:
+ *  a weighted pool makes repeats likely, so retry rather than loop. */
+function classDraw(classId: string): PoolDraw {
+  const row = classById(classId);
+  const weightOf = (ability: Ability): number =>
+    (row ? classWeightFor(row, ability.archetype, ability.school) : 1);
+  return {
+    one: (rng, from) => weightedPick(rng, from, weightOf),
+    many: (rng, from, count) => {
+      const out: Ability[] = [];
+      const seen = new Set<string>();
+      for (let attempt = 0; attempt < 400 && out.length < count; attempt++) {
+        const picked = weightedPick(rng, from, weightOf);
+        if (!picked || seen.has(picked.id)) continue;
+        seen.add(picked.id);
+        out.push(picked);
+      }
+      return out;
+    },
+  };
+}
+
+/**
+ * The Endless's issued pool, drawn through a class's weights.
+ *
+ * **A null class delegates to the Daily's own draw, byte for byte.** That is not a
+ * shortcut — it is the property that lets a run started before classes existed resume
+ * afterwards on exactly the nine it was played with. `RunSnapshot.class` is `null` on
+ * every v3 run, and a resumed run whose pool had shifted would be a confidently wrong run.
+ *
+ * **Weights are not locks** (`CLASSES.md`). Every weight is positive, so a Warden still
+ * gets issued the occasional spell — and the composition floors above still bind, so no
+ * weighting can produce an unplayable nine.
+ */
+export function endlessPoolFor(
+  seed: number,
+  classId: string | null,
+): { abilities: string[]; ultimates: string[] } {
+  if (!classById(classId)) return issuedPoolForDay(seed);
+  return composePool(
+    seed,
+    endlessEquippableFor(classId),
+    endlessUltimatesFor(classId),
+    classDraw(classId!),
+  );
+}
+
+/**
+ * The Endless's kit before gear: the day's shaft, drawn through a class, at a level.
+ *
+ * `core/endless.ts`'s `kitForRun` folds gear over this, and it reads its class and level
+ * off the run's **snapshot** rather than off current gear — so switching class in the camp
+ * mid-run leaves the open run exactly where it was, the same rule a gear swap already
+ * follows.
+ *
+ * A null class returns `issuedKitForDay(seed)` unchanged, which is what makes "classless"
+ * a real, replayable state rather than a Warden with its numbers zeroed.
+ */
+export function endlessKitFor(
+  seed: number,
+  classId: string | null,
+  level: number,
+): IssuedKit {
+  const base = issuedKitForDay(seed);
+  if (!classById(classId)) return base;
+  const { abilities, ultimates } = endlessPoolFor(seed, classId);
+  return {
+    ...base,
+    // Floored at 1 for the same reason `gearedKit` floors it: a class may make a delver
+    // fragile, never impossible.
+    maxHp: Math.max(1, base.maxHp + classHpBonus(classId, level)),
+    pool: abilities,
+    ultimates,
+    ...classSignature(classId),
   };
 }
 
