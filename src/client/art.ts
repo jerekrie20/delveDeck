@@ -24,6 +24,7 @@
 // an inherited strip offline if one is ever needed again.
 
 import { ABILITIES, type Archetype } from '../shared/abilities';
+import { ROLE_LABEL, SCHOOL_LABEL, ELEMENT_LABEL } from '../shared/tags';
 import type { Rarity } from '../shared/items';
 
 /** Enemy id → static portrait (128px square), displayed centred at 64 in a code-drawn
@@ -177,4 +178,24 @@ export function archetypeClass(archetype: Archetype): string {
 export function abilityClass(abilityId: string): string {
   const archetype = ABILITIES[abilityId]?.archetype;
   return archetypeClass(archetype ?? 'strike');
+}
+
+/**
+ * The tag chips an ability wears — Role, then School, then Element if it has one.
+ *
+ * One vocabulary, from `ABILITIES.md` § The glossary via `shared/tags.ts`: the same words
+ * the legend teaches, the popup details, and gear names. The Role chip carries the
+ * archetype accent so the chip and the tile's stroke are the one colour; School and
+ * Element are neutral, because an ability has exactly one Role but its School and Element
+ * are a second axis, not a louder version of the first.
+ */
+export function tagChips(abilityId: string): string {
+  const row = ABILITIES[abilityId];
+  if (!row) return '';
+  const chip = (text: string, cls: string): string =>
+    `<span class="tchip ${cls}">${text}</span>`;
+  const chips = [chip(ROLE_LABEL[row.archetype], `role ${archetypeClass(row.archetype)}`),
+    chip(SCHOOL_LABEL[row.school], 'sch')];
+  if (row.element) chips.push(chip(ELEMENT_LABEL[row.element], `el ${row.element}`));
+  return `<div class="tchips">${chips.join('')}</div>`;
 }

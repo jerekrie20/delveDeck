@@ -23,6 +23,7 @@
 //     already take. The ~40 base sprites are Stage 7, after the model has been played.
 
 import type { Archetype } from './abilities';
+import { ROLE_LABEL } from './tags';
 import type { AbilityMod } from './boons';
 
 // ---- the eleven slots ------------------------------------------------------------
@@ -236,7 +237,7 @@ export const AFFIXES: Record<string, AffixRow> = {
     mod: 'blockAdd',
   },
   venomous: {
-    id: 'venomous', text: 'your {a} riders land {v} harder', cost: 4, min: 1, max: 4,
+    id: 'venomous', text: 'your {a} status effects hit {v} harder', cost: 4, min: 1, max: 4,
     mod: 'statusMagnitudeAdd',
   },
   furious: {
@@ -313,11 +314,6 @@ export function itemName(item: Item): string {
   return `${RARITY_LABEL[item.rarity]} ${itemBase(item)?.name ?? item.base}`;
 }
 
-const ARCHETYPE_LABEL: Record<Archetype, string> = {
-  strike: 'basic attack', guard: 'basic block', burst: 'burst', wall: 'wall',
-  counter: 'counter', tempo: 'tempo', control: 'control',
-};
-
 /**
  * One affix, in words. Templated and filled — never hand-typed, for the same reason the
  * tutorial's copy is: the value is rolled, so a sentence with a number written into it
@@ -328,7 +324,7 @@ export function affixText(affix: Affix): string {
   if (!row) return '';
   return row.text
     .replaceAll('{v}', String(affix.value))
-    .replaceAll('{a}', affix.archetype ? ARCHETYPE_LABEL[affix.archetype] : '');
+    .replaceAll('{a}', affix.archetype ? ROLE_LABEL[affix.archetype] : '');
 }
 
 /** The flat stats a set of affixes moves, plus the base's implicit. Everything else an

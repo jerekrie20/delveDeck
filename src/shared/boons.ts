@@ -8,13 +8,18 @@
 //
 // The one thing you must not break: **a boon targets an ARCHETYPE, never an ability
 // id.** The day's nine are drawn by seed, so Strike may simply not have been issued;
-// "your basic attack" is the only phrasing that is true on every seed. The mockup's
-// own example ("Strike hits twice for 5 instead of once for 9") is the trap.
+// reading by ROLE is the only phrasing true on every seed. The mockup's own example
+// ("Strike hits twice for 5 instead of once for 9") is the trap.
+//
+// The Role word itself is filled from the ONE glossary (`tags.ts`) by `boonText`, so a
+// boon, a tile chip, the legend and a gear affix all say "Attack" the same way — see
+// `ABILITIES.md` § The glossary. `{a}` is the only placeholder; the numbers are literal.
 //
 // Modifiers are flat numeric deltas folded over a COPY of the ability row in
 // `effectiveAbility()`. The `ABILITIES` registry is never written to.
 
 import type { Archetype } from './abilities';
+import { ROLE_LABEL } from './tags';
 
 /** Every field a modifier may move. Deliberately flat and closed: a boon, a gear
  *  affix, a talent and a class signature all fold through this one shape, which is
@@ -49,62 +54,62 @@ export interface Boon {
 export const BOONS: Record<string, Boon> = {
   twinEdge: {
     id: 'twinEdge', name: 'Twin Edge',
-    text: 'Your basic attack hits twice for half, rounded up.',
+    text: 'Your {a} abilities hit twice for half, rounded up.',
     mod: { archetype: 'strike', hitsSet: 2, damageScale: 0.5 },
   },
   honedEdge: {
     id: 'honedEdge', name: 'Honed Edge',
-    text: 'Your basic attack deals 3 more.',
+    text: 'Your {a} abilities deal 3 more.',
     mod: { archetype: 'strike', damageAdd: 3 },
   },
   standingGuard: {
     id: 'standingGuard', name: 'Standing Guard',
-    text: 'Your basic block builds 1 rage.',
+    text: 'Your {a} abilities build 1 rage.',
     mod: { archetype: 'guard', rageAdd: 1 },
   },
   deepGuard: {
     id: 'deepGuard', name: 'Deep Guard',
-    text: 'Your basic block gives 3 more.',
+    text: 'Your {a} abilities give 3 more block.',
     mod: { archetype: 'guard', blockAdd: 3 },
   },
   overwhelm: {
     id: 'overwhelm', name: 'Overwhelm',
-    text: 'Your burst abilities deal 6 more.',
+    text: 'Your {a} abilities deal 6 more.',
     mod: { archetype: 'burst', damageAdd: 6 },
   },
   quickened: {
     id: 'quickened', name: 'Quickened',
-    text: 'Your burst abilities come back a turn sooner.',
+    text: 'Your {a} abilities come back a turn sooner.',
     mod: { archetype: 'burst', cdAdd: -1 },
   },
   ironbound: {
     id: 'ironbound', name: 'Ironbound',
-    text: 'Your wall abilities give 6 more block.',
+    text: 'Your {a} abilities give 6 more block.',
     mod: { archetype: 'wall', blockAdd: 6 },
   },
   secondWall: {
     id: 'secondWall', name: 'Second Wall',
-    text: 'Your wall abilities come back a turn sooner.',
+    text: 'Your {a} abilities come back a turn sooner.',
     mod: { archetype: 'wall', cdAdd: -1 },
   },
   counterweight: {
     id: 'counterweight', name: 'Counterweight',
-    text: 'Your counter abilities deal 3 more and give 3 more block.',
+    text: 'Your {a} abilities deal 3 more and give 3 more block.',
     mod: { archetype: 'counter', damageAdd: 3, blockAdd: 3 },
   },
   relentless: {
     id: 'relentless', name: 'Relentless',
-    text: 'Every hit of your tempo abilities deals 2 more.',
+    text: 'Every hit of your {a} abilities deals 2 more.',
     mod: { archetype: 'tempo', damageAdd: 2 },
   },
   longShadow: {
     id: 'longShadow', name: 'Long Shadow',
-    text: 'Your control abilities land 2 harder and last a turn longer.',
+    text: 'Your {a} abilities land 2 harder and last a turn longer.',
     mod: { archetype: 'control', statusMagnitudeAdd: 2, statusTurnsAdd: 1 },
   },
   coldIron: {
     id: 'coldIron', name: 'Cold Iron',
-    text: 'Your control abilities come back a turn sooner.',
+    text: 'Your {a} abilities come back a turn sooner.',
     mod: { archetype: 'control', cdAdd: -1 },
   },
 };
@@ -112,3 +117,9 @@ export const BOONS: Record<string, Boon> = {
 export const BOON_LIST: Boon[] = Object.values(BOONS);
 
 export const boonById = (id: string): Boon | undefined => BOONS[id];
+
+/** A boon's copy with its Role word filled from the one glossary (`tags.ts`), so the word
+ *  a player reads on a boon is the word the tile chips, the legend and gear all use. `{a}`
+ *  is the only placeholder; the numbers are literal, per `ABILITIES.md`. */
+export const boonText = (boon: Boon): string =>
+  boon.text.replaceAll('{a}', ROLE_LABEL[boon.mod.archetype]);

@@ -17,7 +17,7 @@
 //     timer, and a player on their second run of the week should never be held by it.
 //     The whole overlay is a tap target.
 
-import { boonById } from '../shared/boons';
+import { boonById, boonText } from '../shared/boons';
 import { enemyForDepth, isBossDepth, stratumForDepth, TUNING, type BoonView } from '../shared/sim';
 import { archetypeClass, boonGlyph } from './art';
 import type { DayStats } from './session';
@@ -158,7 +158,7 @@ export function boonScreen(
         + `data-action="pick-boon" data-index="${i}">`
         + `<div class="bi">${boonGlyph(boon.name)}</div><div class="gm">`
         + `<div class="bn">${escapeHtml(boon.name)}</div>`
-        + `<div class="bd">${escapeHtml(boon.text)}</div></div></div>`;
+        + `<div class="bd">${escapeHtml(boonText(boon))}</div></div></div>`;
     })
     .join('');
 

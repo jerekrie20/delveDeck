@@ -252,6 +252,40 @@ decision and a complaint.** Nothing here is started, and none of it should be un
 shapes below are decided in `game_design/` — this stage touches every screen at once, and
 the design folder locks screen shapes.
 
+### Stage 6c-copy — the de-jargon pass ▸ **started 2026-08-12, paused mid-stage**
+
+Owner asked to fix jargon and unclear ability/gear text — *"what the heck is a counter
+rider, no idea which abilities are basic, burst."* The decision (recorded in `ABILITIES.md`
+§ The glossary and `GEAR.md`): **the tag system is shown to players in one vocabulary** —
+Role · School · Element — taught by chips, a legend, and a click-to-open detail popup, and
+**gear may target any tag**, not just Role.
+
+**Shipped and green (298 tsx + 24 vitest + visual gate):**
+
+- [x] The one glossary — `src/shared/tags.ts`, labels + legend lines for all three axes.
+- [x] Tag chips on every ability row (`art.ts` `tagChips`, wired in `camp.ts`, styled in
+      `game.css`). Visual gate passes at all three viewports.
+- [x] `rider` → `status effect` everywhere player-facing.
+- [x] Boons speak the vocabulary — templated `{a}` filled from the glossary (`boonText`),
+      so a boon, a chip, the legend and a gear affix all say "Attack" the same way.
+- [x] `BY ARCHETYPE` → `BY ROLE`. Glossary-completeness test added.
+
+**Paused, both with a blocker — do not build blind:**
+
+- [ ] **The click-to-open detail popup.** Interactive UI; it needs a visual check to get
+      right (the preview was declined the day this paused). Ready to build the moment a
+      browser check is available. Shows: tags + what each means, the numbers, cost/cooldown
+      in words, and what each status effect does. Same for gear.
+- [ ] **Gear targets any tag** (`GEAR.md`, activated). Extend `Affix`/`AbilityMod` to key on
+      School/Element, generalise the `{a}` affixes, add rows. **A balance change — measured
+      against the probe's fork ratio**, and best sequenced WITH Stage 6b-5, not stacked
+      blind on top of it.
+- [ ] **A standalone legend**, if the popup does not already carry enough. Likely folds into
+      the popup rather than eating loadout screen height.
+
+The broader `copy.ts` extraction below is still the mechanical, low-risk move for the REST
+of the shell's strings; this pass did the ability/gear vocabulary specifically.
+
 ### What it would touch, honestly
 
 `game.css` is **3,307 lines** and every screen module reads it. There is no version of

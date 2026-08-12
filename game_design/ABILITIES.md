@@ -114,6 +114,44 @@ Endless draw includes the acting class's locked rows on top of the shared pool.
 rider comes with it — which is what keeps the number on the tile literally true, and
 the three-turn telegraph depends on that absolutely.
 
+### The player-facing names — the glossary (owner call, 2026-08-12)
+
+**The tags are shown to players, in one vocabulary.** For four stages the tag system was
+internal: the daily draw, the boons and the gear all keyed on tags a player never saw, and
+the two that did leak (`burst`, `counter`) leaked as raw enum words. The decision reverses
+that — **an ability wears its tags, a legend teaches them, and tapping it opens a detail
+popup.** What the player reads is the tag, named once, the same everywhere.
+
+The displayed word is a descriptor, not the internal enum id, because two role tags collide
+with ability names (`strike`/Strike, `guard`/Guard). The id stays; the label is the truth.
+
+| Axis | Tag (id) | Player word | Legend line |
+|---|---|---|---|
+| **Role** | `strike` | **Attack** | basic attack — cheap, always ready |
+| | `guard` | **Block** | basic block — cheap, always ready |
+| | `burst` | **Burst** | big hit — expensive, slow to recharge |
+| | `wall` | **Wall** | big block — slow to recharge |
+| | `counter` | **Counter** | hits AND blocks in one cast |
+| | `tempo` | **Tempo** | cheap and fast — spammable |
+| | `control` | **Control** | weakens the enemy |
+| **School** | `physical` | **Physical** | steel & momentum — blunted by *armored* enemies |
+| | `spell` | **Spell** | ignores armor — but *warded* enemies resist it |
+| | `hybrid` | **Hybrid** | a bit of both |
+| **Element** | `fire` | **Fire** | applies **Bleed** — it keeps burning |
+| | `frost` | **Frost** | applies **Weaken** — it hits softer next turn |
+| | `shock` | **Shock** | applies **Expose** — it takes more from everything after |
+| | `void` | **Void** | ignores block entirely |
+
+Two more player-facing wording rules fall out of this and are law from here:
+
+- **"rider" is a `status effect` to players.** The internal prose calls a left-behind status
+  a *rider*; the code identifier is already `status`; the player never sees "rider".
+- **Numbers on a tile stay literally true** (the existing rule) — the popup carries the
+  fuller explanation so the tile can stay terse, never the other way round.
+
+This glossary is `ARCHETYPE_LABEL`'s successor: **one label map for all three axes**, read
+by the tile chips, the legend, the popup and every gear affix that names a tag.
+
 Classes and specialisations weight the draw over **archetype and school** together:
 one mechanism, nine identities. Full coverage across all three schools eventually
 wants ~30 rows; v1 stays at 24 and grows by adding rows.

@@ -221,8 +221,17 @@ survives death"*) and the **Conversion** family (*"your basic attack counts as s
 are the two that need a field the fold does not have — the first reaches into settling
 and the second rewrites a row's `school`. Each is one field, and each should arrive with
 the pass that can measure what it does to the fork ratio, because both change the
-*decision* rather than a number. **School and Element affixes** wait on classes for the
-same reason: their whole point is sharpening a lean that does not exist yet.
+*decision* rather than a number.
+
+> **School and Element affixes are activated — owner call, 2026-08-12.** They waited on
+> classes *"for the same reason: their whole point is sharpening a lean that does not exist
+> yet."* Classes shipped at Stage 6b-2, so the precondition is met. **A gear affix may now
+> target ANY tag** — Role, School or Element — not only Role: *"your Fire abilities hit +3"*,
+> *"your Spell abilities cost 1 less"*, alongside the Role-targeted rows already shipped. The
+> tag it names is drawn from the one glossary in [ABILITIES.md](ABILITIES.md), so gear and the
+> ability tiles speak the same words. **This changes the decision, not just a number, so it is
+> measured against the probe's fork ratio before it is called done** — the same bar every
+> gear change carries.
 
 **The budget is the gate, and there is no second gating system.** An affix whose minimum
 the item's remaining budget cannot afford is dropped from the candidate pool rather than

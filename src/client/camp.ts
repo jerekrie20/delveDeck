@@ -16,7 +16,7 @@
 
 import { ABILITIES } from '../shared/abilities';
 import { TUNING, abilityDetail, classById, levelProgress, type LoadoutView } from '../shared/sim';
-import { abilityClass, abilityGlyph, HERO_ART } from './art';
+import { abilityClass, abilityGlyph, tagChips, HERO_ART } from './art';
 import type { EndlessDoor } from './endless';
 import { escapeHtml, fillPercent, inShell } from './shell';
 
@@ -197,7 +197,8 @@ function abilityRow(id: string, poolIndex: number, order: number | null): string
     // choice is made and it is full width, so a rider is spelled out rather than named:
     // `Weaken 4` on a 91px combat tile is scannable once you know what weaken is, and
     // meaningless the first time anybody meets it. See `statuses.ts`.
-    + `<div class="gs">${escapeHtml(abilityDetail(row.text, row.status))}</div></div>`
+    + `<div class="gs">${escapeHtml(abilityDetail(row.text, row.status))}</div>`
+    + tagChips(id) + `</div>`
     + `<div class="gtail${inBar ? ' in' : ''}">${inBar ? `&#9679; ${order}` : '&#43; ADD'}</div>`
     + '</div>';
 }
@@ -209,7 +210,8 @@ function ultimateRow(id: string, offerIndex: number, picked: boolean): string {
     + `<div class="gi"><span>${abilityGlyph(id)}</span></div><div class="gm">`
     + '<div class="gk">ULTIMATE &middot; CHARGED BY RAGE</div>'
     + `<div class="gn">${escapeHtml(row.name)}</div>`
-    + `<div class="gs">${escapeHtml(abilityDetail(row.text, row.status))}</div></div>`
+    + `<div class="gs">${escapeHtml(abilityDetail(row.text, row.status))}</div>`
+    + tagChips(id) + `</div>`
     + `<div class="gtail${picked ? ' in' : ''}">${picked ? '&#9679; TAKEN' : '&#43; TAKE'}</div>`
     + '</div>';
 }
@@ -275,7 +277,7 @@ export function loadoutScreen(
       : 'ISSUED TODAY'} &middot; TAP TO EQUIP</div></div>`
     // The Endless's rows are sorted by archetype, so the reason they are in that order is
     // worth one line — otherwise it reads as an arbitrary list that happened to group.
-    + (source === 'endless' ? '<div class="gtail">BY ARCHETYPE</div>' : '')
+    + (source === 'endless' ? '<div class="gtail">BY ROLE</div>' : '')
     + '</div>'
     + rest + '</div>'
     + '<div class="pane" style="margin-top:9px"><div class="rowitem head">'

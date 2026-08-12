@@ -25,7 +25,10 @@ import {
   ABILITIES, ARCHETYPES, EQUIPPABLE, SHARED_EQUIPPABLE, SHARED_ULTIMATES, ULTIMATES,
   type Archetype, type StatusId,
 } from '../src/shared/abilities';
-import { BOON_LIST } from '../src/shared/boons';
+import { BOON_LIST, boonText } from '../src/shared/boons';
+import {
+  ROLE_LABEL, SCHOOL_LABEL, ELEMENT_LABEL, ROLE_LEGEND, SCHOOL_LEGEND, ELEMENT_LEGEND,
+} from '../src/shared/tags';
 import { ENEMIES, bossForStratum, isBossDepth, stratumForDepth } from '../src/shared/enemies';
 
 describe('content');
@@ -398,19 +401,41 @@ await check('an element always carries a rider, and physical rows never do', () 
   }
 });
 
-await check('boons target an ARCHETYPE, never an ability id', () => {
-  // Strike may simply not have been issued, so "your basic attack" is the only
-  // phrasing that is true on every seed.
+await check('boons target an ARCHETYPE, never an ability id, and name its tag from the glossary', () => {
+  // Strike may simply not have been issued, so a boon reads by ROLE, never by ability id —
+  // the word comes from `tags.ts` via `boonText`, the same one the tile chips and gear use.
   for (const boon of BOON_LIST) {
     assert.ok(
       ARCHETYPES.includes(boon.mod.archetype),
       `${boon.id}: '${boon.mod.archetype}' is not an archetype`,
     );
+    const rendered = boonText(boon);
+    // The Role word is filled in, never left as a placeholder — the same rule the affix
+    // copy carries, for the same reason: a `{a}` on screen is a bug a player sees.
+    assert.ok(!/\{[a-z]\}/.test(rendered), `${boon.id} left a placeholder: ${rendered}`);
     for (const row of EQUIPPABLE) {
       assert.ok(
-        !boon.text.includes(row.name),
+        !rendered.includes(row.name),
         `${boon.id}'s copy names ${row.name} — it must read by role`,
       );
+    }
+  }
+});
+
+await check('every tag an ability wears resolves to a player word AND a legend line', () => {
+  // The glossary is the one vocabulary (`tags.ts`, `ABILITIES.md` § The glossary). If an
+  // ability carried a tag with no label, its chip would render blank and its popup would
+  // have a hole — silently, for whoever drew that ability. So every value in play must
+  // have both halves, and a word and its gloss are checked together because shipping one
+  // without the other is the easy half-mistake.
+  for (const row of Object.values(ABILITIES)) {
+    assert.ok(ROLE_LABEL[row.archetype], `${row.id}: role '${row.archetype}' has no label`);
+    assert.ok(ROLE_LEGEND[row.archetype], `${row.id}: role '${row.archetype}' has no legend`);
+    assert.ok(SCHOOL_LABEL[row.school], `${row.id}: school '${row.school}' has no label`);
+    assert.ok(SCHOOL_LEGEND[row.school], `${row.id}: school '${row.school}' has no legend`);
+    if (row.element) {
+      assert.ok(ELEMENT_LABEL[row.element], `${row.id}: element '${row.element}' has no label`);
+      assert.ok(ELEMENT_LEGEND[row.element], `${row.id}: element '${row.element}' has no legend`);
     }
   }
 });

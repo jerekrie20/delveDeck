@@ -1686,6 +1686,34 @@ body {
 
 .gtail.in { color: var(--ok); }
 
+/* ═══ tag chips ═══════════════════════════════════════════════════════════════
+   ABILITIES.md § The glossary, made visible. Role · School · Element, one vocabulary,
+   the same words the legend teaches and gear names. The Role chip paints from the
+   ability's `--archetype-accent`; School is neutral; each Element carries its own tint,
+   because the element is what decides the status the hit leaves behind. */
+.tchips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 7px;
+}
+.tchip {
+  font: 400 var(--px-1)/1 var(--px);
+  letter-spacing: 0.08em;
+  padding: 3px 6px 2px;
+  border-radius: 3px;
+  border: 1px solid color-mix(in srgb, var(--chip, var(--faint)) 42%, transparent);
+  background: color-mix(in srgb, var(--chip, var(--faint)) 13%, transparent);
+  color: color-mix(in srgb, var(--chip, var(--ink2)) 78%, var(--ink2));
+  white-space: nowrap;
+}
+.tchip.role { --chip: var(--archetype-accent, #e6e8ee); }
+.tchip.sch { --chip: #8b93a6; }
+.tchip.el.fire { --chip: #d98a5a; }
+.tchip.el.frost { --chip: #5b9bd5; }
+.tchip.el.shock { --chip: #d4c043; }
+.tchip.el.void { --chip: #9b7fd4; }
+
 /* ═══ camp ═════════════════════════════════════════════════════════════════════ */
 
 .camphead {
