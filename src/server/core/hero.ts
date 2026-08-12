@@ -63,7 +63,7 @@ export interface DailyAward {
  * **Called only after the one-run-per-day claim has been won**, which is what makes it
  * exactly-once: a refused second submission never reaches here, so there is no second
  * award to guard against. That is also why the Daily needs no `runId` dedupe — day plus
- * user already is the idempotency key (`TODO.md` § Stage 5).
+ * user already is the idempotency key (`BUILD_LOG.md` § Stage 5).
  *
  * **Both move in ONE mutator and therefore one transaction**, deliberately. Two writes
  * would be two conflict windows and, worse, a partial failure that banked the shards and

@@ -78,7 +78,7 @@ function xpReceipt(receipt: EndlessSummary, offline: boolean): string {
 /**
  * What this run's depth and XP **added to the collection**, named rather than counted.
  *
- * This is where *"newly unlocked"* is marked (`TODO.md` § Stage 6b-3), and it is here
+ * This is where *"newly unlocked"* is marked (`BUILD_LOG.md` § Stage 6b-3), and it is here
  * rather than on the loadout because a collection grows on a settle and nowhere else — so
  * this is the only screen that can say it at the moment it became true. The loadout answers
  * the other half of the same question by printing the gate on every row still locked.

@@ -79,7 +79,8 @@ delvedeck/
 │   └── daily-delve-v5.html   # the mockup. The truth unless a doc overrides it.
 ├── AGENTS.md             # short agent brief → points here
 ├── CODING_BIBLE.md       # this file
-├── TODO.md               # build order, in STAGES
+├── TODO.md               # what is LEFT: live gate, carried-open, unbuilt stages
+├── BUILD_LOG.md          # what SHIPPED, in STAGES — history, never tasks
 ├── devvit.json           # Devvit config: entrypoints, menu/scheduler/trigger mappings
 ├── src/
 │   ├── shared/           # PURE. No I/O, no DOM, no Math.random, no classes (§1.9).

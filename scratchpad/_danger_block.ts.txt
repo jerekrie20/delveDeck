@@ -1,0 +1,54 @@
+
+// ==== DANGER CURVE (temporary, Stage 6c-scope investigation) ======================
+// How lethal is each floor IN ISOLATION, for the endgame delver? Drop it onto floor N
+// at full HP, play exactly floor N, surface. Two signals per floor: death rate, and the
+// HP fraction left among survivors. A CLIFF (flat then a spike at 13) means the Endless's
+// own ramp must fill 1-12; a smooth curve means only the START is free, not the floors.
+{
+  const DANGER_SEEDS = 12;
+  const preLoadout = new Map<string, Loadout>();
+  const loadoutFor = (seed: number, classId: string): Loadout => {
+    const key = `deep:${seed}:${classId}`;
+    const cached = preLoadout.get(key);
+    if (cached) return cached;
+    const gear = gearedDelver(seed, GEARED_AT, 'epic');
+    const kit = {
+      ...gearedKit(endlessKitFor(seed, classId, CLASSED_AT_LEVEL,
+        collectionAt(classId, CLASSED_AT_LEVEL, CLASSED_AT_RECORD)), gear, 'epic'),
+      startDepth: DEEP_START,
+    };
+    const lo = medianLoadoutFor(seed, kit, key);
+    preLoadout.set(key, lo);
+    return lo;
+  };
+
+  console.log('\n  DANGER CURVE — endgame delver, one floor from full HP');
+  console.log('  floor   died/played   death%   mean HP left (survivors)');
+  for (let floor = 1; floor <= 20; floor++) {
+    let died = 0; let played = 0; const hpLeft: number[] = [];
+    for (let i = 0; i < DANGER_SEEDS; i++) {
+      const seed = seedForDay(`2026-10-${pad(i + 1, 2).replace(' ', '0')}`);
+      for (const row of CLASS_LIST) {
+        const gear = gearedDelver(seed, GEARED_AT, 'epic');
+        const kit = {
+          ...gearedKit(endlessKitFor(seed, row.id, CLASSED_AT_LEVEL,
+            collectionAt(row.id, CLASSED_AT_LEVEL, CLASSED_AT_RECORD)), gear, 'epic'),
+          startDepth: floor,
+        };
+        const loadout = loadoutFor(seed, row.id);
+        let frac = 0;
+        const choices = endlessGreedy(seed, kit, loadout, (view) => {
+          frac = view.maxHp === 0 ? 0 : view.hp / view.maxHp; return 'surface';
+        });
+        const run = simulateEndless(seed, choices, kit);
+        played++;
+        if (run.outcome === 'died') died++;
+        else if (run.outcome === 'surfaced') hpLeft.push(frac);
+      }
+    }
+    const pct = played === 0 ? 0 : (died / played) * 100;
+    const bar = '#'.repeat(Math.round(pct / 5));
+    console.log(`  ${pad(floor, 3)}     ${pad(`${died}/${played}`, 8)}     ` +
+      `${pad(pct.toFixed(0), 4)}%    ${pad((mean(hpLeft) * 100).toFixed(0), 3)}%   ${bar}`);
+  }
+}

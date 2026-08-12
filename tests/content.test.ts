@@ -267,7 +267,7 @@ await check('the SHARED catalog is 24 abilities + 6 ultimates across 7 archetype
 });
 
 await check('EVERY UNLOCK GATE IS REACHABLE — no row is authored out of the game', () => {
-  // Level and depth record are the two gates (`TODO.md` § Stage 6b-3). A row gated past
+  // Level and depth record are the two gates (`BUILD_LOG.md` § Stage 6b-3). A row gated past
   // the level cap would be a row nobody can ever own, which type-checks perfectly and is
   // invisible until somebody goes looking for the ability they read about.
   for (const row of [...EQUIPPABLE, ...ULTIMATES]) {

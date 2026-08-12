@@ -30,7 +30,7 @@
 // > coming. Closing it costs a round trip per turn, which is not a thing to do to a
 // > phone in a feed iframe. The exposure is bounded to *re-rolling one depth's play* and
 // > never to un-losing a haul — and at 6a there is no Endless board to carry it onto,
-// > because the board is 6b (`TODO.md` § Stage 6b). Re-read this when the board lands.
+// > because the board is 6b (`TODO.md` § Carried open). Re-read this when the board lands.
 //
 // The one thing you must not break: **every hero write from here goes through
 // `updateHero` with a mutator from `core/hero.ts`, and those mutators are pure.** A
@@ -162,7 +162,7 @@ export function newRunSeed(): number {
  * and the deferred community boss is "The Thing at Sixty".
  *
  * **It is a cap on what can be PERSISTED, not a floor in the shaft**, and it should be
- * re-read from data once gear pushes runs deep (`TODO.md` § Stage 6b).
+ * re-read from data once gear pushes runs deep (`TODO.md` § Carried open).
  */
 export const MAX_ENDLESS_DEPTH = 100;
 

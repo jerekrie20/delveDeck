@@ -187,7 +187,7 @@ await check('A RUN STARTED BEFORE THE COLLECTION IS RETIRED — v5 declines to g
   //
   // So the pool is stamped EMPTY and the run is retired by `STORED_RUN_VERSION`, which is
   // the mechanism that already exists for a run this sim can no longer replay. Owner call,
-  // 2026-08-06 (`TODO.md` § Stage 6b-3).
+  // 2026-08-06 (`BUILD_LOG.md` § Stage 6b-3).
   const snapshot = {
     gear: {}, dropCeiling: 'rare', class: 'hunter', spec: null, level: 9,
   };

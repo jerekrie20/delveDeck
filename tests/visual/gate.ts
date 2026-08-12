@@ -509,7 +509,7 @@ async function gearLeg(screens: ScreenReport[]): Promise<void> {
   // "covered".
   screens.push(measureAt('gear', 'gear (class strip, chosen + not taken)', '.cchip.on'));
 
-  // The two sinks (`TODO.md` § Stage 6b-2), played BEFORE the equip legs so the taps land
+  // The two sinks (`BUILD_LOG.md` § Stage 6b-2), played BEFORE the equip legs so the taps land
   // on a known row: index 0 of the untouched preview stash is shallow, so it is both
   // affordable and below the record ceiling — the one row where each chip is live.
   tap('[data-action="gear-reroll"][data-index="0"]');

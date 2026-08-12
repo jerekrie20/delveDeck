@@ -244,7 +244,7 @@ export interface StoredHero {
    * "ever" is a fact no run can carry — so it is a flag on the hero, exactly like
    * `unlocked`. It rides in on the v4 step rather than buying a migration of its own,
    * which is the only reason it is here at the stage that added classes: the shape change
-   * was already being paid for (`TODO.md` § Stage 6b-2).
+   * was already being paid for (`BUILD_LOG.md` § Stage 6b-2).
    *
    * A LIST rather than a count, for the same reason `unlocked` is: a count cannot say
    * which, so a count could pay twice for one boss and never for another.
@@ -416,7 +416,8 @@ const migrateV3toV4: MigrationStep = (blob) => {
  * exists for exactly this: `STORED_RUN_VERSION` moved with the change, `resumable()`
  * returns null for a run whose choice format this sim no longer replays, and the camp
  * offers a fresh shaft rather than a broken one. That costs an in-flight haul on a
- * pre-launch stage and it is the owner's call (2026-08-06), recorded in `TODO.md`.
+ * pre-launch stage and it is the owner's call (2026-08-06), recorded in
+ * `BUILD_LOG.md` § Stage 6b-3.
  *
  * The blob itself is still never dropped and the key is still never thrown away — the
  * hero, the shards, the stash, the record and the XP all survive untouched. It is one

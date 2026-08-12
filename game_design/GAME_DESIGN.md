@@ -752,27 +752,28 @@ has been re-run. Tune with `TUNING` — per-depth enemy HP growth and how fast t
 lantern strains — before touching the haul rules; the haul asymmetry is load-bearing
 (see [MODES.md](MODES.md) § The haul) and it is the wrong knob.
 
-> **⚠ OPEN as of Stage 6b-3: the gate reads 92/8 and no knob in `TUNING` reaches it.**
-> The Endless stopped drawing its nine, and a collection removes bar *variance* — a bar
-> you build is always balanced, so HP decays in chips and a fraction-of-max nerve rule
-> always fires before death. Measured on one delver two ways: **48/52 on a drawn nine,
-> 95/5 on a collection**. `rampScale` doubled moves it two points; deleting per-class HP
-> entirely leaves it at 83/17.
+> **The gate read 92/8 at 6b-3 and no knob in `TUNING` reached it, and the reason is the
+> record.** The Endless stopped drawing its nine, and a collection removes bar *variance* —
+> a bar you build is always balanced, so HP decays in chips and a fraction-of-max nerve rule
+> always fires before death. Measured on one delver two ways: **48/52 on a drawn nine, 95/5
+> on a collection**. `rampScale` doubled moves it two points; deleting per-class HP entirely
+> leaves it at 83/17. And the probe's danger curve found why a single number cannot reach it:
+> the strongest delver dies **0% of the time on floors 1–11** from full HP — the early floors
+> chip but never kill, so no HP multiplier there produces a death, only a slower one.
 >
-> The fix the design already specs is [MODES.md](MODES.md) § What actually changes as you
-> go deeper, **axis 3: traits arrive and stack** — `ethereal` eats block, and block is
-> what the robustness rests on. *"Prefer `TUNING` over adding systems"* was tried first
-> and measured; the numbers do not reach this one. Full write-up, including the second
-> honest reading (that the 60/40 target itself predates a mode where you build your own
-> bar), in `TODO.md` § GATE 5 failed a third time.
+> **Resolved 2026-08-12 (owner call): the Endless gets its own difficulty, decoupled from the
+> Daily — see [MODES.md](MODES.md) § Its own shaft.** Two levers together: a steeper ramp
+> (axis 1) and traits arriving from depth 1 (axis 3), arming the floors the curve found
+> toothless while the Daily's same floors stay bare and unchanged. The `TUNING` numbers are
+> set against the probe, targeting 60/40 for a first Endless run as well as an endgame one.
 >
-> **⚠ Stage 6b-4 narrowed it, and the narrowing matters.** The same endgame delver reads
-> **88/12 starting at depth 1 and 69/31 starting at depth 13** — in band, for the first
-> time in three stages. The twenty-six points are the twelve depths of attrition that were
-> skipped, so the finding is not *"the delver is too strong"* but **"depths 1–12 are free
-> for anyone geared"**: a run does not become a decision until twelve depths of nothing
-> have gone by. That opens a second answer beside axis 3 — that a deep start is simply how
-> a geared delver is meant to play. Both are owner calls.
+> Two readings the record carried were **not** taken, and both are recorded so they are not
+> re-argued. *Retune the 60/40 target because it predates build-your-own-bar* — no: the gate
+> is about whether the fork is a decision, and that is mode-agnostic. *Make a deep start the
+> default and leave the shallow floors alone* — no: sweep D lands in band (69/31) only because
+> its runs end in under two depths, which is the run ending, not the fork deciding, and it
+> would retire three strata of authored content. Prior write-ups in `BUILD_LOG.md` § Stage
+> 6b-3 and § Stage 6b-4.
 
 ---
 

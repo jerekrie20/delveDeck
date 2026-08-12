@@ -115,7 +115,8 @@ export interface Ability {
   //
   // `CLASSES.md` names six abilities nobody else can be issued, and **not one of them
   // was expressible in the fields above** — which is why they were dated to Stage 7 and
-  // why authoring them is a real change rather than the data edit `TODO.md` promised.
+  // why authoring them is a real change rather than the data edit `BUILD_LOG.md`
+  // § Stage 6b-3 promised.
   // Each is ONE new field, per `CODING_BIBLE` §1.6, and each says here why it could not
   // be a number on an existing one. There is no interpreter and no per-class branch:
   // `castAbility` reads these exactly like it reads `damage`.
@@ -349,7 +350,7 @@ export const ABILITIES: Record<string, Ability> = {
   // ── class-locked ×6 · ENDLESS ONLY, two per class ─────────────────────
   //
   // `CLASSES.md` § Class-locked signatures names exactly these six and no others, so six
-  // is what lands — `TODO.md`'s *"3–4 each"* was counting a list that has two each in it.
+  // is what lands — `BUILD_LOG.md`'s *"3–4 each"* was counting a list that has two each in it.
   // They are what a class's identity is made of now that draw weights are gone: the
   // signature says what your TURNS do, and these say what only you can cast.
   //

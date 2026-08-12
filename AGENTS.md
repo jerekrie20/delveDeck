@@ -10,7 +10,10 @@ score. Endless, gear and progression sit beside it — and never touch it.
 1. `game_design/GAME_DESIGN.md` — the spine. It owns the rules and delegates content
    to `ABILITIES.md`, `BESTIARY.md` and `GEAR.md`. Answers go in the folder.
 2. `CODING_BIBLE.md` — engineering law (inherited from the previous project).
-3. `TODO.md` — stages. Work top-down.
+3. `TODO.md` — what is LEFT: the live gate, the carried-open list, the unbuilt
+   stages. Work top-down.
+4. `BUILD_LOG.md` — what SHIPPED, stages M0–6b-4, with the reasoning behind every
+   call. Read it before re-arguing a decision; do not add tasks to it.
 
 **The design is LOCKED.** `game_design/` is the specification, not a sketch. Counts in
 it are caps; changing one is an owner decision that lands in the folder first, then in

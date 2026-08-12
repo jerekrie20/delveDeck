@@ -104,9 +104,49 @@ comparability story rots from the inside.
 This is where the RPG lives: the character, the gear, the talents, the story, the
 long tail. The Daily is a puzzle you solve; the Endless is a run you push.
 
+### Its own shaft — the Endless is NOT the Daily plus more depths (decided 2026-08-12)
+
+**The Endless runs its own difficulty from depth 1, decoupled from the Daily.** For four
+stages the two modes shared a shaft: an Endless run's depths 1–12 were byte-identical to the
+Daily's twelve — same enemies, same gentle ramp. **That coupling is what this decision cuts**
+(owner call, 2026-08-12), and cutting it is what turns the fork back into a decision.
+
+**What each mode is now:**
+
+- **The Daily** stays a fixed, gentle twelve-floor puzzle: `rampScale` 1, enemies plain, no
+  traits added, capped at depth 12. **None of this touches it** — the Daily is the one thing
+  that must never move, because it is the shared board a whole subreddit compares.
+- **The Endless** is its own shaft. It draws the same roster and the same four strata, but it
+  arms them, on two decoupled levers — both `TUNING` numbers, never shapes, and both carried
+  on the run's kit the way `rampScale` already is:
+  1. **A steeper scaling ramp** than the Daily's, from depth 1.
+  2. **Enemy traits that arrive from depth 1 and stack with depth**, where the Daily's same
+     floors stay bare.
+
+**Why both, and why the early floors specifically.** The probe drops the strongest delver the
+game can issue onto each floor at full HP: floors 1–11 kill it **0% of the time** — they chip
+its HP and never threaten the run. The killing lives at the two bosses (depths 12, 16) and the
+deep. So *"one more depth?"* on the early floors was never a real question — descending could
+not cost the run. The ramp alone is the weak lever (doubling it moved the ratio ~2 points, a
+bigger HP bar only slows a kill); **the traits are the lever that makes a death**, because
+`ethereal` eats block and block is what a built bar's robustness rests on. Both together are
+what arm the early floors without inflating the deep ones into a wall.
+
+**Calibrated across the whole progression, never just the endgame.** The Endless is harder
+than the Daily by intent — it is the *push* mode, and a delver who enters it chose that — but
+the numbers must land the fork ratio near 60/40 for a **first** Endless run as well as an
+endgame one. Too-harsh early floors that bounce a new delver off the mode fail the gate in the
+other direction, and `GAME_DESIGN.md` § The Stage 6 gate names both.
+
+**Farming still works, and that is not a contradiction.** A delver dropping onto an early floor
+at full HP to farm still clears it — the arming makes a *continuous descent* a gamble by
+accumulation, not each single floor a coin-flip from full. Surface after one floor and you were
+never really at risk; push ten and the attrition is real.
+
 ### Structure
 
-Depths 13+ (the Daily's twelve are the tutorial for it). The rhythm continues:
+Its own depths 1…∞, on its own curve — no longer the Daily's twelve with more below. The
+rhythm continues:
 
 ```
 every 4 depths   →  a boss, then a boon
@@ -123,9 +163,12 @@ every depth      →  the fork
 ### Where a run begins
 
 **A run does not have to start at depth 1** (owner call, 2026-08-06, built at Stage 6b-4).
-The Daily's twelve are the tutorial for this mode, and re-clearing them every time is not a
-decision — it is eight minutes of formality between a strong delver and the depth where
-their run actually starts.
+Once the Endless's early floors have their own teeth (§ Its own shaft), re-clearing them
+every run is not a decision — it is grinding depths you have already proven you can pass,
+between a strong delver and the depth where their run actually starts. The justification is
+`PROGRESSION.md`'s, not *"they are trivial"*: **you beat that boss, so you never have to beat
+it again to get past it.** What the deep start saves is the attrition of the climb, not a
+formality — the floors themselves are no longer free.
 
 **Fell a stratum boss once and every later run may begin at the depth after it.**
 
@@ -159,11 +202,15 @@ The rule that stops a deep start being strictly better than a shallow one:
   Endless's only real pressure; that trade is the balance question the probe answers, not a
   rule the design should pre-empt.
 
-> **The probe answered it, and the answer was not the one this section expected.** The same
-> endgame delver reads **88/12 starting at depth 1 and 69/31 starting at depth 13** — the
-> deep start is the *only* configuration measured in three stages that lands the fork ratio
-> inside its target band. Arriving fresh does not make the mode softer; **it deletes the
-> twelve depths in which nothing was at stake.** See `TODO.md` § GATE 5 at 6b-4.
+> **The probe answered it, and the answer diagnosed the real fault.** The same endgame delver
+> reads **88/12 starting at depth 1 and 69/31 starting at depth 13** — the deep start was the
+> *only* configuration in three stages to land the fork ratio in band. But sweep D's runs
+> average under two depths, so that band arrives because the run *ends*, not because the fork
+> became a decision. The finding underneath it is the one that matters: **depths 1–12 held
+> nothing at stake** — the probe's danger curve kills the strongest delver 0% of the time on
+> floors 1–11. The fix taken (2026-08-12) is § Its own shaft: arm those floors so the whole
+> descent is a gamble, rather than delete them by defaulting everyone to a deep start. Prior
+> write-up in `BUILD_LOG.md` § Stage 6b-4.
 
 **The fork is the mode.** After every depth: surface and bank, or descend and risk.
 Screen 13 is that decision and nothing else.
@@ -227,9 +274,18 @@ staggered so something new arrives every few depths:
 > a fraction-of-max nerve rule always fires before death, and the fork stops being a
 > decision for anyone geared. **Measured: the same delver reads 48/52 on a drawn nine and
 > 95/5 on a collection**, and `rampScale` doubled moves that by two points. No number in
-> `TUNING` answers it, because the answer is not a bigger number — it is a *different
-> question*, which is exactly what this axis is for. `ethereal` eats block, and block is
-> what the robustness rests on. See `TODO.md` § Stage 6b-3's GATE 5.
+> `TUNING` answers it *alone*, because a bigger number only slows a kill; the answer is a
+> *different question*, which is exactly what this axis is for. `ethereal` eats block, and
+> block is what the robustness rests on.
+>
+> **Resolved 2026-08-12 (owner call): both levers, and decoupled from the Daily** — see
+> § Its own shaft above. Axis 1 (a steeper ramp) and axis 3 (traits from depth 1) are the
+> two the Endless now runs on, arming the early floors the probe found toothless. The other
+> reading the record carried — *"a deep start is simply how a geared delver plays, so leave
+> the shallow floors alone"* — was **not** taken: it retires three strata of authored content
+> and shortens the mode to two-fight runs, and the owner's aim is a gradual build, not a wall
+> at 13. The deep start stays, but as a way to *skip* the early floors you have earned past,
+> not as the only way the mode is playable. Prior write-up in `BUILD_LOG.md` § Stage 6b-3.
 
 ### A run survives everything except a decision
 

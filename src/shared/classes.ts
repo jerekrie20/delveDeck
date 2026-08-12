@@ -32,7 +32,7 @@
 //     `Ability.class`, which is a stronger claim and a smaller one.
 //
 // The three per-class HP rows and all three signatures are unchanged from 6b-2 and are
-// still the numbers GATE 5 was retuned to. See `TODO.md` § Stage 6b-3 for what the gate
+// still the numbers GATE 5 was retuned to. See `BUILD_LOG.md` § Stage 6b-3 for what the gate
 // said once the draw came out.
 
 import type { Archetype } from './abilities';

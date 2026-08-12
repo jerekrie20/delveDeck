@@ -1,6 +1,6 @@
 // Settling an Endless run at most once, and replaying the award to a duplicate.
 //
-// Ported from `../infinite-delve` and **deliberately held back until now** (`TODO.md`
+// Ported from `../infinite-delve` and **deliberately held back until now** (`BUILD_LOG.md`
 // § Stage 5): it is keyed on a client-stamped `runId`, and the Daily has none — *day +
 // user* is already the Daily's idempotency key and `claimOnce` already enforces it
 // atomically. Stage 6a is the first mode with unlimited attempts, i.e. the first one

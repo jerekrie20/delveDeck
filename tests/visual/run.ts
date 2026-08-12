@@ -40,7 +40,7 @@ const VIEWPORTS = [
  * Findings that are real, understood, written down, and deliberately not fixed yet.
  *
  * **This list is the only thing standing between a useful gate and an ignored one.**
- * Both entries below are pre-existing and both have a fix recorded in `TODO.md` that
+ * The list is empty today. Both original entries had a fix recorded that
  * is deliberately not a CSS one-liner — one of them had its obvious fix tried and
  * reverted for being worse than the bug. Without this list the gate would fail on
  * every run forever, and a gate that always fails teaches people to stop reading it.
