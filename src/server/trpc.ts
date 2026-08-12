@@ -4,7 +4,7 @@ import { transformer } from '../shared/transformer';
 import type { Context } from './context';
 import { context, reddit } from '@devvit/web/server';
 import {
-  dayKey, seedForDay, CLASS_LIST, DEFAULT_CLASS_ID, GEAR_SLOTS, MAX_RUN_CHOICES, TUNING,
+  dayKey, seedForDay, CLASS_LIST, GEAR_SLOTS, MAX_RUN_CHOICES, MAX_START_DEPTH, TUNING,
   type GearSlot,
 } from '../shared/sim';
 import { submitRun, getBoard, getRun, hasSubmitted, isSubmittableDay } from './core/run';
@@ -288,10 +288,14 @@ export const appRouter = t.router({
     state: publicProcedure.query(async () => {
       const userId = currentUserId();
       // A logged-out reader gets the shape a brand-new delver has, not a narrower one:
-      // `class: null` with the default unlocked is exactly true of them, and it is what
-      // lets the door's class prompt render rather than crash on a missing field.
+      // `class: null` with every class open is exactly true of them, and it is what lets
+      // the door's class prompt render rather than crash on a missing field. `[1]` is the
+      // only start such a delver has, for the same reason — they have felled nothing.
       if (!userId) {
-        return { run: null, best: 0, shards: 0, class: null, unlocked: [DEFAULT_CLASS_ID], level: 1 };
+        return {
+          run: null, best: 0, shards: 0, class: null,
+          unlocked: CLASS_LIST.map((row) => row.id), level: 1, startDepths: [1],
+        };
       }
       return await readEndlessState(redisHeroClient, userId, Date.now());
     }),
@@ -301,13 +305,18 @@ export const appRouter = t.router({
     start: publicProcedure
       .input(z.object({
         runId: z.string().min(1).max(MAX_RUN_ID_LENGTH).regex(/^[A-Za-z0-9_-]+$/),
+        // **Capped at the model it guards**, like every input here: there are four stratum
+        // bosses, so the deepest start any delver can ever have earned is one past the
+        // last of them. The schema bounds the shape; `snapshotOfHero` is what decides
+        // whether THIS delver has actually opened the one they asked for.
+        startDepth: z.number().int().min(1).max(MAX_START_DEPTH).default(1),
       }))
       .mutation(async ({ input }) => {
         const now = Date.now();
         const caller = await endlessCaller(now);
         if (!caller.ok) return { ok: false as const, error: caller.error };
         return await startEndlessRun(
-          redisHeroClient, caller.userId, input.runId, newRunSeed(), now,
+          redisHeroClient, caller.userId, input.runId, newRunSeed(), now, input.startDepth,
         );
       }),
 

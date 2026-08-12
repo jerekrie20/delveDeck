@@ -81,7 +81,10 @@ interface Run {
   readonly state: SimState;
   readonly depthMarks: number[];
   readonly depthBands: DepthBand[];
+  /** How many depths were cleared. */
   cleared: number;
+  /** The deepest depth actually cleared, absolute — see where it is written. */
+  clearedTo: number;
 }
 
 /**
@@ -159,6 +162,9 @@ function runDepths(
       cds: [],
       energy: 0,
       energySpent: 0,
+      blockHeld: false,
+      nextDepthEnergy: 0,
+      lastSpell: null,
       rage: 0,
       boons: [],
       heroStatuses: [],
@@ -171,11 +177,18 @@ function runDepths(
     depthMarks: [],
     depthBands: Array.from({ length: TUNING.depths }, () => 'none' as DepthBand),
     cleared: 0,
+    clearedTo: 0,
   };
 
   let step = readLoadout(run);
 
-  for (let depth = 1; step.k === 'go' && (mode === 'endless' || depth <= TUNING.depths); depth++) {
+  // **Where the run begins.** 1 in the Daily forever (`issuedKitForDay`), and in the
+  // Endless whatever the run's snapshot froze — `MODES.md` § Where a run begins. Everything
+  // downstream keys on the ABSOLUTE depth, so a run that starts at 13 meets depth 13's
+  // enemy, ramp and loot table without a single other line knowing it started late.
+  const from = Math.max(1, Math.floor(worn.startDepth));
+  const floor = mode === 'endless' ? Infinity : TUNING.depths;
+  for (let depth = from; step.k === 'go' && depth <= floor; depth++) {
     const enc = beginDepth(run, depth);
     step = fightDepth(run, enc, depth);
     if (step.k !== 'go') break;
@@ -187,6 +200,12 @@ function runDepths(
     }
 
     run.cleared++;
+    // **A COUNT and a DEPTH are two different numbers once a run can start deep**, and
+    // conflating them is how a deep start would quietly under-report a record. `cleared`
+    // stays the count — the score and the XP are both priced off it — and this is the
+    // deepest rung actually cleared, which is what `records.endlessBest` means and always
+    // has. In the Daily they are identical, which is what keeps the Daily byte-identical.
+    run.clearedTo = depth;
     run.state.shards += TUNING.shardsPerDepth;
     if (enc.template.bossOf) {
       run.state.facts.bossesFelled++;
@@ -267,6 +286,12 @@ function beginDepth(run: Run, depth: number): Encounter {
   // Warden who over-blocked the last hit of depth 9 would walk into depth 10 already
   // guarded — which is the "fresh puzzle" rule broken by a class, quietly.
   state.hero.block = 0;
+  // …and Hold the Line's pending carry goes with it, for exactly the same reason: a
+  // block held over the kill that ended depth 9 must not open depth 10 still standing.
+  state.blockHeld = false;
+  // Runic Echo remembers within a depth only. `nextDepthEnergy` deliberately does NOT
+  // reset here — Second Wind's whole point is that it crosses this line.
+  state.lastSpell = null;
   state.log.push(
     `— depth ${depth} (${stratumForDepth(depth)}): ${enc.template.name} (${enc.hp} hp)`,
   );
@@ -304,8 +329,21 @@ function fightDepth(run: Run, enc: Encounter, depth: number): Step {
     // you have a quarter, so the decision is still about THIS turn. See
     // `ClassSignature.blockCarryPct` for why "unspent" is what `CLASSES.md`'s "above your
     // max" resolves to in a model with no block maximum.
-    state.hero.block = Math.floor(state.hero.block * state.kit.blockCarryPct / 100);
+    //
+    // **HOLD THE LINE is the one thing that beats both of them**, and it is a suspension
+    // rather than a bigger fraction: the block you were already standing behind survives
+    // this one clear in full, then the rule comes straight back.
+    state.hero.block = state.blockHeld
+      ? state.hero.block
+      : Math.floor(state.hero.block * state.kit.blockCarryPct / 100);
+    state.blockHeld = false;
     state.energy = state.kit.maxEnergy;
+    // SECOND WIND lands here, on the FIRST turn of a depth and nowhere else — the depth
+    // after the kill that earned it. Taken to 0 as it is spent, so it pays once.
+    if (turn === 0 && state.nextDepthEnergy > 0) {
+      state.energy += state.nextDepthEnergy;
+      state.nextDepthEnergy = 0;
+    }
     state.energySpent = 0;
     // The ADEPT ticks further on the turn after an idle one. Clamped at 0 like any other
     // tick, so a long cooldown banked over two empty turns simply arrives ready.
@@ -522,13 +560,14 @@ function markBand(run: Run, depth: number, band: DepthBand): void {
 function settle(run: Run, step: Step): RunResult {
   const { state, depthMarks, depthBands } = run;
   if (step.k === 'invalid') {
-    return finish(state, 'invalid', 0, depthMarks, depthBands, { badChoiceIndex: run.index - 1 });
+    return finish(state, 'invalid', 0, 0, depthMarks, depthBands,
+      { badChoiceIndex: run.index - 1 });
   }
   if (step.k === 'halt') {
-    return finish(state, step.outcome, run.cleared, depthMarks, depthBands,
+    return finish(state, step.outcome, run.cleared, run.clearedTo, depthMarks, depthBands,
       step.view === undefined ? {} : { view: step.view });
   }
-  return finish(state, 'won', run.cleared, depthMarks, depthBands);
+  return finish(state, 'won', run.cleared, run.clearedTo, depthMarks, depthBands);
 }
 // ---- the public surface ---------------------------------------------------------
 //
@@ -543,16 +582,22 @@ function settle(run: Run, step: Step): RunResult {
 
 export { TUNING, MAX_RUN_CHOICES } from './tuning';
 export {
-  dayKey, depthRng, endlessKitFor, endlessPoolFor, issuedKitForDay, issuedPoolForDay, seedForDay,
+  dayKey, depthRng, endlessKitFor, issuedKitForDay, issuedPoolForDay, seedForDay,
 } from './daily';
-// Classes (Stage 6b-2). Endless-only and structurally so: the weights reach the draw
-// through `endlessPoolFor`, the signature reaches the turn loop through three numeric kit
-// fields, and neither has a door into `simulateRun`.
+// Classes (Stage 6b-2). Endless-only and structurally so: the signature reaches the turn
+// loop through three numeric kit fields, the locked rows reach it through `Ability.class`,
+// and neither has a door into `simulateRun`.
 export {
-  CLASSES, CLASS_LIST, DEFAULT_CLASS_ID, classById, classHpBonus, classSignature,
-  classUnlockFlag, classWeightFor,
+  CLASSES, CLASS_LIST, DEFAULT_CLASS_ID, NO_CLASS, classById, classHpBonus, classSignature,
+  classUnlockFlag,
 } from './classes';
 export type { ClassSignature, DelverClass } from './classes';
+// The collection (Stage 6b-3) — what the Endless has INSTEAD of a draw. The Daily cannot
+// reach any of it: `issuedPoolForDay` takes one argument and reads `SHARED_EQUIPPABLE`.
+export {
+  abilitiesOpenedAt, abilityUnlockFlag, collectionAt, collectionFor, gateOf, isOpenAt,
+} from './collection';
+export type { AbilityGate, Collection } from './collection';
 export { damageRampAt, difficultyAt, enemyForDepth, litSlotsAt } from './encounter';
 export { effectiveAbility, resolveIntent } from './combat';
 // The status glossary (Stage 6b-2). Six keywords the catalog prints on a dozen tiles and
@@ -584,7 +629,10 @@ export {
 // boon and descent — that sit BETWEEN depths and so have no `CombatView` to read it
 // off. Depth → stratum is the same banding the roster and the share grid use, so it
 // resolves here rather than becoming a second copy in `client/`.
-export { isBossDepth, stratumForDepth } from './enemies';
+// `startDepthsFor` (Stage 6b-4) is here rather than in `collection.ts` because the whole
+// of the rule is knowledge about the SHAFT — which boss stands where. Endless-only: the
+// Daily's kit sets `startDepth: 1` and nothing can hand it another number.
+export { MAX_START_DEPTH, isBossDepth, startDepthsFor, stratumForDepth } from './enemies';
 export type { Intent, IntentKind, Stratum } from './enemies';
 // The share grid: one alphabet and one layout, rendered twice — as squares in the app
 // and as characters in a comment. Shared because the preview a player taps POST on and

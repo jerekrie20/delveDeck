@@ -106,6 +106,19 @@ export interface IssuedKit {
    *  affix tiers are gated on depth record). Resolved once at run start and carried
    *  here, so nothing mid-run can move it and the Daily never reads it at all. */
   dropCeiling: Rarity;
+  /**
+   * The depth this run BEGINS at (Stage 6b-4). **1 in the Daily, forever.**
+   *
+   * `MODES.md` § Where a run begins: fell a stratum boss once and later runs may start
+   * after it, so a strong delver stops re-clearing eight formalities. It is a field on the
+   * kit for the same reason `rampScale` and `dropCeiling` are — the Daily's kit sets it to
+   * 1 and there is no argument to `simulateRun` through which anything else could arrive,
+   * which is unreachable rather than forbidden.
+   *
+   * It is validated server-side against the hero's own `bossKills` and frozen on the run's
+   * snapshot, because it is part of what a run was played under.
+   */
+  startDepth: number;
 
   // ---- the class signatures (Stage 6b-2) — Endless only, 0 in the Daily forever -----
   //
@@ -279,8 +292,22 @@ export interface RunFacts {
 
 export interface RunResult {
   outcome: RunOutcome;
-  /** Depths fully cleared. The headline number. */
+  /** Depths fully cleared — a COUNT. The headline number, and what the score and the XP
+   *  are both priced off. */
   cleared: number;
+  /**
+   * The deepest depth actually cleared — a DEPTH. 0 if none.
+   *
+   * The two split at Stage 6b-4, when an Endless run gained the ability to start below
+   * depth 1 (`MODES.md` § Where a run begins): a run that starts at 13 and clears three
+   * has `cleared: 3` and `clearedTo: 15`. **`records.endlessBest` reads THIS**, because
+   * *"the deepest depth ever cleared"* is what that record has always meant and what the
+   * gear rarity gates hang off.
+   *
+   * In the Daily the two are always identical, which is what keeps the Daily's score,
+   * share grid and leaderboard byte-identical across the change.
+   */
+  clearedTo: number;
   hp: number;
   score: number;
   /** The equipped bar — replaces the old `deck`. */
@@ -353,6 +380,30 @@ export interface SimState {
    *  model since Stage 1) could restore a turn to full after spending, and a signature
    *  that mis-fires on the one row it was never tested against is the quiet kind of bug. */
   energySpent: number;
+
+  // ---- what the class-locked rows remember (Stage 6b-3) --------------------------
+  //
+  // Three pieces of bookkeeping, each read by exactly one ability. They sit on the state
+  // rather than in `combat.ts` because every one of them crosses a boundary the cast
+  // itself does not: a turn, a depth, or the gap between two casts. All three are inert
+  // in the Daily — no shared row sets any of them, so a Daily run carries `false`, `0`
+  // and `null` from the first choice to the last.
+
+  /** **Hold the Line.** True when the block standing now must survive the next turn's
+   *  clear untouched. Read and reset at the top of the turn in `sim.ts`, which is the
+   *  only place block is cleared — and cleared again at a depth boundary, because a
+   *  depth boundary is not a turn boundary (the same trap the Warden's carry found). */
+  blockHeld: boolean;
+  /** **Second Wind.** Energy owed to the FIRST turn of the next depth. It survives the
+   *  depth boundary on purpose: that is the whole reason the field exists, since a kill
+   *  ends the depth and energy refunded into it is energy nobody spends. */
+  nextDepthEnergy: number;
+  /** **Runic Echo.** The last damaging `spell` row cast THIS depth, by id. Null at the
+   *  top of every depth, for the same reason cooldowns and rage are: a depth is a fresh
+   *  puzzle, and an echo carried down from the last one would be the first cast of a
+   *  fight paying off a decision made in a different fight. */
+  lastSpell: string | null;
+
   rage: number;
   boons: string[];
   heroStatuses: StatusApplication[];

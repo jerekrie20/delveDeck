@@ -199,10 +199,25 @@ including why two of screen 04's labels had to generalise.
 
 **Classes are Endless-only.** Warden, Hunter and Adept, each evolving into one of two
 specialisations — nine identities built from three authored kits, because a class is
-a set of draw weights plus one numeric signature rather than a separate ability list.
-They never reach `simulateRun`. If class should ever affect the Daily, it must arrive
-as **a choice inside the verified list** — everyone offered all classes — and never
-as account state, or runs stop being comparable and the two-argument signature breaks.
+**two abilities nobody else can cast plus one numeric signature** rather than a separate
+ability list. They never reach `simulateRun`. If class should ever affect the Daily, it
+must arrive as **a choice inside the verified list** — everyone offered all classes — and
+never as account state, or runs stop being comparable and the two-argument signature
+breaks.
+
+**And the Endless does not DRAW** (owner correction, 2026-08-06, built at Stage 6b-3). The
+Daily issues nine of twenty-four from the seed; the Endless is **class and collection
+based** — you own abilities, they open on level and depth record, and the bar is built
+from everything you have. That is the load-bearing difference between the two modes and it
+is why the Daily's draw takes one argument and has no sibling. Full spec in
+[CLASSES.md](CLASSES.md).
+
+**The class choice is made once and is permanent** (2026-08-06, Stage 6b-4), and all three
+are available from level 1. Nothing may write it except the player answering the prompt —
+a run for a delver who has not chosen is refused rather than defaulted, because a class
+stamped on somebody's behalf is a permanent decision they never made. **And an Endless run
+does not have to start at depth 1**: fell a stratum boss once and later runs may begin
+after it, earning only what they actually play ([MODES.md](MODES.md) § Where a run begins).
 
 **Abilities carry a school and an element** — `physical`/`spell`/`hybrid`, and
 fire/frost/shock/void. A school never multiplies a number; it decides which enemy
@@ -736,6 +751,28 @@ to Endless scaling, the lantern strain or the haul rules is not done until the p
 has been re-run. Tune with `TUNING` — per-depth enemy HP growth and how fast the
 lantern strains — before touching the haul rules; the haul asymmetry is load-bearing
 (see [MODES.md](MODES.md) § The haul) and it is the wrong knob.
+
+> **⚠ OPEN as of Stage 6b-3: the gate reads 92/8 and no knob in `TUNING` reaches it.**
+> The Endless stopped drawing its nine, and a collection removes bar *variance* — a bar
+> you build is always balanced, so HP decays in chips and a fraction-of-max nerve rule
+> always fires before death. Measured on one delver two ways: **48/52 on a drawn nine,
+> 95/5 on a collection**. `rampScale` doubled moves it two points; deleting per-class HP
+> entirely leaves it at 83/17.
+>
+> The fix the design already specs is [MODES.md](MODES.md) § What actually changes as you
+> go deeper, **axis 3: traits arrive and stack** — `ethereal` eats block, and block is
+> what the robustness rests on. *"Prefer `TUNING` over adding systems"* was tried first
+> and measured; the numbers do not reach this one. Full write-up, including the second
+> honest reading (that the 60/40 target itself predates a mode where you build your own
+> bar), in `TODO.md` § GATE 5 failed a third time.
+>
+> **⚠ Stage 6b-4 narrowed it, and the narrowing matters.** The same endgame delver reads
+> **88/12 starting at depth 1 and 69/31 starting at depth 13** — in band, for the first
+> time in three stages. The twenty-six points are the twelve depths of attrition that were
+> skipped, so the finding is not *"the delver is too strong"* but **"depths 1–12 are free
+> for anyone geared"**: a run does not become a decision until twelve depths of nothing
+> have gone by. That opens a second answer beside axis 3 — that a deep start is simply how
+> a geared delver is meant to play. Both are owner calls.
 
 ---
 

@@ -114,6 +114,57 @@ every 10 depths  →  a MILESTONE
 every depth      →  the fork
 ```
 
+- **Loadout — from your COLLECTION, not from a draw** (owner correction 2026-08-06, built
+  at Stage 6b-3). The Daily issues nine by seed; the Endless issues nothing. You own
+  abilities — they open on level and depth record — and you pick 3–5 plus one ultimate out
+  of everything you have. That is the load-bearing difference between the two modes, and
+  it is why the Daily's draw has no sibling function. Spec in [CLASSES.md](CLASSES.md).
+
+### Where a run begins
+
+**A run does not have to start at depth 1** (owner call, 2026-08-06, built at Stage 6b-4).
+The Daily's twelve are the tutorial for this mode, and re-clearing them every time is not a
+decision — it is eight minutes of formality between a strong delver and the depth where
+their run actually starts.
+
+**Fell a stratum boss once and every later run may begin at the depth after it.**
+
+| Boss felled | Opens a start at |
+|---|---|
+| the warrens boss (depth 4) | **5** |
+| the hold boss (depth 8) | **9** |
+| the crypt boss (depth 12) | **13** |
+| the abyss boss (depth 16) | **17** |
+
+Depth 1 is always available. **There are four bosses and therefore five start points,
+forever** — the abyss boss recurs every fourth depth but is one row, so it opens one start.
+That bound is deliberate: a start depth is a short list you scan, never a number you dial.
+
+This is [PROGRESSION.md](PROGRESSION.md)'s *"milestones are a record, not a run"* applied one
+system over — **you have beaten that boss, so you never have to beat it again to get past
+it** — and it rides on `hero.bossKills`, which has stored exactly this since v4.
+
+#### You only earn what you play
+
+The rule that stops a deep start being strictly better than a shallow one:
+
+- **Shards, XP and gear all count only for depths you actually cleared**, priced at the
+  depth they really were. Start at 13 and the loot is depth-13 loot; the twelve you skipped
+  simply do not pay.
+- **A deep start buys TIME, not reward.** That is the whole of it, and it is why the choice
+  stays a choice: the long way pays more in total, the short way gets you to the interesting
+  part.
+- **A deep start CAN set your depth record** — depth N is depth N, however you arrived.
+  What it costs is that you arrive fresh rather than chewed up, and attrition is the
+  Endless's only real pressure; that trade is the balance question the probe answers, not a
+  rule the design should pre-empt.
+
+> **The probe answered it, and the answer was not the one this section expected.** The same
+> endgame delver reads **88/12 starting at depth 1 and 69/31 starting at depth 13** — the
+> deep start is the *only* configuration measured in three stages that lands the fork ratio
+> inside its target band. Arriving fresh does not make the mode softer; **it deletes the
+> twelve depths in which nothing was at stake.** See `TODO.md` § GATE 5 at 6b-4.
+
 **The fork is the mode.** After every depth: surface and bank, or descend and risk.
 Screen 13 is that decision and nothing else.
 
@@ -170,6 +221,15 @@ staggered so something new arrives every few depths:
    puzzle from either alone.
 4. **The cast changes.** The Abyss roster, then wanderers at rising frequency —
    things that belong to no stratum, which is canon rule 4 made mechanical.
+
+> **Axis 3 stopped being a nice-to-have at Stage 6b-3, and the probe is why.** With a
+> collection, a delver can always build a bar that blunts damage — so HP decays smoothly,
+> a fraction-of-max nerve rule always fires before death, and the fork stops being a
+> decision for anyone geared. **Measured: the same delver reads 48/52 on a drawn nine and
+> 95/5 on a collection**, and `rampScale` doubled moves that by two points. No number in
+> `TUNING` answers it, because the answer is not a bigger number — it is a *different
+> question*, which is exactly what this axis is for. `ethereal` eats block, and block is
+> what the robustness rests on. See `TODO.md` § Stage 6b-3's GATE 5.
 
 ### A run survives everything except a decision
 

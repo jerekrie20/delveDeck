@@ -28,9 +28,9 @@ import {
   type EquippedGear, type GearSlot, type GearStats, type Item, type Rarity,
 } from '../shared/sim';
 import { createRng } from '../shared/rng';
-import { classStrip, commitClass, sessionClassId, type DelverView } from './delver';
+import { classStrip, sessionClassId, type DelverView } from './delver';
 import {
-  ascendGear, equipGear, loadGearState, rerollGear, salvageGear, setDelverClass, unequipGear,
+  ascendGear, equipGear, loadGearState, rerollGear, salvageGear, unequipGear,
 } from './session';
 import { escapeHtml, inShell } from './shell';
 
@@ -92,9 +92,9 @@ function offlineStash(): GearView {
   // ever reach the happy path is a preview the visual gate cannot measure the off state
   // through — and the off state carries the longer string.
   //
-  // **Level 7 for the same reason**, and it is not a round number by accident: it opens
-  // the Hunter and leaves the Adept locked, so the strip carries a takeable chip and a
-  // locked one at once. All three chip states, on the screen the gate measures.
+  // **Level 7 is still deliberate**, though it no longer decides which classes are open —
+  // all three do from Stage 6b-4. It keeps the stat block and the XP bar off their zero
+  // states, which is where a number is widest.
   //
   // The class is **whatever this session chose at the Endless door**, not a hardcoded
   // Warden: offline there is no server to agree with, so `delver.ts` holds the one answer
@@ -103,7 +103,7 @@ function offlineStash(): GearView {
   return {
     gear: {}, stash, shards: 640, capacity: 24, ceiling: 'epic',
     class: sessionClassId(),
-    unlocked: CLASS_LIST.filter((row) => row.unlockLevel <= 7).map((row) => row.id),
+    unlocked: CLASS_LIST.map((row) => row.id),
     level: 7,
   };
 }
@@ -209,24 +209,11 @@ export function gearAction(action: string, index: number, rerender: () => void):
       }
       return true;
     }
-    case 'gear-class': switchClass(index, rerender); return true;
+    // **There is deliberately no `gear-class` here.** Screen 04's class strip was a switch
+    // until Stage 6b-4 and is read-only now: the choice is permanent (`CLASSES.md` §
+    // Choosing a class), so a control here could only ever produce a refusal.
     default: return false;
   }
-}
-
-/** Switching class from the strip. Its own function rather than a case body because the
- *  dispatch above is at its 80-line limit, and a switch arm is the wrong place to grow. */
-function switchClass(index: number, rerender: () => void): void {
-  const row = CLASS_LIST[index];
-  if (!row || !view) return;
-  if (!view.unlocked.includes(row.id) || view.class === row.id) return;
-  void write(() => setDelverClass(row.id), (state) => {
-    state.class = row.id;
-    // Offline only — `write` runs the local fold in no other case. `delver.ts` holds the
-    // session's one answer, so the Endless door does not then ask a question this screen
-    // has already answered.
-    commitClass(row.id);
-  }, rerender);
 }
 
 /** Whether the banked total covers a price. Checked here only so a tap that cannot

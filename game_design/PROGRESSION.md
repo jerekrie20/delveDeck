@@ -147,15 +147,18 @@ That is all. No level-gated content the Daily can see, ever.
 
 Three base classes (Warden · Hunter · Adept), each evolving at a level gate into one
 of two specialisations — **nine identities from three authored kits**, because a
-class is a set of draw weights plus one numeric signature, not a separate ability
-list. Schools (`physical`/`spell`/`hybrid`) and elements (fire/frost/shock/void) live
-there too.
+class is **two locked rows plus one numeric signature**, not a separate ability list.
+Schools (`physical`/`spell`/`hybrid`) and elements (fire/frost/shock/void) live there
+too.
+
+*(Draw weights were the other half of that sentence until Stage 6b-3 and are deleted with
+the Endless draw — see [CLASSES.md](CLASSES.md) § the override.)*
 
 What belongs *here* is how they interact with levelling:
 
 | | |
 |---|---|
-| **Hunter and Adept** | Unlocked by level |
+| **Warden, Hunter and Adept** | **Nothing — all three are starting classes** (6b-4). The choice between them is permanent, so it is made once on a first delve with all three in front of you. |
 | **Evolution** | A level gate, never a quest — this game has no quests |
 | **Re-specialising** | Costs shards, always available. Make the *choice* meaningful, not the *lock-in*. |
 | **A spec's talent branch** | Opens on evolution |
@@ -199,7 +202,8 @@ threshold, so the unlock rule can change without stranding anyone.
 
 | Unlock | Gated by |
 |---|---|
-| Hunter, Adept | Level — **5 and 10**, decided at Stage 6b-2 and living in the class rows |
+| **Abilities** | **Level *and* Endless depth record** — the collection, Stage 6b-3 |
+| **A deeper START DEPTH** | **Felling a stratum boss** — Stage 6b-4, see below |
 | Specialisations | Level |
 | Relic slot | Endless depth record |
 | **Gear rarity tiers** (`epic`, `legendary`) | **Endless depth record** — see the endgame below |
@@ -211,8 +215,28 @@ threshold, so the unlock rule can change without stranding anyone.
 **The lantern is not on this list.** It is a found gear slot, improved by ascending
 it like any other item — see [GEAR.md](GEAR.md).
 
+**Classes came OFF this list at Stage 6b-4.** Warden, Hunter and Adept are three *starting*
+classes now — all three open at level 1, none of them is unlocked by anything — because the
+choice between them became permanent, and a permanent choice made at level 1 against a
+roster of one is a stamp rather than a decision. Full reasoning, and what the reversal
+costs, in [CLASSES.md](CLASSES.md) § Choosing a class.
+
+**A deeper start depth joined it in the same stage**, and it is the first unlock in the game
+gated on something you *did* rather than on a number you accumulated: fell a stratum boss
+once and every later run may begin at the depth after it. See [MODES.md](MODES.md) § Where a
+run begins.
+
+**Abilities joined the list at Stage 6b-3**, and they are the reason it matters that
+these are flags. The Endless stopped drawing a nine and became **class and collection
+based** ([CLASSES.md](CLASSES.md) § the override): you own abilities, and you build a bar
+from what you own. Thirty gates is thirty numbers the probe may yet move, so a computed
+threshold would mean a retune could take a row back off somebody mid-delve. A flag cannot.
+
 **Nothing on this list touches the Daily.** Read that list again with that in mind —
-it is the test every future unlock has to pass.
+it is the test every future unlock has to pass. The collection is the sharpest case of it
+and the one the wall was built for: a delver's abilities are account state, and the day's
+nine are drawn from the shared rows by seed with no argument through which a collection
+could arrive.
 
 ---
 
@@ -405,6 +429,58 @@ issued at the HP it was fighting on. A test sweeps that identity rather than tru
 **`bossKills` rode along rather than buying its own migration.** Its shape was settled and
 only its contents were pending, which is the "ship a key empty" rule — but a key that
 arrives on a step somebody else is already paying for is strictly cheaper than a v5.
+
+### Version 5 (Stage 6b-3) — the collection, frozen
+
+| Key | v5 value | Why now |
+|---|---|---|
+| `run.snapshot.pool` · `.ultimates` | the ability ids the bar was chosen FROM | 6b-3 is the stage where that list stopped being derivable |
+| `unlocked` | gains `ability:{id}` flags | the collection is flags like every other unlock |
+
+**`load.bar` stores INDICES INTO THE POOL, and this is the trap the whole version exists
+to close.** Until 6b-3 that was safe, because the pool came off a seed and a seed does not
+change. It comes off the delver's *collection* now, and a collection grows: level up
+mid-run, or set a depth record mid-run, and a pool rebuilt from current state would slot a
+newly-earned row into the order — so `{k:'load', bar:[2,5,7]}` would replay as three
+**different abilities**. Silently. In the Endless only. For exactly the players who were
+doing well enough to unlock something.
+
+**Storing the class it was derived from is not enough**, and that is the thing to
+understand: the class is stable, the collection is not. So the list itself is frozen and
+`kitForRun` reads it verbatim.
+
+> **The v4 → v5 step is the first one in the table that cannot tell the truth about an
+> in-progress run, and it declines rather than guessing.** Every step before it back-filled
+> a value whose only possible history was the one being written — a v1 hero had never held
+> a run, a v2 hero had never worn anything, a v3 run was genuinely played classless. A v4
+> run was played on nine rows drawn through `endlessPoolFor` and a table of class draw
+> weights, **both deleted at 6b-3 on the owner's instruction**, so the pool is not
+> derivable from anything left in the codebase.
+>
+> So the run is **retired instead of resumed**: the pool stamps empty, `STORED_RUN_VERSION`
+> moved with the change, and `resumable()` refuses it before anything reads that empty
+> list. **The account is untouched** — shards, XP, stash, record and flags all come
+> through, and the blob is never dropped. It is one run that stops being resumable, never a
+> delver. Owner call, 2026-08-06, and the cost is an in-flight haul on a pre-launch stage.
+
+### Version 6 (Stage 6b-4) — a class you actually chose, and where a run begins
+
+| Key | v6 value | Why now |
+|---|---|---|
+| `class` | **cleared to `null`, once, for everybody** | The choice became permanent, and nobody has made it under that rule |
+| `run.snapshot.startDepth` | `1` | 6b-4 is the stage where a run can begin somewhere else |
+
+**Clearing a field is something no earlier step has done, so it needs its reasoning
+written down.** Every migration in this table until now back-filled a value whose only
+possible history was the one being written. This one *removes* a value — and it is the same
+principle rather than an exception: the class on a v5 hero was either stamped by
+`ensureClass` without anyone being asked, or picked under a rule that let you change your
+mind next week. **Neither is the decision the field now means**, so carrying it forward
+would be recording a permanent answer to a question nobody was asked. Everybody chooses.
+
+Nothing else moves: shards, XP, stash, gear, records, `bossKills` and the unlock flags all
+come through, and **an in-progress run is untouched** — its snapshot froze its own class, so
+it resumes exactly as it was and never reads the hero's field.
 
 ### The CAS contract, and the trap under it
 

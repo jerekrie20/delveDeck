@@ -20,7 +20,7 @@ import {
   bareSnapshot, newStoredHero, type StoredEndlessRun,
 } from '../src/server/core/heroSchema';
 import {
-  ascendStashItem, bankDailyRun, endEndlessRun, ensureClass, equipFromStash, rerollStashItem,
+  ascendStashItem, bankDailyRun, classForRun, endEndlessRun, equipFromStash, rerollStashItem,
   hasSeenTutorial, markTutorialSeen, salvageFromStash, setHeroClass, stashCapacity, unequipSlot,
   unlockedClasses, TUTORIAL_FLAG,
 } from '../src/server/core/hero';
@@ -265,83 +265,91 @@ await check('a WORN item cannot be reforged — the stash is the one door', () =
   assert.equal(hero.shards, 1_000_000);
 });
 
-// ---- the class strip (Stage 6b-2) ------------------------------------------------
+// ---- the class choice (Stage 6b-2, rewritten at 6b-4) ----------------------------
 //
-// Screen 04 gained a third thing a tap can do: change what your delver IS. It lands here
-// rather than in `classes.test.ts` for the same reason the forge does — that file owns the
-// class MODEL (weights, signatures, growth), and this one owns what a tap costs.
+// It lands here rather than in `classes.test.ts` for the same reason the forge does: that
+// file owns the class MODEL (locked rows, signatures, growth), and this one owns what a
+// TAP does to a delver.
+//
+// **The rules these guard reversed at 6b-4.** The choice is permanent, all three are open
+// from level 1, and nothing may stamp one on somebody's behalf.
 
-await check('YOU ARE A WARDEN — stamped on first entry, never at account creation', () => {
-  // `ABILITIES.md` § Open, and the THE CLASS beat says the line out loud. A delver who has
-  // only ever played the Daily keeps `class: null`, because the Daily reads no class and
-  // inventing one for them would put account state in front of the one mode whose whole
-  // promise is that it has none.
+await check('NOTHING STAMPS A CLASS — a delver has one only by choosing it', () => {
+  // **The 6b-3 bug, pinned so it cannot come back.** `ensureClass` used to write
+  // `DEFAULT_CLASS_ID` onto any hero that reached a run start, so a delve *"could always
+  // start"* — and it stamped one on everybody who reached the shaft through the receipt's
+  // DELVE AGAIN or the resume screen's START OVER, neither of which passes the prompt. The
+  // prompt then never fired again, because it fires only while the field is null.
   const hero = newStoredHero(NOW);
   assert.equal(hero.class, null, 'a fresh delver has no class — they have never needed one');
 
-  assert.equal(ensureClass(hero), DEFAULT_CLASS_ID);
-  assert.equal(hero.class, DEFAULT_CLASS_ID, 'and it sticks');
-  assert.ok(hero.unlocked.includes(classUnlockFlag(DEFAULT_CLASS_ID)), 'with its flag');
+  assert.equal(classForRun(hero), null, 'and reading it must not invent one');
+  assert.equal(hero.class, null, 'still nothing written');
 
-  // Pure and replay-safe: a compare-and-set conflict re-runs it and stamps the same thing.
-  const again = { ...hero, unlocked: [...hero.unlocked] };
-  assert.equal(ensureClass(again), DEFAULT_CLASS_ID);
-  assert.deepEqual(again.unlocked, hero.unlocked, 'and it does not double-write the flag');
+  // It is a *reader*, and the only thing it may write is bookkeeping: the unlock flags.
+  assert.ok(hero.unlocked.includes(classUnlockFlag(DEFAULT_CLASS_ID)), 'flags are not a choice');
+
+  // Once the player answers, it reads back what they picked and keeps doing so.
+  assert.equal(setHeroClass(DEFAULT_CLASS_ID)(hero), null);
+  assert.equal(classForRun(hero), DEFAULT_CLASS_ID);
 });
 
-await check('a class you have not reached is REFUSED, and the refusal names the level', () => {
-  // Disabled is never invisible, and never merely LOCKED — the same rule the ascend chip
-  // follows. The error is what screen 04 prints, so it has to say what would open it.
+await check('ALL THREE CLASSES ARE OPEN AT LEVEL 1 — the choice is a real one', () => {
+  // `CLASSES.md` § Choosing a class: given permanence, the level gates and the decision
+  // could not both exist. A permanent choice made on a first delve against a roster of one
+  // is a stamp, not a decision — every delver would have been a Warden forever.
   const hero = newStoredHero(NOW);
-  const gated = CLASS_LIST.find((row) => row.unlockLevel > 1)!;
+  assert.equal(levelForXp(hero.xp), 1, 'this check is about a LEVEL 1 delver');
+  for (const row of CLASS_LIST) {
+    assert.equal(row.unlockLevel, 1, `${row.id} must be a starting class`);
+    const fresh = newStoredHero(NOW);
+    assert.equal(setHeroClass(row.id)(fresh), null, `${row.id} must be takeable at once`);
+    assert.equal(fresh.class, row.id);
+  }
+  // The flags are still written, and still on the paths that touch a hero — they are what
+  // a spec will hang off at Stage 7, so the machinery outlives the class gates it was
+  // built for.
+  classForRun(hero);
+  assert.equal(unlockedClasses(hero).length, CLASS_LIST.length, 'and all three are flagged');
+});
 
-  const refusal = setHeroClass(gated.id)(hero);
-  assert.ok(refusal, 'a level-1 delver cannot simply be a Hunter');
-  assert.ok(refusal!.includes(String(gated.unlockLevel)), `it must name the level: ${refusal}`);
-  assert.equal(hero.class, null, 'and nothing was written');
+await check('THE CHOICE IS PERMANENT — a second one is refused, and nothing moves', () => {
+  // Enforced HERE, on the server, because a rule enforced by hiding a button is not
+  // enforced. What it buys is that the choice means something; what it costs is
+  // experimentation, and that cost is on the record in `CLASSES.md`.
+  const hero = newStoredHero(NOW);
+  assert.equal(setHeroClass(DEFAULT_CLASS_ID)(hero), null);
+
+  const other = CLASS_LIST.find((row) => row.id !== DEFAULT_CLASS_ID)!;
+  const refusal = setHeroClass(other.id)(hero);
+  assert.ok(refusal, 'a class cannot be changed once it is chosen');
+  assert.ok(/permanent/i.test(refusal!), `the refusal must say why: ${refusal}`);
+  assert.equal(hero.class, DEFAULT_CLASS_ID, 'and nothing was written');
+
+  // **Re-picking the SAME class succeeds**, and that is replay safety rather than a
+  // loophole: `updateHero` re-runs a mutator when its transaction loses a race, so the
+  // retry sees the class the first attempt wrote. Refusing there would turn a won write
+  // into a reported failure.
+  assert.equal(setHeroClass(DEFAULT_CLASS_ID)(hero), null, 'a CAS replay must not fail');
 
   assert.ok(setHeroClass('bulwark')(hero), 'a spec is not a base class — Stage 7');
-  assert.ok(setHeroClass('')(hero), 'and neither is nothing');
+  assert.ok(setHeroClass('')(newStoredHero(NOW)), 'and neither is nothing');
 });
 
-await check('LEVELLING OPENS THE FLAG, and switching is then free', () => {
-  // `PROGRESSION.md` § Unlocks: a hero FLAG, never a computed threshold. It is written on
-  // the award, so the rule can be retuned tomorrow without taking a class back off
-  // somebody who already picked it.
-  const hero = newStoredHero(NOW);
-  const gated = CLASS_LIST.find((row) => row.unlockLevel > 1)!;
-  hero.xp = xpToReachLevel(gated.unlockLevel) - 1;
-
-  // One Daily is enough to cross it, which is what the award path actually does.
-  bankDailyRun(0)(hero);
-  assert.ok(levelForXp(hero.xp) >= gated.unlockLevel, 'the fixture has to cross the gate');
-  assert.ok(hero.unlocked.includes(classUnlockFlag(gated.id)), 'the flag lands on the award');
-  assert.ok(unlockedClasses(hero).includes(gated.id));
-
-  const before = hero.shards;
-  assert.equal(setHeroClass(gated.id)(hero), null, 'and switching costs nothing');
-  assert.equal(hero.class, gated.id);
-  assert.equal(hero.shards, before, 'a base class is free — the PAID choice is evolution');
-  assert.equal(setHeroClass(DEFAULT_CLASS_ID)(hero), null, 'and switching back is free too');
-  assert.equal(hero.class, DEFAULT_CLASS_ID);
-});
-
-await check('switching class does NOT move a run in progress', () => {
+await check('a class chosen mid-run does NOT move the run in progress', () => {
   // The snapshot froze what the run began under, and `kitForRun` reads it. Same guarantee
   // a mid-run gear swap already has, from the same field — and nothing in the class path
-  // had to arrange it, which is the whole point of the field existing.
+  // had to arrange it, which is the whole point of the field existing. Permanence makes it
+  // cheaper rather than more expensive.
   const hero = newStoredHero(NOW);
-  hero.xp = xpToReachLevel(TUNING.hero.levelCap);
-  bankDailyRun(0)(hero);
-  ensureClass(hero);
   const run = runFixture('open');
   run.snapshot = { ...run.snapshot, class: DEFAULT_CLASS_ID, level: 3 };
   hero.run = run;
 
-  const gated = CLASS_LIST.find((row) => row.unlockLevel > 1)!;
-  assert.equal(setHeroClass(gated.id)(hero), null);
-  assert.equal(hero.class, gated.id, 'the delver changed');
-  assert.equal(hero.run?.snapshot.class, DEFAULT_CLASS_ID, 'the open run did not');
+  const other = CLASS_LIST.find((row) => row.id !== DEFAULT_CLASS_ID)!;
+  assert.equal(setHeroClass(other.id)(hero), null);
+  assert.equal(hero.class, other.id, 'the delver chose');
+  assert.equal(hero.run?.snapshot.class, DEFAULT_CLASS_ID, 'the open run did not move');
   assert.equal(hero.run?.snapshot.level, 3);
 });
 

@@ -55,8 +55,21 @@ export function isSubmittableDay(claimedDay: string, now: number): boolean {
  * `StoredRun` had no version field at all before this, which means version 1 rejects
  * every run written before it. That is harmless under the 30-day TTL and it is the
  * only safe behaviour: a wrong replay on a leaderboard is worse than a missing one.
+ *
+ * **Version 2 (Stage 6b-3) is the same rule fired by a subtler break.** The `RunChoice`
+ * union did not change at all — what changed is what `load.bar` INDEXES. The Endless
+ * stopped drawing its nine, so a bar is now a list of positions in the delver's own
+ * collection; a v1 Endless run's indices point into a nine that no code left in this
+ * repo can reconstruct, because `endlessPoolFor` and the class draw weights were deleted
+ * with the draw. That is exactly the failure this constant exists for — *"does not error,
+ * produces a confidently wrong replay"* — so a v1 run is refused rather than resumed.
+ *
+ * A Daily run is untouched by the change and is dropped anyway. That is deliberate and
+ * cheap: this is ONE number for both modes, and a version that means "current" in one
+ * mode and "current-ish" in the other is a version nobody can reason about. The 30-day
+ * TTL costs the leaderboard's replay history and nothing else.
  */
-export const STORED_RUN_VERSION = 1;
+export const STORED_RUN_VERSION = 2;
 
 export interface StoredRun {
   version: number;

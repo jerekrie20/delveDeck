@@ -19,10 +19,11 @@
 // forever (`AGENTS.md` rule 2).
 
 import {
-  CLASS_LIST, DEFAULT_CLASS_ID, GEAR_SLOTS, RARITY_LABEL, TUNING, ascendCost, ascendItem,
-  ceilingForRecord, classById, classUnlockFlag, fitsSlot, levelForXp, nextRarity, rarityRank,
-  rerollCost, rerollItem, salvageValue, xpForEndlessRun,
-  type EquippedGear, type GearSlot, type Item, type Rarity, type RunChoice,
+  CLASS_LIST, GEAR_SLOTS, RARITY_LABEL, TUNING, abilitiesOpenedAt,
+  abilityUnlockFlag, ascendCost, ascendItem, ceilingForRecord, classById, classUnlockFlag,
+  collectionFor, fitsSlot, levelForXp, nextRarity, rarityRank, rerollCost, rerollItem,
+  salvageValue, xpForEndlessRun,
+  type Collection, type EquippedGear, type GearSlot, type Item, type Rarity, type RunChoice,
 } from '../../shared/sim';
 import type { HeroRedisLike } from './heroStore';
 import { CAS_ATTEMPTS, readHero, updateHero } from './heroStore';
@@ -223,6 +224,12 @@ export interface EndlessSettlement {
   level: number;
   /** True when this run crossed a level boundary — the receipt says so, once. */
   levelledUp: boolean;
+  /** Ability ids this run's XP and depth record opened, in catalog order. **This is where
+   *  "newly unlocked" is marked**, and it is the right place for it: a collection grows on
+   *  a settle and nowhere else, so the receipt is the one screen that can say *"and you
+   *  learned this"* at the moment it became true. The loadout tags every row with the gate
+   *  it came through, which answers the other half — *what is still out there.* */
+  learned: string[];
   /** Stratum bosses this run felled for the FIRST time ever, in order. Named rather than
    *  counted so the receipt can say which — *"first clear: the Broodmother"* is a moment
    *  and *"+150 XP"* on its own is a number. Empty on almost every run, by design. */
@@ -257,6 +264,13 @@ export function endEndlessRun(
   cleared: number,
   haul: readonly Item[] = [],
   bossesSlain: readonly string[] = [],
+  /** The deepest depth actually cleared, and the depth the run began at. **Two numbers
+   *  rather than one from Stage 6b-4**, because a run can now start below depth 1: the
+   *  record is a DEPTH and the XP is priced over a RANGE, and `cleared` — a count — is
+   *  neither of those on a deep run. Both default to the shallow-run identity, so every
+   *  existing caller keeps its old meaning. */
+  clearedTo: number = cleared,
+  startDepth = 1,
 ): (hero: StoredHero) => EndlessSettlement | null {
   const safe = Number.isFinite(banked) && banked > 0 ? Math.floor(banked) : 0;
   const carried = [...haul];
@@ -268,12 +282,14 @@ export function endEndlessRun(
     const { kept, overflowed, overflowShards } = stow(hero, carried);
     hero.shards += overflowShards;
     // The record is raised BEFORE the XP is priced, because beating it is worth a bonus
-    // and `keepRecord` is the only thing that knows whether this run did.
-    const record = keepRecord(hero, cleared);
+    // and `keepRecord` is the only thing that knows whether this run did. It reads the
+    // DEEPEST DEPTH CLEARED rather than the count — *"depth N is depth N, however you got
+    // there"* (owner call, 2026-08-06, `MODES.md` § Where a run begins).
+    const record = keepRecord(hero, clearedTo);
     // …and the first clears are marked before it too, for the same reason: the award has
     // to know which of them this run was the first of, and that is only true once.
     const firstBosses = markFirstBosses(hero, felled);
-    const earned = xpForEndlessRun(cleared, record.newRecord)
+    const earned = xpForEndlessRun(cleared, record.newRecord, startDepth)
       + firstBosses.length * TUNING.hero.xpFirstBoss;
     return {
       banked: safe,
@@ -303,14 +319,19 @@ export function endEndlessRun(
 function awardXp(
   hero: StoredHero,
   amount: number,
-): { xpEarned: number; level: number; levelledUp: boolean } {
+): { xpEarned: number; level: number; levelledUp: boolean; learned: string[] } {
   const earned = Number.isFinite(amount) && amount > 0 ? Math.floor(amount) : 0;
   const before = levelForXp(hero.xp ?? 0);
   hero.xp = (hero.xp ?? 0) + earned;
   const level = levelForXp(hero.xp);
   hero.level = level;
   openClassesFor(hero, level);
-  return { xpEarned: earned, level, levelledUp: level > before };
+  // The collection opens on the same beat, and it reads the record as well as the level.
+  // It runs AFTER `keepRecord` on the settle path — which is not an accident of ordering
+  // but the whole reason `endEndlessRun` raises the record before it prices the XP: a run
+  // that set a new record has already earned whatever that record opens.
+  const learned = openAbilitiesFor(hero, level);
+  return { xpEarned: earned, level, levelledUp: level > before, learned };
 }
 
 // ---- classes (Stage 6b-2) ----------------------------------------------------------
@@ -332,6 +353,56 @@ function openClassesFor(hero: StoredHero, level: number): void {
     if (!hero.unlocked.includes(flag)) hero.unlocked.push(flag);
   }
 }
+
+// ---- the collection (Stage 6b-3) ---------------------------------------------------
+
+/**
+ * Write the unlock flag for every ability row this delver's LEVEL and DEPTH RECORD have
+ * opened, and report the ones that are new.
+ *
+ * **Flags rather than a computed threshold**, the same rule and for the same reason as
+ * classes: `PROGRESSION.md` § Unlocks, so a gate can be retuned without taking a row back
+ * off somebody who already has it. Here that matters more than it does for a class,
+ * because there are thirty of them and every one is a number the probe may yet move.
+ *
+ * **Class-blind on purpose.** A Hunter row earned at level 6 stays earned when you switch
+ * to Warden — `collectionFor` is what decides which of your flags your current class may
+ * actually cast. Switching class is free (`CLASSES.md`), and a flag you lose on a free
+ * switch is a flag that makes the switch cost something.
+ *
+ * Pure and idempotent, like every flag write here: it reads only the hero it is handed
+ * and adds nothing twice, so a compare-and-set replay writes the same list. It reports
+ * what it added rather than nothing, because *"you learned Fireball"* is a moment the
+ * receipt should be able to name — the same call `firstBosses` makes.
+ */
+function openAbilitiesFor(hero: StoredHero, level: number): string[] {
+  const learned: string[] = [];
+  for (const id of abilitiesOpenedAt(level, endlessBestOf(hero))) {
+    const flag = abilityUnlockFlag(id);
+    if (hero.unlocked.includes(flag)) continue;
+    hero.unlocked.push(flag);
+    learned.push(id);
+  }
+  return learned;
+}
+
+/**
+ * Bring the flag bag up to date without paying anything for it.
+ *
+ * It exists because a delver's FIRST Endless run happens before they have ever settled
+ * one, so no award has run and nothing has written their starting collection. Called from
+ * `snapshotOfHero`, inside the mutator that opens the run — the same place and for the
+ * same reason as `ensureClass`.
+ */
+export function ensureCollection(hero: StoredHero): void {
+  openAbilitiesFor(hero, levelForXp(hero.xp ?? 0));
+}
+
+/** What this delver may take down right now: their flags, filtered by their class. Read
+ *  by the camp so an offline-free client never has to derive it, and by nothing on the
+ *  write path — a run reads the SNAPSHOT, which froze this list when it began. */
+export const collectionOf = (hero: StoredHero | null): Collection =>
+  collectionFor(hero?.class ?? null, hero?.unlocked ?? []);
 
 // ---- the tutorial flag -------------------------------------------------------------
 
@@ -370,45 +441,52 @@ export const unlockedClasses = (hero: StoredHero | null): string[] =>
   CLASS_LIST.filter((row) => hero?.unlocked.includes(classUnlockFlag(row.id))).map((r) => r.id);
 
 /**
- * **You are a Warden** — stamped the first time a delver opens the Endless, never at
- * account creation.
+ * The class a run would be played as, or **null** — in which case there is no run.
  *
- * `ABILITIES.md` § Open says Warden is the default and `GAME_DESIGN.md`'s THE CLASS beat
- * says the line out loud. A hero who has only ever played the Daily keeps `class: null`,
- * because the Daily reads no class and inventing one for them would put account state in
- * front of a mode whose whole promise is that it has none.
+ * > **⚠ THIS USED TO STAMP A DEFAULT AND THAT WAS THE BUG.** Until Stage 6b-4 it read
+ * > *"you are a Warden"* and wrote `DEFAULT_CLASS_ID` onto any hero that reached it, so
+ * > that a delve *"can always start"*. It could be reached from the receipt's DELVE AGAIN
+ * > and the resume screen's START OVER, neither of which passes the class prompt — and the
+ * > prompt fires only while the field is null. **So it handed people a permanent class
+ * > they were never offered, and then the screen that would have offered it never fired
+ * > again.** A backstop that keeps a screen from failing ate the decision the screen exists
+ * > to make.
  *
- * Returns the class the run should be snapshotted with. Pure — it reads and writes only
- * the hero it is handed, so a replay stamps the same thing.
+ * The class is permanent now (`CLASSES.md` § Choosing a class), so the rule is absolute:
+ * **nothing writes `hero.class` except the player answering the prompt.** This only reads.
+ * `startEndlessRun` refuses a run when it comes back null, which is what makes the choice
+ * unskippable rather than merely guarded — there is no path to a shaft that goes around it.
+ *
+ * It still opens the class flags, because that is bookkeeping rather than a decision.
  */
-export function ensureClass(hero: StoredHero): string {
+export function classForRun(hero: StoredHero): string | null {
   openClassesFor(hero, levelForXp(hero.xp ?? 0));
-  if (classById(hero.class)) return hero.class!;
-  hero.class = DEFAULT_CLASS_ID;
-  return hero.class;
+  return classById(hero.class) ? hero.class : null;
 }
 
 /**
- * Change class in the camp. Returns an error string, or null on success.
+ * Answer the prompt. Returns an error string, or null on success.
  *
- * **Free, and always available among what is unlocked.** The design's paid, permanent
- * choice is the *evolution* (`CLASSES.md` § Rules), and even that is respec-able for
- * shards on the argument that a permanent lock-in in a game whose content rotates daily
- * means everyone picks the safe branch and never sees the others. A base class is one tier
- * below that decision, so charging for it would be charging more for less.
+ * **Once, ever.** `CLASSES.md` § Choosing a class: the choice is permanent, so this refuses
+ * a hero that already has one — enforced HERE, on the server, because a rule enforced by
+ * hiding a button is not enforced. What it buys is that the choice means something; what it
+ * costs is experimentation, and that cost is on the record in the doc.
  *
- * **An open run does not move**, and nothing here has to arrange that: `RunSnapshot` froze
- * the class the run began under, and `kitForRun` reads the snapshot. It is the same
- * guarantee a mid-run gear swap already has, from the same field.
+ * The design's next tier is unchanged: **evolution is still respec-able for shards**, so a
+ * delver is not locked out of ever changing shape — only out of changing this.
+ *
+ * Pure and replay-safe like every mutator here: a compare-and-set retry re-runs it against
+ * a fresher blob, sees the class it just wrote, and refuses — which is correct, because the
+ * first attempt is the one that won.
  */
 export function setHeroClass(classId: string): (hero: StoredHero) => string | null {
   return (hero) => {
     const row = classById(classId);
     if (!row) return 'There is no such class.';
-    openClassesFor(hero, levelForXp(hero.xp ?? 0));
-    if (!hero.unlocked.includes(classUnlockFlag(row.id))) {
-      return `Reach level ${row.unlockLevel} to delve as a ${row.name}.`;
+    if (classById(hero.class)) {
+      return hero.class === row.id ? null : 'Your class is chosen, and it is permanent.';
     }
+    openClassesFor(hero, levelForXp(hero.xp ?? 0));
     hero.class = row.id;
     return null;
   };

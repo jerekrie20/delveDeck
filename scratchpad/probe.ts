@@ -28,8 +28,9 @@
 // failure mode — it fails silently and in both directions. See the foot of this file.
 
 import {
-  CLASS_LIST, EMPTY_GEAR, GEAR_SLOTS, TUNING, endlessKitFor, fitsSlot, gearedKit,
-  issuedKitForDay, issuedPoolForDay, rollItem, seedForDay, simulateEndless, simulateRun,
+  CLASS_LIST, DEFAULT_CLASS_ID, EMPTY_GEAR, GEAR_SLOTS, TUNING, collectionAt, endlessKitFor,
+  fitsSlot, gearedKit, issuedKitForDay, issuedPoolForDay, rollItem, seedForDay,
+  simulateEndless, simulateRun,
   type CombatView, type EquippedGear, type ForkView, type IssuedKit, type Rarity,
   type RunChoice, type RunResult,
 } from '../src/shared/sim';
@@ -52,7 +53,8 @@ interface Loadout {
 let loadoutCache: Loadout[] | null = null;
 
 /** All 3-, 4- and 5-slot bars over the day's nine, × the three ultimates offered.
- *  84 + 126 + 126 = 336 bars × 3 = 1,008 loadouts. */
+ *  84 + 126 + 126 = 336 bars × 3 = 1,008 loadouts. **The DAILY's space**, and it is
+ *  exhaustive because the Daily issues nine. */
 function allLoadouts(): Loadout[] {
   if (loadoutCache) return loadoutCache;
   const bars: number[][] = [];
@@ -71,6 +73,51 @@ function allLoadouts(): Loadout[] {
     for (let ult = 0; ult < TUNING.ultimateOffers; ult++) out.push({ bar, ult });
   }
   loadoutCache = out;
+  return out;
+}
+
+/**
+ * The ENDLESS's loadout space, which stopped being enumerable at Stage 6b-3.
+ *
+ * A delver who owns twenty-six rows and six ultimates has **394,680** loadouts, against
+ * the Daily's 1,008 — so the instrument samples instead, at the same size, and says so.
+ * The sample is seeded off the caller's key, so it is a pure function of the run being
+ * measured and re-running the probe twice reports the same number twice.
+ *
+ * **This is a real narrowing and it is worth stating rather than burying.** The Daily's
+ * "median loadout" is the median of every loadout; the Endless's is the median of a
+ * thousand of them. It is the right trade for a FLOOR policy — greedy-on-median is
+ * measuring a player who does not optimise, and a thousand samples locate that player's
+ * median fine — but it would be the wrong instrument for a ceiling, and a ceiling on the
+ * Endless is still unbuilt (see § What the probe learned).
+ */
+const ENDLESS_LOADOUT_SAMPLES = 1008;
+
+function sampledLoadouts(kit: IssuedKit, key: string): Loadout[] {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < key.length; i++) {
+    hash ^= key.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  const rng = createRng(hash >>> 0);
+  const pick = (limit: number): number => Math.min(limit - 1, Math.floor(rng() * limit));
+  const out: Loadout[] = [];
+  const seen = new Set<string>();
+  for (let attempt = 0; attempt < ENDLESS_LOADOUT_SAMPLES * 4; attempt++) {
+    if (out.length >= ENDLESS_LOADOUT_SAMPLES) break;
+    const size = Math.min(kit.barMin + pick(kit.barMax - kit.barMin + 1), kit.pool.length);
+    if (size < kit.barMin) break;
+    const bar: number[] = [];
+    while (bar.length < size) {
+      const index = pick(kit.pool.length);
+      if (!bar.includes(index)) bar.push(index);
+    }
+    const ult = pick(kit.ultimates.length);
+    const id = `${[...bar].sort((a, b) => a - b).join(',')}|${ult}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push({ bar, ult });
+  }
   return out;
 }
 
@@ -514,6 +561,19 @@ const GEARED_AT = 15;
  * nothing, which is the flattering answer rather than the true one.
  */
 const CLASSED_AT_LEVEL = TUNING.hero.levelCap;
+/** …and the depth record it plays with, which now decides half its COLLECTION as well as
+ *  its rarity ceiling. `epicAtRecord` is the number the sweep's `epic` gear already
+ *  assumes, so using anything else would be measuring a delver whose abilities and whose
+ *  gear came from two different histories. */
+const CLASSED_AT_RECORD = TUNING.items.epicAtRecord;
+/** The middle row: a delver a couple of weeks in. Level 10 is where `progression.ts` puts
+ *  a regular player after one week, and a record of 12 is the Daily's floor reached once —
+ *  which is also the deepest a record can be without opening `epic`. */
+const MID_LEVEL = 10;
+const MID_RECORD = 12;
+/** The deepest start the game can open — one past the crypt boss. Sweep D plays it, so the
+ *  gate measures what skipping twelve depths of attrition is actually worth. */
+const DEEP_START = 13;
 
 /** Greedy play, with the fork answered by `decide`. Reuses `greedyTurn` — the fight is
  *  not what is being measured here, the decision after it is. */
@@ -621,7 +681,13 @@ const kitSweepCache = new Map<string, Loadout>();
 function medianLoadoutFor(seed: number, kit: IssuedKit, key: string): Loadout {
   const cached = kitSweepCache.get(key);
   if (cached) return cached;
-  const scored = allLoadouts().map((loadout) => {
+  // Exhaustive while the pool is nine (sweeps A and B still play the issued kit), a seeded
+  // sample once the delver owns a collection — see `sampledLoadouts`.
+  const space = kit.pool.length <= TUNING.poolSize
+    ? allLoadouts().filter((l) => l.bar.every((i) => i < kit.pool.length)
+      && l.ult < kit.ultimates.length)
+    : sampledLoadouts(kit, key);
+  const scored = space.map((loadout) => {
     const run = simulateEndless(seed, endlessGreedy(seed, kit, loadout, (view) =>
       (view.depth >= TUNING.depths ? 'surface' : 'descend')), kit);
     return { loadout, score: run.score };
@@ -711,47 +777,93 @@ function forkSweep(
 }
 
 console.log(`\nGATE 5 — THE FORK RATIO · ${NERVES.length} risk appetites × ` +
-  `${FORK_SEEDS} shafts × 3 delvers`);
+  `${FORK_SEEDS} shafts × 4 delvers`);
 
-// Note the kit: `gearedKit(issued, …)` and NOT `issuedKitForDay` on its own, so the
-// probe measures the kit `core/endless.ts` actually derives — including the rarity
-// ceiling, which is the thing a depth record opens.
+// **All three rows are delvers the game can actually issue, and that is a change made at
+// Stage 6b-3.** Until then A was *"nothing worn, no class"* and B was *"geared, no class"*,
+// both playing the Daily's drawn nine — and from 6b-3 there is no such delver: every
+// Endless run has a class and a collection. Two of the three rows were measuring a game
+// that no longer exists, which is `6b-1`'s *"the probe stopped lying about the kit"* one
+// axis over.
+//
+// So the axis is now the PROGRESSION itself: a first run, a delver a fortnight in, and one
+// at the cap. If they disagree, that is the finding — and at 6b-3 they disagreed by a lot.
 const bare = forkSweep(
-  'A · NOTHING WORN, NO CLASS (the control, and every run written before v4)',
-  (seed) => ({
-    kit: gearedKit(issuedKitForDay(seed), EMPTY_GEAR, 'rare'),
-    loadout: sweepLoadouts(seed)[Math.floor(sweepLoadouts(seed).length / 2)]!.loadout,
-  }),
+  'A · A NEW DELVER (level 1, nothing worn, no record — a first Endless run)',
+  (seed) => {
+    const kit = gearedKit(
+      endlessKitFor(seed, DEFAULT_CLASS_ID, 1, collectionAt(DEFAULT_CLASS_ID, 1, 0)),
+      EMPTY_GEAR, 'rare',
+    );
+    return { kit, loadout: medianLoadoutFor(seed, kit, `new:${seed}`) };
+  },
   FORK_DEPTH_CAP,
 );
 const geared = forkSweep(
-  `B · GEARED (one item per slot @ depth ${GEARED_AT}, ceiling epic, cap ${GEARED_DEPTH_CAP})`,
-  (seed) => ({
-    kit: gearedKit(issuedKitForDay(seed), gearedDelver(seed, GEARED_AT, 'epic'), 'epic'),
-    loadout: sweepLoadouts(seed)[Math.floor(sweepLoadouts(seed).length / 2)]!.loadout,
-  }),
+  `B · MID (level ${MID_LEVEL}, record ${MID_RECORD}, one item per slot @ ${MID_RECORD}, `
+  + `ceiling rare, cap ${GEARED_DEPTH_CAP})`,
+  (seed) => {
+    // **Coherent**, and it has to be: a record of `MID_RECORD` has not opened `epic`
+    // (`TUNING.items.epicAtRecord`), so a delver wearing epics with a level-10 collection
+    // would be one the game cannot issue — the exact mistake this whole block just fixed.
+    const kit = gearedKit(
+      endlessKitFor(seed, DEFAULT_CLASS_ID, MID_LEVEL,
+        collectionAt(DEFAULT_CLASS_ID, MID_LEVEL, MID_RECORD)),
+      gearedDelver(seed, MID_RECORD, 'rare'), 'rare',
+    );
+    return { kit, loadout: medianLoadoutFor(seed, kit, `mid:${seed}`) };
+  },
   GEARED_DEPTH_CAP,
 );
-// C · the delver the game actually issues from Stage 6b-2 on, and the axis this gate was
-// re-run for. **All three classes share the seed pool** rather than getting a sweep each:
-// three separate sweeps would triple the most expensive row in the instrument, and the
-// question here is whether the three AGREE — which a pooled sweep with a printed split
-// answers directly. A class that is an outlier shows up in its own line.
+// C · the strongest delver the game can issue. **All three classes share the seed pool**
+// rather than getting a sweep each: three separate sweeps would triple the most expensive
+// row in the instrument, and the question here is whether the three AGREE — which a pooled
+// sweep with a printed split answers directly. A class that is an outlier gets its own line.
 const classed = forkSweep(
-  `C · GEARED + CLASSED @ level ${CLASSED_AT_LEVEL} (the endgame delver, cap ${GEARED_DEPTH_CAP})`,
+  `C · ENDGAME @ level ${CLASSED_AT_LEVEL}, record ${CLASSED_AT_RECORD} `
+  + `(geared @ ${GEARED_AT}, ceiling epic, cap ${GEARED_DEPTH_CAP})`,
   (seed, index) => {
     const row = CLASS_LIST[index % CLASS_LIST.length]!;
     const gear = gearedDelver(seed, GEARED_AT, 'epic');
-    const kit = gearedKit(endlessKitFor(seed, row.id, CLASSED_AT_LEVEL), gear, 'epic');
+    // The record is the one the gear's own `epic` ceiling implies, so the delver's
+    // abilities and their gear are opened by the same imagined history rather than two.
+    const kit = gearedKit(
+      endlessKitFor(seed, row.id, CLASSED_AT_LEVEL,
+        collectionAt(row.id, CLASSED_AT_LEVEL, CLASSED_AT_RECORD)),
+      gear, 'epic',
+    );
     return { kit, loadout: medianLoadoutFor(seed, kit, `${seed}:${row.id}`), group: row.id };
   },
   GEARED_DEPTH_CAP,
 );
 
-const surfaced = bare.surfaced + geared.surfaced + classed.surfaced;
-const died = bare.died + geared.died + classed.died;
-const capped = bare.capped + geared.capped + classed.capped;
-const allDepths = [...bare.depths, ...geared.depths, ...classed.depths];
+// D · the SAME endgame delver, starting at the crypt boss's far side (Stage 6b-4). It is
+// its own row rather than a replacement for C because the question is what a deep start
+// COSTS: the delver is identical, so any difference is the twelve depths of attrition that
+// were skipped. `MODES.md` § Where a run begins says that trade is the balance question,
+// and this is where it gets answered rather than assumed.
+const deep = forkSweep(
+  `D · ENDGAME, STARTING AT ${DEEP_START} (the same delver, twelve depths in)`,
+  (seed, index) => {
+    const row = CLASS_LIST[index % CLASS_LIST.length]!;
+    const gear = gearedDelver(seed, GEARED_AT, 'epic');
+    const kit = {
+      ...gearedKit(
+        endlessKitFor(seed, row.id, CLASSED_AT_LEVEL,
+          collectionAt(row.id, CLASSED_AT_LEVEL, CLASSED_AT_RECORD)),
+        gear, 'epic',
+      ),
+      startDepth: DEEP_START,
+    };
+    return { kit, loadout: medianLoadoutFor(seed, kit, `deep:${seed}:${row.id}`), group: row.id };
+  },
+  GEARED_DEPTH_CAP,
+);
+
+const surfaced = bare.surfaced + geared.surfaced + classed.surfaced + deep.surfaced;
+const died = bare.died + geared.died + classed.died + deep.died;
+const capped = bare.capped + geared.capped + classed.capped + deep.capped;
+const allDepths = [...bare.depths, ...geared.depths, ...classed.depths, ...deep.depths];
 const forkTotal = surfaced + died;
 const forkRatio = forkTotal === 0 ? 0 : surfaced / forkTotal;
 console.log(`\n  pooled: ${surfaced} surfaced / ${died} died ` +
@@ -787,8 +899,8 @@ const gearedRatio = ratioOf(geared);
 const classedRatio = ratioOf(classed);
 if (Math.abs(bareRatio - gearedRatio) > FORK_TOLERANCE * 2) {
   console.log(`  ⚠ A and B disagree by ` +
-    `${Math.round(Math.abs(bareRatio - gearedRatio) * 100)} points — gear is moving the ` +
-    `DECISION, not just the depth`);
+    `${Math.round(Math.abs(bareRatio - gearedRatio) * 100)} points — the first fortnight is ` +
+    `moving the DECISION, not just the depth`);
 }
 // The same test one axis over, and the finding this gate was re-run for. A class that
 // moved the ratio would be a class that had stopped being an identity and started being
@@ -796,8 +908,30 @@ if (Math.abs(bareRatio - gearedRatio) > FORK_TOLERANCE * 2) {
 // one place the design cannot see it.
 if (Math.abs(gearedRatio - classedRatio) > FORK_TOLERANCE * 2) {
   console.log(`  ⚠ B and C disagree by ` +
-    `${Math.round(Math.abs(gearedRatio - classedRatio) * 100)} points — a CLASS is moving ` +
-    `the decision, not just the depth`);
+    `${Math.round(Math.abs(gearedRatio - classedRatio) * 100)} points — the ENDGAME is ` +
+    `moving the decision, not just the depth`);
+}
+// **The one the 6b-3 gate is about.** A fork ratio used to be one number; with a
+// collection it is a CURVE, because how robust a bar you can build is now a function of
+// how many rows you own. If the three rows above span more than the tolerance, the mode's
+// difficulty is being set by progression rather than by tuning — which is a thing no
+// number in `TUNING` can answer, and it was measured at 6b-3 rather than argued.
+const deepRatio = ratioOf(deep);
+const ratios = [bareRatio, gearedRatio, classedRatio, deepRatio];
+const spread = Math.max(...ratios) - Math.min(...ratios);
+console.log(spread <= FORK_TOLERANCE * 2
+  ? `  ✓ the four delvers agree within ${Math.round(spread * 100)} points — one mode`
+  : `  ✗ THE FOUR DELVERS SPAN ${Math.round(spread * 100)} POINTS — the fork ratio is a ` +
+    `CURVE, not a number`);
+// **Sweep D is the one to read when this fails**, and it is why it exists. If the deep
+// start sits inside the target band while the shallow rows do not, the finding is not
+// *"the delver is too strong"* — it is that **depths 1–12 are free for anyone geared**, so
+// a run only becomes a decision after twelve depths of nothing. That is a statement about
+// where the mode starts, not about how hard it is, and no difficulty number addresses it.
+const inBand = (ratio: number): boolean => Math.abs(ratio - FORK_TARGET) <= FORK_TOLERANCE;
+if (inBand(deepRatio) && !inBand(classedRatio)) {
+  console.log('  ← THE DEEP START IS IN BAND AND THE SHALLOW ONE IS NOT: the free depths ' +
+    'are the problem, not the difficulty');
 }
 console.log(Math.abs(forkRatio - FORK_TARGET) <= FORK_TOLERANCE
   ? '  ✓ the fork is a decision — the loss is real and the mode is not punishing you'

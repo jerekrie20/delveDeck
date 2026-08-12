@@ -90,20 +90,33 @@ export function levelProgress(xp: number): LevelProgress {
 /**
  * What one Endless run earns.
  *
- * **Priced on depths CLEARED and on beating your record**, which are the two things
- * `PROGRESSION.md` names — and deliberately not on the outcome. A death keeps its depth
- * record, so it keeps what that record earned: the mode's promise is *you moved sideways,
- * never backwards*, and XP that evaporated on a death would make it a step back. What a
- * death costs is the **haul**, and that asymmetry is the fork's whole design (`GEAR.md`).
+ * **Priced on the depths ACTUALLY PLAYED and on beating your record**, which are the two
+ * things `PROGRESSION.md` names — and deliberately not on the outcome. A death keeps its
+ * depth record, so it keeps what that record earned: the mode's promise is *you moved
+ * sideways, never backwards*, and XP that evaporated on a death would make it a step back.
+ * What a death costs is the **haul**, and that asymmetry is the fork's whole design
+ * (`GEAR.md`).
  *
  * The per-depth award compounds, so depth 25 pays more per depth than depth 5 — which is
  * the *"one more depth"* reward that is not shards, and the reason farming shallow is
  * never the efficient line.
+ *
+ * **`startDepth` is what makes that true for a run that began deep** (Stage 6b-4). It sums
+ * over the rungs the delver stood on rather than over `1..cleared`, so a run that cleared
+ * 13–16 is paid at depth 13–16's rates. `MODES.md` § You only earn what you play: the
+ * twelve depths you skipped pay nothing, and the ones you fought pay what they are worth.
+ * Summing from 1 would have been the other reading of the same sentence and it is the wrong
+ * one — it would price the hardest depths in the game as if they were the first four.
  */
-export function xpForEndlessRun(cleared: number, newRecord: boolean): number {
+export function xpForEndlessRun(
+  cleared: number,
+  newRecord: boolean,
+  startDepth = 1,
+): number {
   const depths = Number.isFinite(cleared) && cleared > 0 ? Math.floor(cleared) : 0;
+  const from = Number.isFinite(startDepth) && startDepth > 1 ? Math.floor(startDepth) : 1;
   let earned = 0;
-  for (let depth = 1; depth <= depths; depth++) {
+  for (let depth = from; depth < from + depths; depth++) {
     earned += TUNING.hero.xpPerDepth * (1 + (depth - 1) * TUNING.hero.xpPerDepthGrowth);
   }
   return Math.round(earned) + (newRecord ? TUNING.hero.xpNewRecord : 0);

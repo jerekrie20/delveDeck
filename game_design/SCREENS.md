@@ -158,55 +158,88 @@ one tap from a feed. It is also the same rule the sim uses to resolve a mid-run 
 inside a verified choice list, so there is one implementation and the screen cannot
 promise a slot the server then fills differently.
 
-### The class is CHOSEN at the Endless door and CHANGED on screen 04
+### The class is CHOSEN at the Endless door, and it is never changed anywhere
 
 Classes arrived at 6b-2 with no screen of their own drawn anywhere in the mockup. The
 first attempt put the whole thing on screen 04 — and **playing it found the hole
 immediately: a player who never opened the GEAR tile never met their own class.** That is
 the one decision the Endless is built around, so it cannot be behind a tile.
 
-**Owner call (2026-08-06): the first choice is a prompt on the way into the first Endless
-run, and every change after it is the strip on screen 04.** Two surfaces, one decision
-each, and neither is a fifth camp tile.
+**Owner call (2026-08-06): the choice is a prompt on the way into an Endless run, it is
+made once, and it is permanent.** One surface, one decision, and it is not a fifth camp
+tile.
 
-> **It fires while `hero.class` is null, which is at most once per delver, ever.** Not a
-> setting, not a screen you can get back to — after it, opening the Endless goes straight
-> to the loadout as it always did.
+> **It fires while `hero.class` is null, and until it is answered THERE IS NO RUN.** Not a
+> setting, not a screen you can get back to, and — this is the part 6b-3 got wrong — not a
+> screen anything is allowed to skip on your behalf.
 
-**At level 1 there is one live option and two locked, and that is the screen working
-rather than failing.** It is [GAME_DESIGN.md](GAME_DESIGN.md)'s THE CLASS beat said out
-loud — *"You are a Warden. Here is what that means in one line"* — with the other two
-visible and carrying the level that opens them. Past level 5 the same screen becomes a
-real choice, which is why it is one screen and not two.
+**Three live options, always.** Warden, Hunter and Adept all open at level 1
+([CLASSES.md](CLASSES.md)), so this screen is a real three-way choice the first time it is
+seen rather than one lit chip and two locked ones. It is
+[GAME_DESIGN.md](GAME_DESIGN.md)'s THE CLASS beat with something actually at stake.
 
 **The chips STACK here and sit three-across on 04.** Same chips, two jobs: on 04 it is a
-control you already understand and three across is a row you scan; here it is the
-explanation, and at 320px a 91px column wraps *"Out-tempos. A hit taken charges you twice
-over."* into four lines of the smallest type in the game.
+read-only summary and three across is a row you scan; here it is the explanation, and at
+320px a 91px column wraps a class line into four lines of the smallest type in the game.
 
-### 04 · the class strip, and there is no screen 05 for it
+> **What 6b-3 shipped and why it was wrong.** The prompt guarded `openEndless` and nothing
+> else, while the receipt's DELVE AGAIN and the resume screen's START OVER both opened a
+> run directly — and the server's `ensureClass` then stamped Warden so that *"a delve can
+> always start"*. A player who reached the shaft through either door got a permanent class
+> they were never offered, and the prompt never fired again because it fires only while the
+> field is null. **A backstop that keeps a screen from failing can eat the decision the
+> screen exists to make.** The fix is not a third guard: it is that a run without a class is
+> refused, so there is no path that does not pass through here.
 
-A fifth camp tile is forbidden by the section above, and a dedicated *settings* screen is
-a menu item this game does not have — so switching lives where the rest of the build does.
+### 04 · the class strip is READ-ONLY, and there is no screen 05 for it
 
-**Decided: a strip at the top of screen 04, and the screen's own heading generalises.**
-This is already the answer to *what is my delver* — four stats, eleven slots, a stash —
-and a class is the largest thing on that list. It sits at the top because the gear
-underneath is chosen *for* it. The heading went from WHAT YOU ARE WEARING to **WHAT YOU
-ARE**, which is the honest title for a screen that now answers both.
+A fifth camp tile is forbidden by the section above, and a dedicated *settings* screen is a
+menu item this game does not have.
+
+**Decided: a strip at the top of screen 04, and it shows rather than changes.** This is
+already the answer to *what is my delver* — four stats, eleven slots, a stash — and a class
+is the largest thing on that list. It sits at the top because the gear underneath is chosen
+*for* it. The heading went from WHAT YOU ARE WEARING to **WHAT YOU ARE**, which is the
+honest title for a screen that now answers both.
 
 Three chips, and there are three forever: evolution adds a **spec** beside a class rather
-than a fourth column. Each carries the class name, its one line, and a tail — what it is
-worth in HP if you can have it, **the level that opens it if you cannot**. That is the
-unlit-threat-slot rule again, and the same shape the `ASCEND D35` chip already uses:
-*locked, with the reason, never invisible.* MAX HP in the stat block above includes the
-class, because a stat that disagreed with the run would be the one number on this screen
-nobody could trust.
+than a fourth column. Each carries the class name, its one line, and what it is worth in HP.
+**The two you did not pick stay on the screen** rather than being hidden — they are what
+makes the one you did pick mean something, and a delver should be able to see what the other
+two were without leaving the game to find out. MAX HP in the stat block above includes the
+class, because a stat that disagreed with the run would be the one number here nobody could
+trust.
 
 **A delver with no class yet says so**, rather than lighting the default and implying a
-decision nobody made: the strip's header reads *chosen on your first Endless delve* and
-no chip is marked. That state is reachable — a Daily-only player has genuinely never
-needed a class.
+decision nobody made: the strip's header reads *chosen on your first Endless delve* and no
+chip is marked. That state is reachable — a Daily-only player has genuinely never needed a
+class.
+
+### 03 · the Endless loadout shows what you OWN, and nothing else
+
+6b-3 shipped a second pane under it listing every row still locked, each printing the level
+and depth that would open it — the *"disabled ≠ invisible"* rule applied to the collection.
+
+**Owner call (2026-08-06): take it out.** The rule earns its place where a locked thing is
+*in your way right now* — an unlit threat slot, a refused ascend, a door you just tapped.
+A catalogue of things you cannot do yet is a different object: it is twenty-four rows of
+noise on the screen where you are trying to make one decision, and the decision is about
+the seven you have. What you have not earned yet is the receipt's job to announce, at the
+moment it changes.
+
+### The Endless door asks WHERE, when there is more than one answer
+
+Screen 13's shape, one step earlier: a short list, tapped, and the run begins.
+
+**It is shown only when a delver has more than one start**, so a first-time player never
+meets it and it never reads as a question with one answer. A veteran sees it *instead of*
+the class prompt rather than after it — the class prompt is once ever, so the two are never
+on screen in the same session.
+
+Each row is a depth and the stratum it stands in, and the list is at most five long forever
+([MODES.md](MODES.md) § Where a run begins). **The line that has to be on this screen is
+what a deep start costs**: the depths you skip pay nothing, so the choice reads as *time
+against reward* rather than as a difficulty setting.
 
 **Nothing here is a colour nobody has seen before.** A chip paints from the accent of the
 archetype its class leans on — the Warden is the colour of the `guard` tiles a Warden gets

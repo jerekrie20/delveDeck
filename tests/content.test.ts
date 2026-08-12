@@ -18,11 +18,11 @@
 import { assert, check, describe } from './helpers';
 import { firstCombat, firstLoadout, loadoutWithArchetypes } from './policies';
 import {
-  STATUS_RULES, TUNING, abilityDetail, difficultyAt, enemyForDepth, issuedKitForDay, statusText,
-  issuedPoolForDay, simulateRun,
+  STATUS_RULES, TUNING, abilityDetail, difficultyAt, enemyForDepth, gateOf, issuedKitForDay,
+  statusText, issuedPoolForDay, simulateRun,
 } from '../src/shared/sim';
 import {
-  ABILITIES, ARCHETYPES, EQUIPPABLE, SHARED_EQUIPPABLE, ULTIMATES,
+  ABILITIES, ARCHETYPES, EQUIPPABLE, SHARED_EQUIPPABLE, SHARED_ULTIMATES, ULTIMATES,
   type Archetype, type StatusId,
 } from '../src/shared/abilities';
 import { BOON_LIST } from '../src/shared/boons';
@@ -240,13 +240,18 @@ await check('every boss phase is nastier than the cycle it replaces', () => {
 
 // ---- the catalog ----------------------------------------------------------------
 
-await check('the catalog is 24 abilities + 6 ultimates across 7 archetypes', () => {
-  assert.equal(EQUIPPABLE.length, 24, 'the design caps the catalog at 24 equippable rows');
-  assert.equal(ULTIMATES.length, 6);
+await check('the SHARED catalog is 24 abilities + 6 ultimates across 7 archetypes', () => {
+  // **The count is a count of the SHARED half**, and it always was — `ABILITIES.md` says
+  // so in its own opening: *"everything in this file describes the shared half unless it
+  // says otherwise."* Until Stage 6b-3 no row carried a `class`, so the two lists were the
+  // same object and the distinction cost nothing; the six class-locked rows are what make
+  // it load-bearing. The Daily draws from this list and only this list.
+  assert.equal(SHARED_EQUIPPABLE.length, 24, 'the design caps the shared catalog at 24 rows');
+  assert.equal(SHARED_ULTIMATES.length, 6);
   const counts: Record<Archetype, number> = {
     strike: 0, guard: 0, burst: 0, wall: 0, counter: 0, tempo: 0, control: 0,
   };
-  for (const row of EQUIPPABLE) counts[row.archetype]++;
+  for (const row of SHARED_EQUIPPABLE) counts[row.archetype]++;
   assert.equal(counts.strike, 4);
   assert.equal(counts.guard, 4);
   assert.equal(counts.burst, 4);
@@ -255,6 +260,31 @@ await check('the catalog is 24 abilities + 6 ultimates across 7 archetypes', () 
   assert.equal(counts.tempo, 3);
   assert.equal(counts.control, 3);
   assert.ok(SHARED_EQUIPPABLE.length >= TUNING.poolSize, 'the draw needs rows to draw from');
+  // …and the class-locked half, which `CLASSES.md` names two of per class. It is counted
+  // HERE rather than only in `classes.test.ts` because this file owns the ROWS, and a
+  // seventh locked row appearing by accident is a row the shared catalog has to not have.
+  assert.equal(EQUIPPABLE.length + ULTIMATES.length - 30, 6, 'six class-locked rows, no more');
+});
+
+await check('EVERY UNLOCK GATE IS REACHABLE — no row is authored out of the game', () => {
+  // Level and depth record are the two gates (`TODO.md` § Stage 6b-3). A row gated past
+  // the level cap would be a row nobody can ever own, which type-checks perfectly and is
+  // invisible until somebody goes looking for the ability they read about.
+  for (const row of [...EQUIPPABLE, ...ULTIMATES]) {
+    const gate = gateOf(row);
+    assert.ok(gate.level >= 1 && gate.level <= TUNING.hero.levelCap,
+      `${row.id} opens at level ${gate.level}, which is outside 1..${TUNING.hero.levelCap}`);
+    assert.ok(gate.depth >= 0, `${row.id} has a negative depth gate`);
+    assert.ok(Number.isInteger(gate.level) && Number.isInteger(gate.depth),
+      `${row.id}'s gate is fractional`);
+  }
+  // A depth gate has to be reachable by an actual delver: the probe's classed sweep tops
+  // out around 15 on the greedy FLOOR, and `MODES.md`'s milestones run every 10 — so a
+  // gate past the point gear stops opening (`legendaryAtRecord`) would be one nobody meets.
+  for (const row of [...EQUIPPABLE, ...ULTIMATES]) {
+    assert.ok(gateOf(row).depth <= TUNING.items.legendaryAtRecord,
+      `${row.id} is gated deeper than the deepest gear gate — nothing else asks that much`);
+  }
 });
 
 await check('ability text matches the numbers on the tile (no lying tooltips)', () => {

@@ -8,7 +8,7 @@
 
 import { ABILITIES } from '../src/shared/abilities';
 import {
-  issuedKitForDay, simulateEndless, simulateRun, TUNING,
+  collectionAt, endlessKitFor, issuedKitForDay, simulateEndless, simulateRun, TUNING,
   type CombatView, type ForkView, type IssuedKit, type RunChoice, type RunResult,
 } from '../src/shared/sim';
 
@@ -181,6 +181,85 @@ export function endlessAtFork(
     return 'stop';
   });
   return found ? { choices, view: found } : undefined;
+}
+
+// ---- playing a CLASSED delver (Stage 6b-3) ---------------------------------------
+//
+// `classes.test.ts` and `collection.test.ts` both need to stand a real delver up and cast
+// a named row on them, and the Endless's kit stopped being derivable from a seed alone —
+// it takes a class, a level and a collection now. These live here rather than in either
+// file because two copies of "build a legal bar" is two things to get wrong, and this is
+// already the module that owns *how a test plays a run*.
+
+/** The kit the server would issue this delver: their class, their level, their collection. */
+export function endlessKit(
+  seed: number, classId: string | null, level = 1, record = 0,
+): IssuedKit {
+  return endlessKitFor(seed, classId, level, collectionAt(classId, level, record));
+}
+
+/** A bar built from a KIT's own pool by archetype, so a check can ask for "this delver's
+ *  guard" without knowing which of the four they own. The classed version of
+ *  `loadoutWithArchetypes`, which reads the Daily's pool. */
+export function barFromKit(kit: IssuedKit, wanted: readonly string[]): RunChoice & { k: 'load' } {
+  const bar: number[] = [];
+  for (const archetype of wanted) {
+    const index = kit.pool.findIndex(
+      (id, i) => ABILITIES[id]!.archetype === archetype && !bar.includes(i),
+    );
+    if (index >= 0) bar.push(index);
+  }
+  for (let i = 0; bar.length < kit.barMin && i < kit.pool.length; i++) {
+    if (!bar.includes(i)) bar.push(i);
+  }
+  if (bar.length < kit.barMin) throw new Error('could not build a legal bar');
+  return { k: 'load', bar, ult: 0 };
+}
+
+/** A bar of NAMED rows, in the order given — for a check that is about one specific
+ *  ability rather than about whatever this delver owns in an archetype. */
+export function barOfIds(kit: IssuedKit, wanted: readonly string[]): RunChoice & { k: 'load' } {
+  const bar: number[] = [];
+  for (const id of wanted) {
+    const index = kit.pool.indexOf(id);
+    if (index < 0) throw new Error(`${id} is not in this collection`);
+    bar.push(index);
+  }
+  for (let i = 0; bar.length < kit.barMin && i < kit.pool.length; i++) {
+    if (!bar.includes(i)) bar.push(i);
+  }
+  return { k: 'load', bar, ult: 0 };
+}
+
+/** Which SLOT holds an archetype. Cooldowns are keyed by slot index, so this is the
+ *  number `{k:'cast', i}` wants — never a pool position and never a catalog one. */
+export function slotOfArchetype(
+  kit: IssuedKit, load: RunChoice & { k: 'load' }, archetype: string,
+): number {
+  const slot = load.bar.findIndex((poolIndex) =>
+    ABILITIES[kit.pool[poolIndex]!]!.archetype === archetype);
+  if (slot < 0) throw new Error(`no ${archetype} in this bar`);
+  return slot;
+}
+
+/** …and which slot holds a named row. */
+export function slotOfAbility(
+  kit: IssuedKit, load: RunChoice & { k: 'load' }, id: string,
+): number {
+  const slot = load.bar.findIndex((poolIndex) => kit.pool[poolIndex] === id);
+  if (slot < 0) throw new Error(`${id} is not in this bar`);
+  return slot;
+}
+
+/** Play `choices` and hand back the combat view they stop in. */
+export function combatAfter(
+  seed: number, kit: IssuedKit, choices: readonly RunChoice[],
+): CombatView {
+  const result = simulateEndless(seed, choices, kit);
+  if (result.outcome !== 'outOfChoices' || result.view?.phase !== 'combat') {
+    throw new Error(`expected a combat view, got ${result.outcome}/${result.view?.phase}`);
+  }
+  return result.view;
 }
 
 /** Every choice greedy would make from this combat view, through to `end`. */

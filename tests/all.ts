@@ -11,6 +11,11 @@ await import('./sim.test');
 await import('./content.test');
 await import('./server.test');
 await import('./art.test');
+// `boundary` owns the LAYERING — what the client may import from the server, and the
+// rule that `shared/` reaches into neither. Its own file because it is the only test
+// here that fails for a reason no run can express: the bug it exists for was a black
+// screen in a built bundle while every other check on this list was green.
+await import('./boundary.test');
 // `share` owns the artifact that LEAVES the game — the alphabet, the grid, the
 // pasted comment. It fails when the share format changes and nothing else does.
 await import('./share.test');
@@ -22,6 +27,12 @@ await import('./tutorial.test');
 // the migration that reads it back, and the compare-and-set loop. It is separate from
 // `server.test` because it fails when the stored shape changes and nothing else does.
 await import('./hero.test');
+// `migration` owns the path from every shape this game has EVER stored to the one it
+// writes today. Split off `hero.test` at 6b-4 when that file crossed 400 lines, on the
+// seam it already had: a mutator changes when a run learns to do something new, and a
+// migration step is written once, never edited again, and has to keep working forever
+// against blobs nobody can look at.
+await import('./migration.test');
 // `camp` owns what a player standing in the CAMP does to a delver — wear it, take it off,
 // scrap it, reforge it, raise it a tier. Split off `hero.test` at 6b-2 on the seam
 // `core/hero.ts` uses: that file fails when the stored shape or write path changes, this
@@ -31,12 +42,16 @@ await import('./camp.test');
 // pays better per depth. Its own file because it fails when the curve changes and nothing
 // else does; the PACING it is tuned to is measured by `scratchpad/progression.ts`.
 await import('./progression.test');
-// `classes` owns what a CLASS is — the three rows, their draw weights, their one numeric
-// signature each, and the wall that keeps every bit of it out of the Daily. Its own file
-// because it fails when a weight or a signature changes and nothing else does; the turn
-// loop those signatures hook into is `sim.test`'s, and the curve their HP is paid along
-// is `progression.test`'s.
+// `classes` owns what a CLASS is — the three rows, their one numeric signature each, and
+// the wall that keeps every bit of it out of the Daily. Its own file because it fails when
+// a class row changes and nothing else does; the turn loop those signatures hook into is
+// `sim.test`'s, and the curve their HP is paid along is `progression.test`'s.
 await import('./classes.test');
+// `collection` owns what a delver OWNS — the unlock gates, the reading order `load.bar`
+// indexes, the class filter, and what the six class-locked rows actually DO in the turn
+// loop. Split off `classes.test` at 6b-3 on the schedule seam: three class rows almost
+// never move, thirty-six catalog rows move whenever the probe says the shaft is wrong.
+await import('./collection.test');
 // `endless` owns the SECOND MODE — the fork, the lantern strain, the haul, and the
 // wall that keeps all three away from the Daily. It fails when the fork changes and
 // nothing else does, which is exactly why it is not part of `sim.test`.

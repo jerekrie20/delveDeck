@@ -15,11 +15,17 @@ the shared half unless it says otherwise.
 
 ---
 
-## The catalog: 24 abilities + 6 ultimates
+## The catalog: 24 shared abilities + 6 ultimates, plus 6 class-locked rows
 
-The mockup shows ten. Ten is the illustrative slice, not the game. The catalog is
-**24 equippable abilities across 7 archetypes, plus 6 ultimates**, and the day's
-issued nine are drawn from it by seed.
+The mockup shows ten. Ten is the illustrative slice, not the game. The **shared** catalog
+is **24 equippable abilities across 7 archetypes, plus 6 ultimates**, and the day's issued
+nine are drawn from it by seed.
+
+**Six more rows are locked to a class** and are Endless-only — two each, named in
+[CLASSES.md](CLASSES.md) § Class-locked signatures. Thirty rows in the registry, twenty-four
+the Daily can ever see. The count in this file has always been a count of the shared half
+(see the opening); until Stage 6b-3 no row carried a `class`, so the distinction cost
+nothing.
 
 ### Why a catalog and not a fixed bar
 
@@ -73,6 +79,11 @@ Names only. Numbers live in `abilities.ts`.
 | `tempo` ×3 | Jab · Flurry · Volley |
 | `control` ×3 | Hobble · Taunting Shout · Deadeye |
 | **ultimates ×6** | Execute · Pyroclasm · Last Stand · Reckoning · Sunder · Bloodtide |
+| **class-locked ×6** | Hold the Line · Bulwark's Oath · Mark · Second Wind · Siphon · Runic Echo |
+
+The six locked rows are Endless-only and belong to [CLASSES.md](CLASSES.md), which owns
+what each does and why each needed a mechanic that did not exist. They are listed here so
+this table is the whole registry rather than most of it.
 
 `control` is the archetype that carries most of the status effects below; the others
 carry at most one rider each. **A catalog where every ability applies a status is a
@@ -203,13 +214,13 @@ Three sources, per the mockup's `cast()` / `endTurn()`:
 
 ## Status effects
 
-Six so far — **the current set, not a ceiling** (see the folder README: the design is
-still open). Each is a **plain numeric field on the ability row** —
-`{ id, magnitude, turns }` — resolved by the turn loop.
+**Seven**, and the seventh arrived through the door this paragraph left open. Each is a
+**plain numeric field on the ability row** — `{ id, magnitude, turns }` — resolved by the
+turn loop.
 
 The constraint that *does* hold at any scope is structural, not numeric: **no
-interpreter, no handler registry, no scripting layer.** A seventh status is welcome
-if it fits that shape and creates a decision the six don't.
+interpreter, no handler registry, no scripting layer.** A new status is welcome if it fits
+that shape and creates a decision the others don't.
 
 | Status | On | Effect | The decision it creates |
 |---|---|---|---|
@@ -217,8 +228,17 @@ if it fits that shape and creates a decision the six don't.
 | **Bleed** | enemy | N damage at the start of its turn, for M turns | Damage that ignores the enemy's block turns |
 | **Stun** | enemy | It skips its next intent | Buy exactly one turn — see below |
 | **Expose** | enemy | Takes +N per hit, M turns | Turns a multi-hit `tempo` ability into a burst |
+| **Marked** | enemy | Its block stops none of your next N hits | **Hold it for the turn it blocks** |
 | **Regen** | hero | Heal N at the start of your turn, M turns | The only healing in the game, and it costs a slot |
 | **Thorns** | hero | An attacker takes N when it lands | Rewards eating a hit, which is also how rage charges |
+
+> **Marked is the seventh (Stage 6b-3), and it earned the slot on the second half of the
+> test rather than the first.** It fits the shape — a plain row, no interpreter — but so
+> would a dozen dull ones. What makes it worth having is that **it is the only status
+> measured in HITS rather than in turns**: every other one is a clock you spend or lose,
+> and this one waits. That is a decision the other six cannot produce, and it is the only
+> way [CLASSES.md](CLASSES.md)'s **Mark** could be expressed at all — *"the next hit on
+> this target cannot be blocked"* is a fact about the enemy, not about a row.
 
 ### Stun must not advance the intent cycle
 
@@ -325,19 +345,29 @@ identically in both modes and never threatens the two-argument rule.
 Classes, schools, elements and evolution have their own file. The one thing that
 matters *here*:
 
-**Classes reuse this file's draw machinery.** `issuedPoolForDay` takes weights over
-**archetype and school**, and a class — or a specialisation — is a set of weights
-plus one numeric signature field. The composition template's floors still apply to
-every class, so **no weighting can produce an unplayable nine**. One mechanism, nine
-identities, and none of it reaches `simulateRun`.
+**Classes no longer touch this file's draw at all** (Stage 6b-3, owner override). The
+Endless does not draw — a delver owns abilities and builds a bar from what they own — so
+`issuedPoolForDay` is the Daily's and only the Daily's, takes one argument, and reads the
+shared rows. A class is two locked rows plus one numeric signature, and none of it reaches
+`simulateRun`.
+
+> This section previously said *"classes reuse this file's draw machinery… weights over
+> archetype and school"*, and the machinery it described is deleted. What survives
+> unchanged is the composition template above, which is now the Daily's alone; the
+> Endless's equivalent guarantee is that **the level-1 collection is playable**, tested the
+> same way ([CLASSES.md](CLASSES.md) § The collection).
 
 ---
 
 ## Open
 
-- **Ultimate offers: 3 of 6, or all 6?** Three keeps the choice sharp and the
-  loadout space at ~1,000. Revisit if ultimates feel same-y.
+- **Ultimate offers: 3 of 6, or all 6?** Three keeps the Daily's choice sharp and its
+  loadout space at ~1,000. Revisit if ultimates feel same-y. **The Endless answered it
+  differently at 6b-3 and that is not a contradiction**: it offers nothing, because you
+  own your ultimates and pick from what you own. The question is now a Daily question
+  only.
 - **Does a boon ever grant an ability?** Currently no — that would reintroduce
   dilution. If it ever does, it must swap rather than append.
-- **Class unlock path.** Warden is default; how Hunter and Adept unlock is a Stage 6
-  question and deliberately unanswered here.
+- **~~Class unlock path.~~ Answered at Stage 6b-4: there is none.** All three are starting
+  classes, and the choice between them is permanent — see [CLASSES.md](CLASSES.md) §
+  Choosing a class, which also records what dropping the level gates cost.

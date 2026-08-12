@@ -215,18 +215,39 @@ function ultimateRow(id: string, offerIndex: number, picked: boolean): string {
 }
 
 /**
- * Screen 03. This is where the deckbuilding went: **3–5 of the day's 9, plus one of
- * three ultimates**, locked for the delve.
+ * Which mode is filling screen 03. `'endless'` changes one heading and nothing else.
  *
- * The nine are drawn from a 24-ability catalog by the day's seed, so this is a new
- * puzzle every morning — which is also the structural answer to the project's top
- * risk. A fixed bar makes greedy play near-optimal; a chosen bar puts the variance
- * back into what you were given and what you took.
+ * The two screens are one implementation on purpose and stay one — the difference between
+ * them is not layout, it is **where the rows came from**. A second loadout screen would be
+ * two places to fix the next time a tile's rules text overflows.
+ */
+export type LoadoutSource = 'daily' | 'endless';
+
+/**
+ * Screen 03. This is where the deckbuilding went: **3–5 abilities plus one ultimate**,
+ * locked for the delve.
+ *
+ * **The two modes fill it from opposite directions, and that is the whole of what Stage
+ * 6b-3 changed here.** In the Daily the nine are drawn from a 24-row catalog by the day's
+ * seed, so this is a new puzzle every morning and the structural answer to the project's
+ * top risk — a fixed bar makes greedy play near-optimal, a chosen bar puts the variance
+ * back into what you were given. In the Endless nothing is drawn at all: the rows are the
+ * ones you OWN, they arrive by level and depth record, and the puzzle is the collection
+ * rather than the hand.
+ *
+ * **It shows what you own and nothing else** (owner call, 2026-08-06). 6b-3 added a second
+ * pane listing every row still locked with the gate that opens it — *"disabled ≠
+ * invisible"* applied to the collection — and it was taken out at 6b-4. That rule earns its
+ * place where a locked thing is in your way *right now*: an unlit threat slot, a refused
+ * ascend, a door you just tapped. A catalogue of what you cannot do yet is twenty-four rows
+ * of noise on the screen where you are making one decision about the seven you have.
+ * Announcing what you have earned is the RECEIPT's job, at the moment it changes.
  */
 export function loadoutScreen(
   view: LoadoutView,
   pendingBar: number[],
   pendingUltimate: number,
+  source: LoadoutSource = 'daily',
 ): string {
   const equipped = pendingBar
     .map((poolIndex, slot) => abilityRow(view.pool[poolIndex]!, poolIndex, slot + 1))
@@ -249,7 +270,13 @@ export function loadoutScreen(
       + `${view.barMin}.</div>`)
     + '</div>'
     + '<div class="pane" style="margin-top:9px"><div class="rowitem head">'
-    + '<div class="gm"><div class="gk">ISSUED TODAY &middot; TAP TO EQUIP</div></div></div>'
+    + `<div class="gm"><div class="gk">${source === 'endless'
+      ? `WHAT YOU OWN &middot; ${view.pool.length} ABILITIES`
+      : 'ISSUED TODAY'} &middot; TAP TO EQUIP</div></div>`
+    // The Endless's rows are sorted by archetype, so the reason they are in that order is
+    // worth one line — otherwise it reads as an arbitrary list that happened to group.
+    + (source === 'endless' ? '<div class="gtail">BY ARCHETYPE</div>' : '')
+    + '</div>'
     + rest + '</div>'
     + '<div class="pane" style="margin-top:9px"><div class="rowitem head">'
     + '<div class="gm"><div class="gk">ULTIMATE &middot; OFF-BAR, TAKE ONE</div></div></div>'

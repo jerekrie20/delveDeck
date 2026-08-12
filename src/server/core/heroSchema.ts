@@ -22,7 +22,7 @@
 import type { EquippedGear, Item, Rarity, RunChoice } from '../../shared/sim';
 
 /** Current write version. See the header before bumping it. */
-export const STORED_HERO_VERSION = 4;
+export const STORED_HERO_VERSION = 6;
 
 /**
  * The gear, class and level a run was STARTED with — the thing `kitForRun` derives from.
@@ -56,6 +56,42 @@ export interface RunSnapshot {
   /** The delver's level when the run began. Frozen for the same reason gear is: levelling
    *  mid-run must not change the max HP a fight already resolved against. */
   level: number;
+
+  // ---- v5: the collection itself (Stage 6b-3) -------------------------------------
+
+  /**
+   * **The ability ids the bar was chosen from, frozen — and this is the trap the whole
+   * version bump exists to close.**
+   *
+   * `load.bar` stores INDICES INTO THIS LIST, not ability ids. Until 6b-3 that was safe
+   * because the list came off a seed and a seed does not change. It came off the delver's
+   * *collection* from 6b-3 on, and a collection grows: level up mid-run, or set a depth
+   * record mid-run, and a pool rebuilt from current state would slot a newly-earned row
+   * into the order — so `{k:'load', bar:[2,5,7]}` would replay as three **different
+   * abilities**. Silently. In the Endless only. For exactly the players who were doing
+   * well enough to unlock something.
+   *
+   * Storing the class it was derived from is not enough and that is the thing to
+   * understand here: the class is stable, the collection is not. So the list itself is
+   * what a run is played against, and `kitForRun` reads it verbatim.
+   */
+  pool: string[];
+  /** The same, for `load.ult`. Ultimates unlock on the same gates and index the same way,
+   *  so leaving them derived would leave half the hole open. */
+  ultimates: string[];
+
+  // ---- v6: where the run began (Stage 6b-4) ---------------------------------------
+
+  /**
+   * The depth this run started at — 1, or the depth after a stratum boss this delver has
+   * felled (`MODES.md` § Where a run begins).
+   *
+   * Frozen for the same reason everything else here is: it is part of what the run was
+   * played under. Felling the depth-8 boss *during* this run must not retroactively move
+   * where the run began, and a replay that started somewhere else is a replay of a
+   * different run.
+   */
+  startDepth: number;
 }
 
 /**
@@ -72,6 +108,14 @@ export interface RunSnapshot {
  */
 export const bareSnapshot = (): RunSnapshot => ({
   gear: {}, dropCeiling: 'rare', class: null, spec: null, level: 1,
+  // **An empty pool is the honest answer for a pre-v5 run, not a default.** The nine such
+  // a run was issued came off a draw this code no longer contains, so it is not derivable
+  // — and `STORED_RUN_VERSION` moved with it, so `resumable()` retires the run before
+  // anything ever reads these. A migration must never guess; this is it declining to.
+  pool: [], ultimates: [],
+  // Every run ever written before v6 began at the top of the shaft, so this is the truth
+  // about them rather than a default.
+  startDepth: 1,
 });
 
 /**
@@ -353,12 +397,102 @@ const migrateV3toV4: MigrationStep = (blob) => {
   return out;
 };
 
+/**
+ * v4 → v5. Stage 6b-3 stopped the Endless drawing its nine, so `RunSnapshot` gained the
+ * **pool itself** — see the field's own note for why the class it was derived from is not
+ * enough.
+ *
+ * **This is the first step in the table that cannot tell the truth about an in-progress
+ * run, and it says so rather than inventing one.** Every step before it back-filled a
+ * value whose only possible history was the one being written: a v1 hero had never held a
+ * run, a v2 hero had never worn anything, a v3 run was genuinely played classless. A v4
+ * run was played on nine rows drawn through `endlessPoolFor` and a table of class draw
+ * weights, and **both were deleted at 6b-3 on the owner's instruction.** The pool is
+ * therefore not derivable from anything left in the codebase, and `load.bar` is a list of
+ * indices into it — so a rebuilt pool would not resume that run, it would replay it as
+ * different abilities and hand back a confidently wrong number.
+ *
+ * So the run is **retired instead of resumed**, and the mechanism is the one that already
+ * exists for exactly this: `STORED_RUN_VERSION` moved with the change, `resumable()`
+ * returns null for a run whose choice format this sim no longer replays, and the camp
+ * offers a fresh shaft rather than a broken one. That costs an in-flight haul on a
+ * pre-launch stage and it is the owner's call (2026-08-06), recorded in `TODO.md`.
+ *
+ * The blob itself is still never dropped and the key is still never thrown away — the
+ * hero, the shards, the stash, the record and the XP all survive untouched. It is one
+ * run that stops being resumable, not an account.
+ */
+const migrateV4toV5: MigrationStep = (blob) => {
+  const out = { ...blob };
+  const run = out['run'];
+  if (run && typeof run === 'object' && !Array.isArray(run)) {
+    const stored: Record<string, unknown> = { ...(run as Record<string, unknown>) };
+    const snapshot = stored['snapshot'];
+    const bare = bareSnapshot();
+    if (snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)) {
+      const shot: Record<string, unknown> = { ...(snapshot as Record<string, unknown>) };
+      for (const key of ['pool', 'ultimates'] as const) {
+        if (shot[key] === undefined) shot[key] = bare[key];
+      }
+      stored['snapshot'] = shot;
+    } else {
+      stored['snapshot'] = bare;
+    }
+    out['run'] = stored;
+  }
+  return out;
+};
+
+/**
+ * v5 → v6. Stage 6b-4 made the class choice permanent and gave a run somewhere else to
+ * begin. Two changes, and the first one is the only step in this table that **removes** a
+ * value rather than back-filling one.
+ *
+ * **`class` is cleared to null, once, for everybody — and that is the same principle, not
+ * an exception to it.** Every step before this back-filled a value whose only possible
+ * history was the one being written. The class on a v5 hero has one of two histories:
+ * `ensureClass` stamped it without anyone being asked (the bug 6b-4 exists to fix — see
+ * `core/hero.ts` § classForRun), or it was picked under a rule that let you change your
+ * mind next week. **Neither is the decision the field now means.** Carrying it forward
+ * would be recording a permanent answer to a question that was never put. So everybody is
+ * asked, once, and the prompt they meet is the one the design always described.
+ *
+ * **The in-progress run is untouched by that** and does not need to be otherwise: its
+ * snapshot froze its own class at v4, and `kitForRun` reads the snapshot — so a run
+ * mid-shaft resumes exactly as it was, played as whatever it was started as, while the
+ * delver holding it chooses what they are from now on. That is the v2 → v3 model again.
+ *
+ * Everything else survives: shards, XP, stash, gear, records, `bossKills`, the unlock flags
+ * and any unknown field a newer writer left behind.
+ */
+const migrateV5toV6: MigrationStep = (blob) => {
+  const out = { ...blob };
+  out['class'] = null;
+  const run = out['run'];
+  if (run && typeof run === 'object' && !Array.isArray(run)) {
+    const stored: Record<string, unknown> = { ...(run as Record<string, unknown>) };
+    const snapshot = stored['snapshot'];
+    const bare = bareSnapshot();
+    if (snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)) {
+      const shot: Record<string, unknown> = { ...(snapshot as Record<string, unknown>) };
+      if (shot['startDepth'] === undefined) shot['startDepth'] = bare.startDepth;
+      stored['snapshot'] = shot;
+    } else {
+      stored['snapshot'] = bare;
+    }
+    out['run'] = stored;
+  }
+  return out;
+};
+
 /** Keyed by the version a step migrates FROM (vN → vN+1). */
 const MIGRATIONS: Record<number, MigrationStep> = {
   0: migrateV0toV1,
   1: migrateV1toV2,
   2: migrateV2toV3,
   3: migrateV3toV4,
+  4: migrateV4toV5,
+  5: migrateV5toV6,
 };
 
 /**

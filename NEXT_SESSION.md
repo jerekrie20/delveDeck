@@ -1,16 +1,17 @@
 # Next session
 
-**Stage 6b-2 shipped, and then you corrected its central assumption.** The shard sinks,
-levels and XP, and classes are all in — but classes shipped as *draw weights on a
-nine-of-twenty-four roll*, which is the Daily's structure with a lean bolted on. **Your
-call, 2026-08-06: the Endless is not a daily and must not draw. It is class and collection
-based.** That is Stage 6b-3 and it is the next task; the board moves behind it.
+**Stage 6b-4 shipped: four of the seven things you reported, and the class-prompt one was
+a real bug.** The prompt guarded one door and there were three; the server then stamped a
+class on anyone who came through the other two. It cannot happen again — a run without a
+class is now refused rather than defaulted.
 
-The status glossary landed with the correction, because the same session found that the
-game had been printing a vocabulary — `Weaken 4`, `Thorns 2 for 1 turn` — that it defined
-absolutely nowhere.
+**Your delver's class was cleared by the migration**, deliberately, so you meet the prompt
+you have been asking for. Nothing else on the account moved.
 
-Nothing is blocked on you. Paste from the line below as the opening prompt.
+**GATE 5 is still failing — but the deep start you asked for found the reason.** That is
+the first thing below and it is a decision, not a task.
+
+Paste from the line below as the opening prompt.
 
 ---
 
@@ -22,374 +23,151 @@ Read **AGENTS.md**, then **game_design/GAME_DESIGN.md**, **CODING_BIBLE.md** and
 no `vite build`** — validate with `npm run type-check`, `npm run lint`, `npm run test`,
 and **`npm run test:visual`** for anything that changes a screen.
 
-**🔒 The design is LOCKED.** `game_design/` (17 docs + a canvas + the mockup) is the
-specification, not a sketch. Counts in it are caps. **If code and the folder disagree, the
-folder is right and the code is a bug.** Only I unlock it, and a change lands in the
-folder first, then in code and TODO.md.
+**🔒 The design is LOCKED.** `game_design/` is the specification, not a sketch. Counts in
+it are caps. **If code and the folder disagree, the folder is right and the code is a
+bug.** Only I unlock it, and a change lands in the folder first, then in code and TODO.md.
 
 
-## TASK — **Stage 6b-3**: the Endless stops drawing
+## ⚠ FIRST — the fork ratio, and the deep start changed the question
 
-`TODO.md` § Stage 6b-3 has the list. **The Endless is class and collection based**: you own
-abilities, and you build a bar from what you own. No seed, no nine-of-twenty-four, no
-weights.
+**86/14 pooled against a 60/40 ±10 target.** Still failing. But one row is in band for the
+first time in three stages, and it is the one 6b-4 added:
 
-| | The Daily | The Endless |
-|---|---|---|
-| Where the nine come from | **Drawn from the seed**, same shaft for the whole sub | **What you OWN** |
-| What varies run to run | The issued nine | Your gear, the depth, the cast |
-| What you choose between | The nine you were handed | Everything you have unlocked |
-
-- **Abilities unlock by LEVEL and DEPTH RECORD**, as hero flags like every other unlock.
-- **The catalog stays mostly shared**: the 24 shared rows remain (the Daily needs them),
-  plus **3–4 class-locked rows each** — the ones `CLASSES.md` names by name already. ~36
-  rows, not three separate kits. `Ability.class` and `endlessEquippableFor` exist for
-  exactly this, so a locked row is a **data edit**.
-
-> **⚠ THE TRAP, and it is not a detail: `load.bar` indexes `kit.pool`.**
->
-> A collection that grew between runs would make a stored choice list replay a **different
-> ability** — silently, and only in the Endless, and only for people who levelled mid-run.
-> So `RunSnapshot` has to freeze the **pool itself**, not the class it was derived from.
-> `STORED_HERO_VERSION` **4 → 5**, a migration step, a fixture test, and a v4 snapshot
-> rebuilds its pool from the class it stored. This is the whole reason the snapshot exists
-> and it is the third stage running that has needed widening; the pattern is proven.
-
-**Delete `endlessPoolFor` and `classWeightFor` when you do it.** A class then has no draw
-lean at all — its identity is the locked rows plus the one signature, which is a smaller
-and sharper claim than the one 6b-2 shipped.
-
-**GATE 5 re-runs.** It has failed first **twice** — when gear arrived and when classes did
-— and both times the failure was the real answer. This is a bigger change to what a run can
-do than either. Budget for a retune and read § What the probe learned before touching a
-number.
-
-### Then the board, which is unblocked but no longer first
-
-- **`MODES.md` § A checkpoint is a DECISION — re-read the note before shipping a board.**
-  6a accepts a bounded exposure (die mid-depth, close the tab, re-fight that depth knowing
-  what is coming) **precisely because there is no board to carry it onto.** The board
-  changes that calculation and `core/endless.ts`'s header says so in as many words.
-- **`MAX_ENDLESS_DEPTH = 100` is still owed a re-read**, and now there is data: the probe's
-  classed sweep reaches **depth 15** on the greedy floor with a full epic set at level 20.
-- Consumables (`kit.consumables` is still empty, so the sim refuses every `use`) and
-  traits-arriving-with-depth are the two smaller boxes after that.
-
-
-## THE GAME WAS PRINTING WORDS IT NEVER DEFINED
-
-Reported as *"the ability descriptions don't make sense to a human"*, and the audit was
-worse than the complaint. **A dozen tiles printed `Weaken 4`, `Thorns 2 for 1 turn`,
-`Expose 2 for 2 turns` — and nothing anywhere in the game said what any of those words
-meant.** The combat screen rendered the raw enum id, in lower case, straight out of the
-union. **Statuses standing on the HERO were not rendered at all**: Regen and Thorns were
-tracked by the sim, carried by the view, and printed by nobody, so the two abilities that
-read as defensive looked inert.
-
-`AGENTS.md` says the design rests on *reasoning from the numbers*. You cannot reason from
-`Weaken 3` if nobody told you it comes off the next hit — so this was the telegraph being
-unreadable, not a copy problem.
-
-**`shared/statuses.ts` owns the six rules now**, and there are three renderings of them:
-
-| Where | What it says |
+| sweep | ratio |
 |---|---|
-| Combat tile (91px, clamps to two lines) | `Deal 15 damage. Weaken 4.` |
-| **Loadout row** (full width, where you choose) | `Deal 15 damage. Weaken — its next attack lands 4 lighter.` |
-| Combat pill | `WEAKEN 4`, carrying the rule itself |
+| A · a new delver (level 1, nothing worn) | 93/7 |
+| B · mid (level 10, record 12, rare gear) | 95/5 |
+| C · endgame (level 20, record 20, epic gear) | 88/12 |
+| **D · the SAME delver as C, starting at depth 13** | **69/31 ✓** |
 
-The keyword survives as a **label** because the pill prints it and a player has to connect
-the two — and it **replaces** the terse clause rather than appending. The first attempt
-appended and read *"Bleed 3 for 2 turns. It loses 3 HP at the start of each of its next 2
-turns."*: the same rule twice, the second time longer. A test keeps that gone.
+**D is C with one thing changed — where it begins.** So the twenty-six point swing is the
+twelve depths of attrition it skipped and nothing else.
 
-**Playing it found a second one.** A thorns pill on its last turn read **"for 1 turns"** —
-which is every status, on the turn before it expires. Every duration in the catalog is
-authored at 2 or 3, so nothing static could have shown it. The duration is a *phrase* now,
-and the assert sweeps all six at 1 and 2 turns.
+**That reframes 6b-3's finding rather than replacing it.** The problem is not that a
+collected delver is too strong. It is that **depths 1–12 are free for anyone geared**, so a
+run does not become a decision until twelve depths of nothing have gone by — and a
+surface-when-scratched player banks long before it gets anywhere interesting.
 
-**The class copy went with it.** *"Out-tempos. A hit taken charges you twice over."* said
-nothing; it reads *"Fastest. Every hit you take builds your ultimate twice as quickly."*
-The test that capped a class line at 48 characters now also **requires it to say what
-happens to YOU** — "Out-tempos" fit in 48 characters and taught nobody anything.
+**Two live answers, both yours:**
 
-## WHAT LANDED EARLIER — classes, and the delver stops being generic
+1. **`MODES.md` axis 3 — traits arrive and stack**, still unchecked under Stage 6b-2.
+   `ethereal` eats block, and block is what the robustness rests on. The structural fix,
+   and the one the design already specs.
+2. **Or a deep start is simply how a geared delver is meant to play** — in which case the
+   shallow rows measure a mode nobody with a record actually enters, and the move is to
+   make the deep start the default rather than an option.
 
-A class is **two things and only two**: a set of draw weights over the shared catalog, and
-**one numeric field**. Not an ability list, not a code branch. `src/shared/classes.ts` is
-the registry; `tests/classes.test.ts` (18) is what stops it becoming anything else.
+Everything measured at 6b-3 still stands and does not need re-deriving: `rampScale` 1 → 2
+moves the endgame delver two points, class HP at ×0 leaves it at 83/17, and a collection
+takes the same delver from 48/52 to 95/5. **What must not happen is reaching for the haul
+rules** — `GAME_DESIGN.md` names them the wrong knob and nothing measured is about them.
 
-> **The DRAW WEIGHTS half of that is superseded** — see the task at the top. The
-> signature, the per-class HP, the unlock flags, the snapshot and the whole client half
-> all survive 6b-3 untouched; what goes is `endlessPoolFor` and `classWeightFor`. Left
-> written up as shipped because the retune below is what the *next* GATE 5 gets compared
-> against.
 
-| | **WARDEN** | **HUNTER** | **ADEPT** |
-|---|---|---|---|
-| Lean | physical · `guard`/`wall` | hybrid · `tempo`/`strike` | spell · `burst`/`control` |
-| Opens at | level 1 (default) | level 5 | level 10 |
-| Max HP by cap | +23 | +11 | +2 |
-| **Signature** | unspent block **carries 50%** into your next turn | a hit that lands on HP charges **+1 extra rage** | cooldowns tick **one turn further** after a turn spending no energy |
+## WHAT 6b-4 BUILT
 
-### The two sentences that had to be read before they could be a field
+### 1 · The class prompt — the bug, and why it could not be fixed with another guard
 
-Both are recorded in `CLASSES.md` § What Stage 6b-2 built so they are not re-argued, and
-both are one number to reverse.
+It was checked in `openEndless` and **there were three doors into a run**: the receipt's
+DELVE AGAIN and the resume screen's START OVER both called `beginRun` directly, and the
+server's `ensureClass` then stamped Warden so a delve *"could always start"*. A player who
+reached the shaft either way got a **permanent class they were never offered**, and the
+prompt never fired again because it fires only while the field is null.
 
-- **Warden — *"block above your max"*.** This model has **no block maximum**: block resets
-  to 0 every turn and has no ceiling, so the phrase has no referent in it. The line's own
-  next column does — *over-blocking stops being waste* — so what carries is what you did
-  not spend. A **fraction, not a hoard**: carry half of a leftover twice and you have a
-  quarter, so block stays a decision about *this* turn.
-- **Hunter — *"rage charges faster"*.** Several readings were honest; this is the one that
-  also satisfies the column beside it, *when to take a hit on purpose*. A bonus per cast
-  would charge faster and change nothing about that decision; a shorter rage bar would be
-  the ultimate getting cheaper rather than rage arriving sooner.
+**A backstop that keeps a screen from failing ate the decision the screen exists to make.**
 
-**A depth boundary is not a turn boundary**, and the Warden's carry is what found that:
-`beginDepth` now zeroes block explicitly. Without it a Warden who over-blocked the last hit
-of depth 9 would walk into depth 10 already guarded — the fresh-puzzle rule broken by a
-class, quietly. A test plays a real run to the fork for it.
+The fix is not a third guard: **`startEndlessRun` refuses a classless hero**, `ensureClass`
+is gone, and `classForRun` only reads. There is no path to a shaft that goes around the
+choice. The client routes that one error to the prompt rather than to its offline fallback
+— which would have hidden the bug again with an extra step.
 
-### GATE 5 failed first, again, and the failure was the finding
+### 2 · The choice is permanent, and all three classes start open
 
-The probe grew a **third sweep — C · geared + classed at the level cap** — with all three
-classes sharing the seed pool and their split printed beneath it.
+Two rules reversed, both recorded in `CLASSES.md` § Choosing a class **with what each one
+costs**: the level gates were a week-one pacing beat, and free switching was
+experimentation.
 
-The first growth draft gave a Warden **+46 max HP** by the cap. It came back **38/62**
-against the geared delver's 62/38: a 24-point swing, which is the gate's own *"a class is
-moving the decision, not just the depth"* warning, and `CLASSES.md`'s **never a power
-ladder** failing in the one place the design cannot see it.
+The gates had to go. A permanent choice made on a first delve against a roster of one is a
+stamp, not a decision — every delver would have been a Warden forever and the other two
+would have been unreachable content. Permanence is enforced in `setHeroClass` on the
+server, because a rule enforced by hiding a button is not enforced.
 
-**Pure defensive growth is what did it.** HP pushes a run deeper without helping it fight,
-so the floor policy arrives at depths it cannot win — and a fraction-of-max nerve rule
-keeps descending because the fraction is easier to clear with a bigger pool. Cut to
-`+23 / +11 / +2`:
+Screen 04's strip is **read-only**. The two you did not take stay on it — they are what
+makes the one you did mean something.
 
-| sweep | ratio | mean depth |
-|---|---|---|
-| A · nothing worn, no class | 67/33 | 6 |
-| B · geared @ d15, epic | 62/38 | 11 |
-| **C · geared + classed @ 20** | **57/43** | **15** |
-| **pooled** | **62/38** (target 60/40 ±10) ✓ | 8.3 |
+### 3 · The loadout shows what you own, and nothing else
 
-All three agree inside ten points. **Class moves the depth 11 → 15 and leaves the decision
-alone** — the same finding gear produced, which is the finding that matters.
+6b-3's locked-abilities pane is gone. That rule earns its place where a locked thing is in
+your way *right now*; a catalogue of what you cannot do yet is twenty-four rows of noise on
+the screen where you are choosing among the seven you have. **What you just earned is the
+receipt's job**, at the moment it changes.
 
-**The Daily half of the probe is byte-identical**: floor 6.6/12, ceiling 11.6/12, gap 5.0,
-both tutorial invariants clean over 3,000 seeds. A test also sweeps 240 seeds asserting
-`endlessPoolFor(seed, null)` is `issuedPoolForDay(seed)` exactly.
+### 4 · A run can start at a boss's far side
 
-> **The per-class split is a DIRECTION, not a gate, and the probe now says so out loud.**
-> Splitting one sweep three ways leaves ~14 decided runs per row; one seed flipping is
-> worth 7 points there. The first draft's Hunter read 21/79 and the retuned one reads
-> 79/21 — the same signature, an HP change of 28, and mostly noise. **The pooled ratio is
-> the gate.** An outlier there is a reason for more seeds, never a reason to retune.
+Fell a stratum boss once and later runs may begin after it — **depth 5 / 9 / 13 / 17**.
+Four bosses, five starts, forever. It rides on `hero.bossKills`, which has stored exactly
+this since v4, so it needed **no new state on the hero**.
 
-### Stat growth is HP, and only HP — written down with the reason
+- **You only earn what you play.** XP is priced over the depths actually stood on, so a run
+  that cleared 13–16 is paid at depth 13–16's rates and the twelve you skipped pay nothing.
+  Shards and drops needed no change — both already keyed on the absolute depth.
+- **`cleared` and `clearedTo` split**, and this is the subtle half: a count and a depth are
+  the same number only when a run starts at 1. The record reads the DEPTH — *depth N is
+  depth N* — and the camp door and the receipt read it too, or they would tell somebody
+  standing at depth 14 that they were *"2 deep"*.
+- `IssuedKit.startDepth` is **1 in the Daily forever**, like `rampScale`. `simulateRun`
+  still takes two arguments.
 
-`PROGRESSION.md` asks for growth that is *"small, automatic, per-class"* and the class
-table names exactly one stat. Attack and block were tried and left out: both are **per-hit**
-in this engine, so `+1` attack is `+3` on a three-hit `tempo` row and `+9` on some
-ultimates, and block compounds over a turn's casts. **A growth stat that multiplies is not
-small.** A second axis should arrive after the probe has measured one, not before.
+### 5 · `STORED_HERO_VERSION` 5 → 6
 
-### `STORED_HERO_VERSION` is 4, and the step STAMPS rather than drops
+`run.snapshot.startDepth`, and **`class` cleared to null once for everybody.**
 
-`RunSnapshot` gained `class` / `spec` / `level`, and the hero gained `bossKills`.
-
-**A v3 run was played classless** — no class to be, no per-class HP, no signature — so
-`class: null` on that snapshot is the truth about it rather than a Warden standing in. That
-is only safe because the derivation agrees: **`endlessKitFor(seed, null, level)` returns
-`issuedKitForDay(seed)` byte for byte**, and a test sweeps that identity rather than
-trusting it. A run mid-shaft on the day classes shipped resumes on the nine it was issued,
-at the HP it was fighting on. The v2 → v3 step is the model, and it is the model because
-*"a run waits as long as you do"* is an owner answer.
-
-**`kitForRun` is still the one line in the project that derives a kit.** Classes arrived by
-widening what it reads, not by adding a second derivation beside it. The test that equips
-something in the camp mid-run and asserts the resumed kit does not move still passes, and
-there is now one beside it for switching class mid-run.
-
-**First-clear-of-a-stratum-boss XP rode in on the same step** rather than buying a
-migration of its own — `bossKills` on the hero, `RunResult.bossesSlain` from the sim (a
-count cannot say *which*, and *"once each, ever"* needs the name). **Endless only**: the
-Daily meets the same bosses at 4, 8 and 12, and paying there — or even *marking* there —
-would make the day's shaft the efficient way to level.
-
-### Where the class lives on screen — **chosen at the door, changed on 04**
-
-The first pass put the whole thing on screen 04 and **playing it found the hole
-immediately: a player who never opened the GEAR tile never met their own class**, which is
-the decision this mode is built around. Owner call, 2026-08-06:
-
-- **The first choice is a PROMPT on the way into the first Endless run.** It fires only
-  while `hero.class` is null — at most once per delver, ever — and after it the door goes
-  straight to the loadout as it always did.
-- **Every change after it is the strip on screen 04**, whose heading generalised from WHAT
-  YOU ARE WEARING to **WHAT YOU ARE**. Still no fifth camp tile.
-
-At level 1 the prompt has one live option and two locked, **and that is it working**: it
-is `GAME_DESIGN.md`'s THE CLASS beat said out loud — *"You are a Warden. Here is what that
-means in one line"* — with the other two carrying the level that opens them. Past level 5
-the same screen becomes a real choice.
-
-The camp head reads `WARDEN · LVL 12`, falling back to `DELVER` for somebody who has never
-opened the Endless. A delver with no class yet **says so on 04** rather than lighting the
-default and implying a decision nobody made.
-
-**No new colour was written.** A chip paints from the accent of the archetype its class
-leans on — a Warden chip is the colour of the `guard` tiles a Warden gets issued — so no
-third copy of the palette exists for `art.test.ts` to have to guard.
-
-### The tutorial is once per ACCOUNT now, and the bug is worth knowing
-
-**`localStorage` does not survive a Devvit feed iframe.** The write succeeds and the
-partition is discarded between sessions, so the coached run offered itself **every single
-time the game was opened**. Owner report from a real subreddit — and it does not reproduce
-locally or in the visual gate, both of which see a browser that keeps its storage. That is
-the shape of every bug this class of guard has.
-
-`tutorial:seen` lives in `hero.unlocked` now, which needed **no migration**: that array is
-the hero's flag bag and shipped empty at v1 for exactly this. Storage stays underneath as
-the fallback, and **either flag suppresses the offer** — the account covers a wiped browser
-and a second device, storage covers a logged-out player and an unreachable server. It is
-the one write in the app that creates a delver for somebody who has not played yet, and
-that was the accepted cost.
-
-### The client split twice, by subject
-
-`endless.ts` was at 381 code lines and a new screen would not fit. Two splits rather than
-an exemption, both on seams that already existed:
-
-- **`delver.ts`** — *who you are*: the class strip and the first-entry prompt, off
-  `gear.ts`, which is *what you are wearing*. They render on one screen and change for
-  entirely different reasons.
-- **`receipt.ts`** — *what a settled run left you* (screen 14), off `endless.ts`, which
-  owns the run itself. The banner and the offline flag are **passed in**, so the screen
-  never reaches back into the module driving it.
-
-Everything is comfortably under 400 again: endless 348, gear 293, receipt 84, delver 70.
-
-### What playing it caught, twice
-
-**The three chips' price lines floated at three different heights.** *"Out-damages…"* wraps
-to four lines where *"Outlasts…"* wraps to three, so inside three equal boxes the tails
-landed at 302, 316 and 316px — three chips reading as three states. The chip is a flex
-column with the tail on `margin-top: auto` now.
-
-**And the prompt was three-across when it should stack.** Same chips, two jobs: on 04 it is
-a row you scan, on the prompt it is the explanation — and at 320px a 91px column wrapped
-*"Out-tempos. A hit taken charges you twice over."* to four lines of the smallest type in
-the game. Stacked it is one line each, and the screen still fits 568px exactly with DELVE
-AS WARDEN at 558. Verified by hand at 320×568 and 1920×1080.
+That is the first step in the table that *removes* a value, and it is the same principle
+rather than an exception: every class on a v5 hero was either stamped without anyone being
+asked or picked under a rule that let you change it next week. Neither is the decision the
+field now means. **The in-progress run is untouched** — its snapshot froze its own class at
+v4, so it resumes as whatever it was started as.
 
 
 ## STATE
 
-- On **`main`**. Working tree clean. Stages 3, 4, 5, 6a, **6b-1** and the first three
-  slices of **6b-2** merged.
-- **301 checks green** — 277 tsx (`tests/all.ts`) + 24 vitest (`--project server`).
-  `npm run test` runs both; don't "simplify" it to one, that has silently skipped a whole
-  suite before. **Plus `npm run test:visual`**, a fourth command and a real gate, green at
-  all three viewports with **`KNOWN_FINDINGS` still empty** — keep it that way.
-- `tests/` is fourteen files. **`sim.test.ts` (30) owns the RULES**, **`content.test.ts`
-  (19) the ROWS**, **`classes.test.ts` (18) what a CLASS IS**, **`share.test.ts` (13) the
-  artifact that LEAVES the game**, **`hero.test.ts` (34) the first thing that OUTLIVES A
-  DAY**, **`camp.test.ts` (22) what the CAMP does to a delver**, **`progression.test.ts`
-  (10) the CURVE**, **`endless.test.ts` (18) the FORK**, **`endlessRun.test.ts` (17) the
-  run that outlives a TAB**, and **`items.test.ts` (30) the GEAR MODEL.** Plus
-  `server.test.ts` (30), `art.test.ts` (22), `tutorial.test.ts` (14), and `tests/visual/`.
-  Split by what makes each fail.
-- **`eslint.config.js` has no size exemptions.** Do not add one without a `TODO.md` line
-  naming the stage that removes it.
-- **There are TWO instruments, and they measure different things.**
-  `npx tsx scratchpad/probe.ts` (~4 min now — a third sweep) is the balance instrument —
-  **run it after any ability, enemy, tuning, item or CLASS change.**
-  `npx tsx scratchpad/progression.ts` (instant) is the PACING instrument — **run it after
-  any change to `TUNING.hero` or `shared/progression.ts`.** Both have now failed on a
-  first run and been believed; the probe has done it twice.
-- **`StoredHero` is version 4.** `RunSnapshot` carries `class`/`spec`/`level`; the hero
-  carries `bossKills`. `spec` is `null` everywhere and stays that way until Stage 7.
-  `StoredRun` is version 1. **There is still no `name` and that is a decision.**
-- **No new Redis call shipped this session.** `hero.setClass` goes through the existing
-  `updateHero` CAS loop, exactly as the two sinks did.
-- `public/` is 8 enemy portraits + 1 hero portrait + 3 backdrops. **22 of the 30 roster
-  rows have no portrait**, and **gear has no sprites at all** (owner answer 7). The ~40
-  base sprites are Stage 7. **Classes ship with no art either** — a chip is code-drawn.
-
-### The visual gate plays the class strip in all three of its states
-
-The offline delver is **level 7 deliberately**: that opens the Hunter and leaves the Adept
-locked, so a chosen chip, a takeable chip and a locked one carrying `LVL 10` are all on the
-screen at once. The gate measures the strip, then switches class and measures again. Same
-call as the `epic` ceiling on the offline stash — a preview that could only reach the happy
-path leaves the longer strings unmeasured.
+- On **`main`**. Stages 3–6b-4 merged.
+- **318 checks green** — 294 tsx + 24 vitest. Type-check and lint clean, **no size
+  exemptions**. `npm run test:visual` green at all three viewports with `KNOWN_FINDINGS`
+  empty, and it now measures the start-depth screen.
+- `tests/` is **sixteen** files. **`migration.test.ts`** split off `hero.test.ts` at 400
+  lines: a mutator changes when a run learns something new, a migration step is written
+  once and must keep working forever against blobs nobody can look at.
+- **The probe has a fourth sweep** and its rows are four points on the progression. It
+  prints a line when the deep start is in band and the shallow one is not, because that is
+  the finding rather than a number.
+- Played by hand at 320×568 and 1920×1080: prompt → three live chips → start depth →
+  loadout with no locked pane → **DEPTH 5 · HOLD** on the first fight; screen 04 read-only
+  with zero switch controls; START OVER routes through the door.
 
 
-## RULES THAT SHAPE THIS PROJECT
+## STILL OPEN
 
-1. **The Daily reads no account state.** `simulateRun(seed, choices)` — two arguments,
-   forever. **And the Daily's DRAW is one argument**: `issuedPoolForDay(seed)`.
-   `endlessPoolFor(seed, class)` is a separate function for exactly that reason.
-2. **The client submits CHOICES, never outcomes.** The server recomputes every score,
-   depth trace, bar size — every kit, every run seed, every item that dropped, every price
-   and reforge, **and now which class a run is being played as.**
-3. `src/shared/` stays pure — no I/O, no DOM, no `Math.random`.
-4. **Never re-implement a combat rule in `client/`.** If a screen needs a derived number,
-   the sim reports it — including `ceiling` and now the class's own HP, which the gear
-   screen receives rather than deriving.
-5. **Cohesion over size, and it is ENFORCED.** Files under 400 lines, functions under 80.
-   Split by *what it is about*, never into a `helpers.ts`.
-6. **Never mutate the `ABILITIES` registry.** A class signature is a field on the KIT, not
-   a mod on a row — three of them, each read at exactly one place in the turn loop.
-7. **No new Redis call without a test against `@devvit/test`'s mock.**
-8. **No art that animates or aligns.** Static squares only. Gear and classes ship with no
-   sprites.
-9. **Entrance animations animate `transform` only, never `opacity`.** A disabled control
-   dims with `filter`, for the same compositing reason.
-10. **The grid may not encode meaning in colour alone** — and neither may a rarity or a
-    class. Every chip carries its name.
-11. **Verify any layout change by PLAYING it** — `npm run test:visual`, then by hand at
-    320×568 and a desktop size.
-12. Prefer fixing balance in `TUNING` + the probe over adding systems.
-
-
-## NO OPEN QUESTIONS — but five numbers are openly owed a retune
-
-Three from last session stand unchanged (`rerollShare`/`ascendShare`, the level curve,
-`xpDailyRun`). Two are new, both `CLASSES`/`TUNING` knobs, none blocking:
-
-| Knob | Now | Owed |
+| | Now | Owed |
 |---|---|---|
-| class `hpBase` · `hpPerLevel` | `6/0.9` · `0/0.6` · `-4/0.35` | Real session data. The invariant that must survive is **GATE 5's three sweeps agreeing inside ten points**, which is what the retune was for. |
-| signature magnitudes | carry 50% · +1 rage · +1 tick | Real session data, and the per-class split needs more seeds before any of them is read as an outlier. |
-| class unlock levels | Warden 1 · Hunter 5 · Adept 10 | Both land in week one at the measured pace. Move freely — it is a **flag**, so nobody loses a class they already have. |
-| `hero.xpFirstBoss` | 150 (×4 bosses, ever) | A delver at depth 7 collects 1 of 4, worth 7% of a whole delver. The regular row is 3.3 weeks. |
+| **⚠ the fork ratio** | **86/14** | **Blocking, and yours** — see the top. |
+| **the overhaul** | scoped as **Stage 6c — the shell** | Your items 4, 6 and 7. Not started, deliberately: it touches `game.css` (3,307 lines) and every screen, and the folder locks screen shapes. **The copy pass has a concrete first move** — pull the player-facing strings into one `src/client/copy.ts` so you can edit wording without touching logic. |
+| ability unlock gates | 30 rows, authored at 6b-3 | Never measured against real play. |
+| the deep-start list | 5 / 9 / 13 / 17 | Whether 17 is reachable at all, and whether a deep start should cost something. |
+| class HP · signatures | unchanged from 6b-2 | Real session data. |
+| `MAX_ENDLESS_DEPTH` | 100 | Still owed a re-read. |
 
 
-## Three things to check yourself, on a real subreddit
+## Check on a real subreddit
 
-1. **Play the Daily two days running and confirm your shard total went up and stayed up.**
-2. **Start an Endless run, get two or three depths deep, close the tab, and come back.**
-3. **Find something, wear it, and die.** The receipt should name the item and mark it
-   WORN, your stash should be empty afterwards, and whatever you walked in wearing should
-   still be on you. Then do it again and surface instead.
-4. **Scrap, reforge and raise something in the camp.** An ascend into a tier your record
-   has not opened should refuse and print the depth that would open it.
-5. **Play two days and watch the level climb.** The camp head should move only on a
-   **submit** or a **settle**, never mid-delve.
-6. **NEW — open the Endless door.** The class prompt should be the first thing you see,
-   reading `YOU BEGIN AS A WARDEN` with HUNTER and ADEPT stacked below it, dimmed and
-   printing `LVL 5` and `LVL 10`. Confirm, and **it must never appear again** — the second
-   delve goes straight to the loadout. Then check screen 04: the strip should say
-   `WARDEN · DELVING AS` and the camp head `WARDEN · LVL n`. Level past 5, come back, and
-   the Hunter chip should be live — **switch to it and confirm the camp head follows.**
-   Then start an Endless run, go back to the camp, switch class *while the run is open*,
-   and resume: **the run must not change** — same nine abilities, same max HP. That is the
-   snapshot doing its job, and it is the one thing here only a real Redis can confirm.
-7. **NEW — close the game and open it again.** The tutorial must **not** offer itself a
-   second time. That is the whole point of the account flag, and the feed iframe is the
-   only place the old `localStorage` guard failed — so it is the only place this can be
-   confirmed.
+1. **Open the Endless.** The class prompt should read **PICK YOUR DELVER** with all three
+   chips live. Pick one, confirm — and it must never appear again.
+2. **Check screen 04.** The strip shows what you are and what the other two were, and
+   **nothing on it is tappable**.
+3. **Tap DELVE AGAIN on a receipt, and START OVER on the resume screen.** Both must reach
+   the door rather than dropping you straight into a shaft.
+4. **Fell the depth-4 boss, then start a new run.** The door should ask **HOW FAR DOWN?**
+   with depth 1 and depth 5. Pick 5 — the first fight must be `DEPTH 5 · HOLD`.
+5. **Check what a deep run paid.** The receipt's XP should reflect the depths you actually
+   fought, and your record should be the real depth, not the count.
+6. **Your Daily replay history is gone** from the 6b-3 version bump, and your class was
+   cleared by this one. Shards, stash, level, XP and depth record are all untouched.

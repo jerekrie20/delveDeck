@@ -12,7 +12,7 @@
 //     That is what keeps the number on the tile literally true, and the three-turn
 //     telegraph depends on it absolutely.
 
-import type { Ability, StatusApplication, StatusId } from './abilities';
+import { ABILITIES, type Ability, type StatusApplication, type StatusId } from './abilities';
 import { boonById, type AbilityMod } from './boons';
 import type { Intent } from './enemies';
 import { traitMagnitude, type Encounter } from './encounter';
@@ -105,7 +105,10 @@ function hitEnemy(state: SimState, enc: Encounter, ability: Ability, raw: number
   if (enc.wardedRemaining > 0) enc.wardedRemaining--;
 
   let through = amount;
-  if (!ability.ignoresBlock) {
+  // **`marked` is spent HERE and only here**, which is what makes it the one status
+  // measured in hits rather than turns. The short-circuit matters: a row that already
+  // ignores block never eats a mark, or Bloodtide would quietly spend the Hunter's.
+  if (!ability.ignoresBlock && !consumeMark(enc.statuses)) {
     const absorbed = Math.min(enc.block, amount);
     enc.block -= absorbed;
     through = amount - absorbed;
@@ -136,13 +139,31 @@ function applyStatus(
 /**
  * Tick a status list down by one of the affected side's turns.
  *
- * `stun` and `weaken` are excluded on purpose: stun is consumed when it fires (see
- * `consumeStun`) and weaken is consumed by the next attack, so ticking them here
- * would spend them twice.
+ * `stun`, `weaken` and `marked` are excluded on purpose: stun is consumed when it fires
+ * (see `consumeStun`), weaken is consumed by the next attack, and marked is consumed by
+ * the next HIT (see `consumeMark`) — so ticking any of them here would spend them twice.
  */
+const SPENT_NOT_TICKED: readonly StatusId[] = ['stun', 'weaken', 'marked'];
+
 export function tickStatuses(rows: StatusApplication[]): void {
-  for (const row of rows) if (row.id !== 'stun' && row.id !== 'weaken') row.turns--;
+  for (const row of rows) if (!SPENT_NOT_TICKED.includes(row.id)) row.turns--;
   for (let i = rows.length - 1; i >= 0; i--) if (rows[i]!.turns <= 0) rows.splice(i, 1);
+}
+
+/**
+ * Spend one hit's worth of `marked`, if any is standing. Returns true when this hit goes
+ * straight past the enemy's block.
+ *
+ * The magnitude is a COUNT OF HITS rather than a size, which is the whole of what makes
+ * this status different from the other six: it waits for the turn the enemy blocks
+ * instead of expiring on a clock.
+ */
+export function consumeMark(rows: StatusApplication[]): boolean {
+  const index = rows.findIndex((s) => s.id === 'marked' && s.magnitude > 0);
+  if (index < 0) return false;
+  rows[index]!.magnitude--;
+  if (rows[index]!.magnitude <= 0) rows.splice(index, 1);
+  return true;
 }
 
 /** Spend one turn of stun, if any is standing. Returns true when the enemy's turn
@@ -172,29 +193,84 @@ export function incomingToHp(enc: Encounter, total: number, block: number): numb
   return through;
 }
 
-/** Resolve one cast against the enemy. The row passed in is already an
- *  `effectiveAbility` copy — never a registry row. */
+/**
+ * Resolve one cast against the enemy. The row passed in is already an
+ * `effectiveAbility` copy — never a registry row.
+ *
+ * **The five class-locked mechanics are read HERE, as plain fields, in this order** — no
+ * interpreter, no per-class branch, and a shared row simply has none of them set. See
+ * `Ability` in `abilities.ts` for why each one had to be a field rather than a number on
+ * an existing one.
+ */
 export function castAbility(state: SimState, enc: Encounter, row: Ability): void {
   if (row.energy) state.energy += row.energy;
   if (row.selfDamage) state.hero.hp -= row.selfDamage;
   if (row.heal) state.hero.hp = Math.min(state.hero.maxHp, state.hero.hp + row.heal);
   if (row.block) state.hero.block += row.block + state.kit.block;
+  // HOLD THE LINE. Suspends the turn-start clear for one turn; `sim.ts` reads and resets
+  // the flag at the top of the next turn, which is the only place block is cleared.
+  if (row.holdsBlock) state.blockHeld = true;
 
   let dealtAny = false;
+  // BULWARK'S OATH. Spends every point standing and hands back Thorns worth a fraction —
+  // the same *"over-blocking stops being waste"* sentence the Warden's signature reads,
+  // paid as offence instead of as carry. Nothing standing means nothing to convert.
+  if (row.blockToThorns && state.hero.block > 0) {
+    const spent = state.hero.block;
+    state.hero.block = 0;
+    applyStatus(state, enc, {
+      id: 'thorns',
+      magnitude: Math.ceil(spent * row.blockToThorns.pct / 100),
+      turns: row.blockToThorns.turns,
+    });
+  }
   if (row.damage) {
     for (let h = 0; h < (row.hits ?? 1); h++) {
       hitEnemy(state, enc, row, row.damage + state.kit.attack);
       dealtAny = true;
     }
   }
+  // SIPHON. The enemy's accumulated empower, taken to zero and delivered as damage. It
+  // lands through this row's own school, so armour bites it exactly as it bites the rest
+  // of the cast — a stolen number is still a hit, not a special case.
+  if (row.stealsBuff && enc.buff > 0) {
+    const stolen = enc.buff;
+    enc.buff = 0;
+    hitEnemy(state, enc, row, stolen);
+    dealtAny = true;
+  }
+  // RUNIC ECHO. The last DAMAGING spell cast this depth, at a fraction. Folded fresh
+  // rather than remembered as a resolved number, so a boon taken since the original cast
+  // is in the echo too — the echo is the ability firing again, not a replay of a number.
+  const echoed = row.echoDamagePct ? echoTarget(state) : undefined;
+  if (row.echoDamagePct && echoed?.damage) {
+    const raw = Math.ceil((echoed.damage + state.kit.attack) * row.echoDamagePct / 100);
+    for (let h = 0; h < (echoed.hits ?? 1); h++) hitEnemy(state, enc, echoed, raw);
+    dealtAny = true;
+  }
   // Rage: +1 when a cast DEALS DAMAGE — once per cast, not per hit. A three-hit
   // tempo ability grants 1, not 3.
   if (dealtAny) state.rage = Math.min(state.kit.maxRage, state.rage + 1);
   if (row.rage) state.rage = Math.min(state.kit.maxRage, state.rage + row.rage);
   if (row.status) applyStatus(state, enc, row.status);
+  // SECOND WIND. A kill ends the depth, so the energy goes where it can still be spent:
+  // the first turn of the next one. `sim.ts` is what hands it over.
+  if (row.refundOnKill && enc.hp <= 0) state.nextDepthEnergy += row.refundOnKill;
+  // …and the memory the echo reads. A row with no damage is never remembered (there
+  // would be nothing to halve) and the echo never remembers itself (it would echo an
+  // echo, which is a loop wearing a data field's clothes).
+  if (row.school === 'spell' && row.damage && row.echoDamagePct === undefined) {
+    state.lastSpell = row.id;
+  }
 
   if (!row.ultimate) {
     state.facts.casts++;
     state.facts.castsByArchetype[row.archetype]++;
   }
+}
+
+/** The row Runic Echo would fire, folded through the same mods the original was. */
+function echoTarget(state: SimState): Ability | undefined {
+  const base = state.lastSpell === null ? undefined : ABILITIES[state.lastSpell];
+  return base && effectiveAbility(base, state.kit.mods, state.boons);
 }

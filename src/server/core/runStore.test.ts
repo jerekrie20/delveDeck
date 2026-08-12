@@ -14,15 +14,16 @@ import {
 import { getBoard, submitRun } from './run';
 import { readDayStats } from './stats';
 import { heroKey, readHero, updateHero } from './heroStore';
-import { bankRunShards, bankShards, readShardTotal } from './hero';
+import { bankRunShards, bankShards, readShardTotal, setHeroClass } from './hero';
 import { consumeRateLimit } from './rateLimit';
-import { STORED_HERO_VERSION, bareSnapshot } from './heroSchema';
+import { STORED_HERO_VERSION, bareSnapshot, type RunSnapshot } from './heroSchema';
 import { findSettledRun, recordSettledRun, runDoneKey } from './runDedupe';
 import {
   readEndlessState, replayEndless, settleEndlessRun, startEndlessRun, stepEndlessRun,
 } from './endless';
 import {
-  depthReached, levelForXp, MAX_RUN_CHOICES, seedForDay, simulateRun, TUNING,
+  collectionAt, DEFAULT_CLASS_ID, depthReached, levelForXp, MAX_RUN_CHOICES, seedForDay,
+  simulateRun, TUNING,
   type RunChoice,
 } from '../../shared/sim';
 
@@ -323,8 +324,21 @@ test('rate-limit windows rotate by time, so a limit is never permanent', async (
 
 const ENDLESS_SEED = 4242;
 
+/**
+ * Answer the class prompt for a user, which from Stage 6b-4 is what a run requires.
+ *
+ * `startEndlessRun` refuses a classless hero rather than stamping a default — the silent
+ * stamp is exactly the bug 6b-4 removed — so these fixtures make the choice a real player
+ * makes before opening a shaft.
+ */
+async function chooseClass(user: string): Promise<void> {
+  await updateHero(redisHeroClient, user, NOW, setHeroClass(DEFAULT_CLASS_ID), 3);
+}
+
 test('an in-progress Endless run survives a real WATCH / MULTI / EXEC round trip', async () => {
   const user = 't2_endless_roundtrip';
+
+  await chooseClass(user);
 
   const started = await startEndlessRun(redisHeroClient, user, 'run-a', ENDLESS_SEED, NOW);
   expect(started.ok).toBe(true);
@@ -334,9 +348,12 @@ test('an in-progress Endless run survives a real WATCH / MULTI / EXEC round trip
   const state = await readEndlessState(redisHeroClient, user, NOW);
   expect(state.run?.runId).toBe('run-a');
   expect(state.run?.seed).toBe(ENDLESS_SEED);
-  // The kit came back out of the STORED seed. Nothing sent one up and nothing stored
-  // one — this is `kitForRun` running against a blob that made a full round trip.
-  expect(state.run?.kit.pool).toHaveLength(TUNING.poolSize);
+  // The kit came back out of the STORED snapshot. Nothing sent one up — this is
+  // `kitForRun` running against a blob that made a full round trip, and from Stage 6b-3
+  // the pool it rebuilds is the delver's own COLLECTION rather than a nine drawn off the
+  // seed. A brand-new delver is a level-1 Warden, so that is what it is compared against.
+  expect(state.run?.kit.pool)
+    .toEqual(collectionAt(DEFAULT_CLASS_ID, 1, 0).abilities);
 
   const raw = await redisRunStore.readRun(heroKey(user));
   expect(raw).toBeTruthy();
@@ -345,6 +362,7 @@ test('an in-progress Endless run survives a real WATCH / MULTI / EXEC round trip
 
 test('a checkpoint is persisted, and a rewind of it is refused', async () => {
   const user = 't2_endless_checkpoint';
+  await chooseClass(user);
   await startEndlessRun(redisHeroClient, user, 'run-b', ENDLESS_SEED, NOW);
   const load: RunChoice[] = [{ k: 'load', bar: [0, 1, 2], ult: 0 }];
 
@@ -368,6 +386,7 @@ test('END TO END — surfacing banks onto the same hero the Daily writes', async
   // The two modes share one blob and one CAS loop, so this is the check that they are
   // not two accounts wearing one key.
   const user = 't2_endless_banker';
+  await chooseClass(user);
   await bankRunShards(redisHeroClient, user, 500, NOW);
   await startEndlessRun(redisHeroClient, user, 'run-c', ENDLESS_SEED, NOW);
 
@@ -399,6 +418,25 @@ test('the dedupe summary round-trips, so a retried settle replays its receipt', 
 });
 
 /**
+ * The snapshot `startEndlessRun` actually writes for a brand-new delver: a level-1 Warden
+ * with the collection that opens at level 1.
+ *
+ * **`bareSnapshot()` would be the wrong one from Stage 6b-3**, and wrong in a way that
+ * looks like a passing test until it doesn't: it is the PRE-v5 snapshot, whose pool is
+ * empty by design, so `{k:'load', bar:[0,1,2]}` is an illegal choice against it and every
+ * line below would come back `invalid`.
+ */
+function startedSnapshot(): RunSnapshot {
+  const collection = collectionAt(DEFAULT_CLASS_ID, 1, 0);
+  return {
+    ...bareSnapshot(),
+    class: DEFAULT_CLASS_ID,
+    pool: collection.abilities,
+    ultimates: collection.ultimates,
+  };
+}
+
+/**
  * Play to the first fork by ASKING THE SIM, never by counting turns.
  *
  * Every candidate is trialled and dropped if the run comes back `invalid`, which is the
@@ -408,14 +446,14 @@ test('the dedupe summary round-trips, so a retried settle replays its receipt', 
 function playToFirstFork(): RunChoice[] {
   const choices: RunChoice[] = [{ k: 'load', bar: [0, 1, 2], ult: 0 }];
   const legal = (candidate: RunChoice): boolean => {
-    if (replayEndless({ seed: ENDLESS_SEED, snapshot: bareSnapshot() }, [...choices, candidate]).outcome === 'invalid') {
+    if (replayEndless({ seed: ENDLESS_SEED, snapshot: startedSnapshot() }, [...choices, candidate]).outcome === 'invalid') {
       return false;
     }
     choices.push(candidate);
     return true;
   };
   for (let guard = 0; guard < 400; guard++) {
-    const result = replayEndless({ seed: ENDLESS_SEED, snapshot: bareSnapshot() }, choices);
+    const result = replayEndless({ seed: ENDLESS_SEED, snapshot: startedSnapshot() }, choices);
     const view = result.view;
     if (result.outcome !== 'outOfChoices' || !view) break;
     if (view.phase === 'fork') break;

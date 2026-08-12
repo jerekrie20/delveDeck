@@ -31,15 +31,20 @@
 // than only type-checked.
 
 import {
-  DEFAULT_CLASS_ID, classById, itemName, issuedKitForDay, seedForDay,
-  simulateEndless, TUNING, xpForEndlessRun,
+  CLASS_LIST, DEFAULT_CLASS_ID, NO_CLASS, classById, collectionAt, endlessKitFor, itemName,
+  seedForDay, simulateEndless, TUNING, xpForEndlessRun,
   type ForkView, type IssuedKit, type RunChoice, type RunResult,
 } from '../shared/sim';
+// **`import type` and nothing else.** A VALUE imported from `src/server/` here is what
+// black-screened the app on Reddit — see `shared/classes.ts` § NO_CLASS. A type is erased
+// before the bundler ever sees it; a value drags a client module into the server tree and
+// the build stops resolving that module's imports at all.
 import type { EndlessSummary } from '../server/core/endless';
 import { loadoutScreen } from './camp';
 import { combatScreen } from './combat';
 import {
-  classChoiceScreen, commitClass, pendingClass, pickClass, resetClassChoice, type DelverView,
+  classChoiceScreen, commitClass, pendingClass, pickClass, resetClassChoice, sessionClassId,
+  startChoiceScreen, type DelverView,
 } from './delver';
 import { affixSummary, rarityClass } from './gear';
 import { boonScreen, descentScreen } from './interlude';
@@ -70,7 +75,7 @@ interface LiveRun {
 /** `class` is the once-per-delver gate on the way in — it fires only while `delver.class`
  *  is null, which is at most once and never again on that account. */
 type Phase =
-  | 'closed' | 'class' | 'opening' | 'resume' | 'playing' | 'settling' | 'settled';
+  | 'closed' | 'class' | 'start' | 'opening' | 'resume' | 'playing' | 'settling' | 'settled';
 
 let phase: Phase = 'closed';
 let run: LiveRun | null = null;
@@ -99,12 +104,34 @@ let offlineRuns = 0;
  * same call the offline stash and the offline run already make, and it is what lets the
  * visual gate measure a screen that only exists once per account.
  */
-let delver: DelverView = { class: null, unlocked: [DEFAULT_CLASS_ID], level: 1 };
+let delver: DelverView = { class: null, unlocked: CLASS_LIST.map((row) => row.id), level: 1 };
+/**
+ * Every depth this delver may begin at (Stage 6b-4). **The server's answer**, derived from
+ * `bossKills` — re-deriving it here would be a second copy of a rule the hero owns. On a
+ * real delver it is `[1]` until a stratum boss has been felled, which is what keeps a
+ * first-time player from ever meeting a choice with one option in it.
+ *
+ * **The OFFLINE default carries a second start, deliberately**, and it is the same call
+ * `gear.ts` makes giving its offline stash seven deep rolls and level 7: with no server
+ * there is nothing to have felled, so a screen that only exists for a delver who has
+ * beaten a boss would be unreachable under `npm run preview` — and therefore unmeasurable
+ * by the visual gate, which is where every layout bug this project has shipped was found.
+ */
+let startDepths: number[] = [1, 5];
+/** What the start screen is pointing at, exactly as long-lived as the screen. */
+let pendingStart = 1;
 
 // ---- what the camp shows ----------------------------------------------------------
 
 export interface EndlessDoor {
-  /** Depths cleared by the run in progress, 0 when there is none. */
+  /**
+   * How deep the run in progress has actually got, 0 when there is none.
+   *
+   * **The DEPTH, not the count** — the two split at Stage 6b-4, when a run gained the
+   * ability to begin below depth 1. A door telling somebody standing at depth 14 that they
+   * are *"2 deep"* would be the camp lying about the run it is offering to resume, which
+   * is exactly the class of bug 6a already found here once.
+   */
   depth: number;
   /** The unbanked haul that run is carrying. */
   haul: number;
@@ -124,7 +151,7 @@ export function endlessDoor(): EndlessDoor {
   const live = run ?? stored;
   const carried = live ? simulateEndless(live.seed, live.choices, live.kit) : null;
   return {
-    depth: carried?.cleared ?? 0,
+    depth: carried?.clearedTo ?? 0,
     haul: carried?.shards ?? 0,
     best,
     running: carried !== null,
@@ -147,6 +174,7 @@ export async function loadEndless(): Promise<void> {
   bankedTotal = state.shards;
   stored = state.run;
   delver = { class: state.class, unlocked: state.unlocked, level: state.level };
+  startDepths = state.startDepths.length > 0 ? state.startDepths : [1];
 }
 
 /** The class the camp head prints, once this mode has heard one. Null before that, and
@@ -181,18 +209,7 @@ function depthOfView(result: RunResult): number {
 export function openEndless(day: string, rerender: () => void): void {
   notice = null;
   if (run || stored) { phase = 'resume'; rerender(); return; }
-  // **The class is chosen HERE, before the first run, and only ever once** (owner call,
-  // 2026-08-06). The strip on screen 04 was the first home and it was the wrong one for
-  // the FIRST time: a player who never opened the gear tile never met their own class,
-  // which is the decision this whole mode is built around. Afterwards the class is set
-  // and this branch never fires again — switching lives on 04 forever.
-  if (!classById(delver.class)) {
-    resetClassChoice(delver);
-    phase = 'class';
-    rerender();
-    return;
-  }
-  void beginRun(day, rerender);
+  startOrChoose(day, rerender);
 }
 
 /** Confirm the choice, then open the shaft. The server's answer is what sticks — offline
@@ -202,13 +219,13 @@ async function confirmClass(day: string, rerender: () => void): Promise<void> {
   const chosen = pendingClass() ?? DEFAULT_CLASS_ID;
   commitClass(chosen);
   const result = await setDelverClass(chosen);
-  // A refusal is not a dead end: `ensureClass` stamps the default inside the run's own
-  // transaction, so a delve can always start. The notice says what happened and the run
-  // goes ahead rather than stranding somebody at a screen they cannot leave forward.
+  // A refusal is not a dead end. Offline there is no server to answer, and the local value
+  // is the only answer there is — which the run's own banner already says out loud.
   if ('error' in result) notice = result.error;
   else delver = { class: result.class, unlocked: result.unlocked, level: result.level };
   if (!classById(delver.class)) delver = { ...delver, class: chosen };
-  await beginRun(day, rerender);
+  // Back through the one door, so a delver who has bosses felled still gets asked WHERE.
+  startOrChoose(day, rerender);
 }
 
 /**
@@ -230,10 +247,25 @@ function resumeStored(rerender: () => void): void {
   rerender();
 }
 
-/** Mint an offline run. Deterministic, unsaveable, and honest about both. */
-function openOffline(day: string): void {
+/**
+ * Mint an offline run. Deterministic, unsaveable, and honest about both.
+ *
+ * **It builds the Endless's real kit rather than the Daily's**, which matters from Stage
+ * 6b-3 in a way it did not before: the Endless no longer draws, so a preview handed
+ * `issuedKitForDay` would play a nine that this mode cannot issue and the loadout screen
+ * the gate measures would be the wrong screen entirely. `collectionAt` is the same rule
+ * the server writes flags with, read forward for a client that has no hero blob.
+ */
+function openOffline(day: string, from: number): void {
   const seed = (seedForDay(day) ^ Math.imul(++offlineRuns, 0x9e37_79b1)) >>> 0;
-  const kit = issuedKitForDay(seed);
+  const classId = classById(sessionClassId() ?? delver.class)?.id ?? DEFAULT_CLASS_ID;
+  const kit = {
+    ...endlessKitFor(seed, classId, delver.level, collectionAt(classId, delver.level, best)),
+    // **The offline run honours the start it was given.** Without this the door would ask
+    // where to begin and then ignore the answer, which is the one thing the offline
+    // fallback is built not to do: it may be unsaveable, but it must never be untrue.
+    startDepth: from,
+  };
   run = { runId: 'offline', seed, kit, choices: [], offline: true };
   stored = { runId: run.runId, seed, choices: [], kit };
   offlineNow = true;
@@ -242,17 +274,56 @@ function openOffline(day: string): void {
   phase = 'playing';
 }
 
-async function beginRun(day: string, rerender: () => void): Promise<void> {
+/**
+ * **The ONE door into a run, and every entrance goes through it.**
+ *
+ * There were three before Stage 6b-4 — this, the receipt's DELVE AGAIN and the resume
+ * screen's START OVER — and only `openEndless` checked for a class. The other two opened a
+ * shaft directly, the server stamped a default so the delve *"could always start"*, and the
+ * prompt (which fires only while the class is null) then never fired again. **A player got a
+ * permanent class they were never offered.** So there is one function now, and asking it
+ * for a run is the same thing as passing the checks.
+ */
+function startOrChoose(day: string, rerender: () => void): void {
+  notice = null;
+  if (!classById(delver.class)) {
+    resetClassChoice(delver);
+    phase = 'class';
+    rerender();
+    return;
+  }
+  // Where to begin, but only when there is more than one answer — a first-time delver has
+  // felled nothing, so the list is `[1]` and they never meet a question with one option.
+  if (startDepths.length > 1) {
+    pendingStart = startDepths[0]!;
+    phase = 'start';
+    rerender();
+    return;
+  }
+  void beginRun(day, 1, rerender);
+}
+
+async function beginRun(day: string, from: number, rerender: () => void): Promise<void> {
   phase = 'opening';
   summary = null;
-  notice = null;
   rerender();
-  const opened = await startEndless(newRunId());
+  const opened = await startEndless(newRunId(), from);
   if ('error' in opened) {
-    // No server, or it refused. Play offline rather than showing a dead door — the
-    // Daily does exactly this, and a mode nobody can enter teaches nothing.
+    // **A missing class is not "no server", and telling them apart is load-bearing.** Every
+    // other failure here means the server is unreachable and an offline run is the honest
+    // fallback; this one means *go and answer the prompt*. Falling through to `openOffline`
+    // would put the player in an unsaved run instead of asking — which is the 6b-3 bug
+    // wearing a different coat.
+    if (opened.error === NO_CLASS) {
+      resetClassChoice(delver);
+      phase = 'class';
+      rerender();
+      return;
+    }
+    // No server. Play offline rather than showing a dead door — the Daily does exactly
+    // this, and a mode nobody can enter teaches nothing.
     notice = 'No shaft on the server — this run is not being saved.';
-    openOffline(day);
+    openOffline(day, from);
   } else {
     run = { ...opened.run, choices: [...opened.run.choices], offline: false };
     stored = { ...opened.run, choices: [] };
@@ -349,12 +420,15 @@ async function settle(rerender: () => void): Promise<void> {
  *  and `outcomeScreen` says *surfaced, not banked* rather than pretending otherwise. */
 function offlineSummary(): EndlessSummary {
   const result = currentResult();
-  const beat = result.cleared > best;
-  best = Math.max(best, result.cleared);
+  // The record is a DEPTH, exactly as `keepRecord` reads it on the server — *"depth N is
+  // depth N, however you got there"*. On a run that began at the top the two are equal.
+  const beat = result.clearedTo > best;
+  best = Math.max(best, result.clearedTo);
   return {
     runId: run!.runId,
     outcome: result.outcome === 'surfaced' ? 'surfaced' : 'died',
     cleared: result.cleared,
+    clearedTo: result.clearedTo,
     depth: result.facts.deepestDepth,
     haul: result.shards,
     items: result.haul,
@@ -379,6 +453,9 @@ function offlineSummary(): EndlessSummary {
     // Empty for the same reason `kept` is: *"once each, ever"* is a fact about an account,
     // and offline there is no account to have felled anything before.
     firstBosses: [],
+    // …and so is a collection. An offline delver's pool is whatever level 1 opens and it
+    // never grows, so there is genuinely nothing new to name.
+    learned: [],
   };
 }
 
@@ -396,11 +473,18 @@ export function endlessAction(
   switch (action) {
     case 'enter-endless': openEndless(day, rerender); return true;
     case 'endless-resume': resumeStored(rerender); return true;
+    // **Both of these used to call `beginRun` directly**, which is how a class got stamped
+    // on somebody who was never asked. They go through the one door now.
     case 'endless-new':
-    case 'endless-again': void beginRun(day, rerender); return true;
+    case 'endless-again': startOrChoose(day, rerender); return true;
     case 'endless-retry': void settle(rerender); return true;
     case 'class-pick': pickClass(delver, index); rerender(); return true;
     case 'class-confirm': void confirmClass(day, rerender); return true;
+    case 'start-pick':
+      if (startDepths.includes(index)) pendingStart = index;
+      rerender();
+      return true;
+    case 'start-confirm': void beginRun(day, pendingStart, rerender); return true;
     default: break;
   }
   if (!endlessActive()) return false;
@@ -419,6 +503,7 @@ export function endlessAction(
 
 export function endlessScreen(pending: EndlessPending): string {
   if (phase === 'class') return classChoiceScreen(delver);
+  if (phase === 'start') return startChoiceScreen(startDepths, pendingStart);
   if (phase === 'resume') return resumeScreen();
   if (phase === 'settled' && summary) {
     return outcomeScreen(summary, { banner: banner(), offline: offlineNow });
@@ -434,7 +519,9 @@ export function endlessScreen(pending: EndlessPending): string {
   // settle leaves you, and where walking to the camp and back would otherwise dead-end
   // on a screen with no way forward.
   if (!view) return settlingScreen();
-  if (view.phase === 'loadout') return loadoutScreen(view, pending.bar, pending.ultimate);
+  if (view.phase === 'loadout') {
+    return loadoutScreen(view, pending.bar, pending.ultimate, 'endless');
+  }
   if (view.phase === 'fork') return forkScreen(view);
   if (view.phase === 'boon') return boonScreen(view, pending.boon);
   return combatScreen(view, result.log.at(-1) ?? '', { live: true, haul: true });

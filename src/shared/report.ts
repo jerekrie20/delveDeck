@@ -116,6 +116,7 @@ export function finish(
   state: SimState,
   outcome: RunOutcome,
   cleared: number,
+  clearedTo: number,
   depthMarks: number[],
   depthBands: DepthBand[],
   extra: { badChoiceIndex?: number; view?: RunView } = {},
@@ -125,6 +126,7 @@ export function finish(
   return {
     outcome,
     cleared,
+    clearedTo: outcome === 'invalid' ? 0 : clearedTo,
     hp,
     score,
     bar: [...state.bar],

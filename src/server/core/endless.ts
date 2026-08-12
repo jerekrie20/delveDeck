@@ -37,15 +37,16 @@
 // conflict replays them.
 
 import {
-  CLASS_LIST, ceilingForRecord, endlessKitFor, gearedKit, levelForXp, simulateEndless, TUNING,
+  CLASS_LIST, NO_CLASS, ceilingForRecord, classById, collectionFor, endlessKitFor, gearedKit,
+  levelForXp, simulateEndless, startDepthsFor, TUNING,
   type IssuedKit, type Item, type RunChoice, type RunResult,
 } from '../../shared/sim';
 import type { RunSnapshot, StoredEndlessRun, StoredHero } from './heroSchema';
 import type { HeroRedisLike } from './heroStore';
 import { CAS_ATTEMPTS, readHero, updateHero } from './heroStore';
 import {
-  beginEndlessRun, endEndlessRun, endlessBestOf, ensureClass, saveEndlessProgress,
-  type EndlessSettlement,
+  beginEndlessRun, classForRun, endEndlessRun, endlessBestOf, ensureCollection,
+  saveEndlessProgress, type EndlessSettlement,
 } from './hero';
 import { STORED_RUN_VERSION } from './run';
 import { findSettledRun, recordSettledRun, type RunDedupeRedisLike } from './runDedupe';
@@ -65,14 +66,25 @@ import { findSettledRun, recordSettledRun, type RunDedupeRedisLike } from './run
  *
  * **This is still the one line in the project that derives a kit**, and it is still one
  * line. Classes arrived by widening what `endlessKitFor` reads, not by adding a second
- * derivation beside it. Talents join the same way at Stage 7.
+ * derivation beside it, and the collection arrived the same way at 6b-3. Talents join it
+ * at Stage 7.
  *
- * A snapshot with `class: null` — which is every run written before v4 — derives exactly
- * `issuedKitForDay(seed)` folded over its gear, i.e. the kit it was actually played on.
+ * **The pool comes off the snapshot VERBATIM and is never rebuilt.** From 6b-3 the
+ * Endless has no draw to rebuild it with — see `RunSnapshot.pool`, which carries the
+ * whole reason. A run written before v5 has an empty pool here and never reaches this
+ * function, because `STORED_RUN_VERSION` retires it first.
  */
 export function kitForRun(run: Pick<StoredEndlessRun, 'seed' | 'snapshot'>): IssuedKit {
-  const { gear, dropCeiling, class: classId, level } = run.snapshot;
-  return gearedKit(endlessKitFor(run.seed, classId ?? null, level ?? 1), gear, dropCeiling);
+  const { gear, dropCeiling, class: classId, level, pool, ultimates, startDepth } = run.snapshot;
+  const collection = { abilities: pool ?? [], ultimates: ultimates ?? [] };
+  return {
+    ...gearedKit(
+      endlessKitFor(run.seed, classId ?? null, level ?? 1, collection), gear, dropCeiling,
+    ),
+    // Straight off the snapshot, like everything else here — felling the depth-8 boss
+    // *during* this run must not move where this run began.
+    startDepth: startDepth ?? 1,
+  };
 }
 
 /**
@@ -80,23 +92,42 @@ export function kitForRun(run: Pick<StoredEndlessRun, 'seed' | 'snapshot'>): Iss
  * compare-and-set mutator so a concurrent equip cannot stamp a run with gear the blob no
  * longer holds.
  *
- * **`ensureClass` is what makes "you are a Warden" true**, and it happens here rather than
- * at account creation: opening the Endless is the moment a delver first needs a class, and
- * a Daily-only player never does. It writes to the hero it is handed, which is legal for
- * the same reason everything in `core/hero.ts` is — the mutator this runs inside is
- * replayed against a fresh blob, and stamping the same default twice is stamping it once.
+ * **It no longer invents a class, and that is the 6b-4 correction.** `classForRun` only
+ * READS — see its note in `core/hero.ts` for the bug that made this necessary — so a hero
+ * who has not answered the prompt has no class here, and `startEndlessRun` refuses rather
+ * than defaulting. Callers must not reach this without one.
+ *
+ * **`ensureCollection` is a different thing and still writes**, because it is bookkeeping
+ * rather than a decision. It has to run here rather than only on an award: a delver's very
+ * first Endless run happens before they have ever settled one, so nothing has written their
+ * starting flags yet. It brings the flag bag up to whatever the level and the record have
+ * earned, and the pool is read off the flags immediately afterwards — inside the same
+ * mutator, against the same blob.
  */
-export function snapshotOfHero(hero: StoredHero): RunSnapshot {
+export function snapshotOfHero(hero: StoredHero, startDepth: number): RunSnapshot {
+  const classId = classForRun(hero);
+  ensureCollection(hero);
+  const collection = collectionFor(classId, hero.unlocked);
   return {
     gear: hero.gear ?? {},
     dropCeiling: ceilingForRecord(endlessBestOf(hero)),
-    class: ensureClass(hero),
-    // Always null at 6b-2 — evolution is Stage 7. Frozen here anyway so the day a spec
+    class: classId,
+    // Always null at 6b-4 — evolution is Stage 7. Frozen here anyway so the day a spec
     // exists it is already part of what a run was played under.
     spec: hero.spec ?? null,
     // The DERIVED level, never the cached field: `hero.level` is a cache of
     // `levelForXp(hero.xp)` and a snapshot is forever, so it reads the source.
     level: levelForXp(hero.xp ?? 0),
+    // **The list, not the rule that produced it.** See `RunSnapshot.pool`: `load.bar`
+    // indexes this, and a collection that grew mid-run would otherwise re-point every
+    // index in a stored choice list.
+    pool: collection.abilities,
+    ultimates: collection.ultimates,
+    // Re-validated HERE rather than trusted from the caller's earlier read, for the same
+    // reason the gear is snapshotted here: this runs inside the compare-and-set mutator,
+    // and a boss felled by a concurrent settle must not let a start depth through that the
+    // blob being written does not actually open.
+    startDepth: startDepthsFor(hero.bossKills ?? []).includes(startDepth) ? startDepth : 1,
   };
 }
 
@@ -144,6 +175,7 @@ export const MAX_ENDLESS_CHOICES =
  *  alphabet-checked at the schema before it ever gets here. */
 export const MAX_RUN_ID_LENGTH = 40;
 
+
 // ---- what the client is told ------------------------------------------------------
 
 /** Everything the client needs to play a run it did not start this session. The kit
@@ -168,6 +200,11 @@ export interface EndlessState {
   class: string | null;
   unlocked: string[];
   level: number;
+  /** Every depth this delver may begin at, shallowest first — always at least `[1]`.
+   *  Derived from `bossKills` here rather than in `client/`, which is rule 4: the layer
+   *  that owns the rule reports the number. The door draws the choice only when there is
+   *  more than one, so a first-time player never meets a question with one answer. */
+  startDepths: number[];
 }
 
 /** What the client echoes back on every call after the first. */
@@ -184,8 +221,12 @@ export type EndlessOutcome = 'surfaced' | 'died';
 export interface EndlessSummary extends EndlessSettlement {
   runId: string;
   outcome: EndlessOutcome;
-  /** Depths fully cleared — the headline, and the number the record is kept in. */
+  /** Depths fully cleared — a COUNT, and what the XP is priced off. */
   cleared: number;
+  /** The deepest depth actually cleared — a DEPTH. Equal to `cleared` on a run that began
+   *  at the top, and not on one that began at a boss's far side (Stage 6b-4). The receipt
+   *  reads this wherever it names a rung of the shaft rather than an amount of work. */
+  clearedTo: number;
   /** The deepest depth ENTERED. Death at 18 having cleared 17 reads "the lantern went
    *  out at depth 18" and keeps a record of D17: you do not set a record by walking
    *  into a fight. Both numbers are shown, both are labelled. */
@@ -288,13 +329,24 @@ export async function startEndlessRun(
   runId: string,
   seed: number,
   nowMs: number,
+  startDepth = 1,
 ): Promise<StartResult> {
   if (!runId || runId.length > MAX_RUN_ID_LENGTH) return fail('Bad run id.');
+  // **A run without a class is refused, and that is what makes the choice unskippable.**
+  // Until 6b-4 `ensureClass` stamped a default here so a delve could always start, and it
+  // stamped one on everybody who reached the shaft through the receipt or the resume
+  // screen — neither of which passes the prompt. Refusing is the version of that rule with
+  // no way around it: `NO_CLASS` is a distinct string because the client has to route it to
+  // the prompt rather than to its offline fallback, which would hide this all over again.
+  // A pure READ, deliberately — `classForRun` opens flags as a side effect and belongs
+  // inside the mutator. Here the question is only *has this delver answered the prompt*.
+  const before = await readHero(client, userId, nowMs);
+  if (!classById(before?.class)) return fail(NO_CLASS);
   const { result } = await updateHero(
     client, userId, nowMs,
     beginEndlessRun(
       { version: STORED_RUN_VERSION, runId, seed, choices: [], startedAt: nowMs, updatedAt: nowMs },
-      snapshotOfHero,
+      (hero) => snapshotOfHero(hero, startDepth),
       depthOfStoredRun,
     ),
     CAS_ATTEMPTS.runResult,
@@ -344,6 +396,7 @@ export async function readEndlessState(
     class: hero?.class ?? null,
     unlocked: CLASS_LIST.filter((row) => level >= row.unlockLevel).map((row) => row.id),
     level,
+    startDepths: startDepthsFor(hero?.bossKills ?? []),
   };
 }
 
@@ -443,6 +496,9 @@ export async function settleEndlessRun(
     endEndlessRun(
       sent.runId, surfaced ? haul : 0, replay.cleared,
       surfaced ? replay.haul : [], replay.bossesSlain,
+      // The record is a DEPTH and the XP is priced over a RANGE — see `endEndlessRun`.
+      // Both come off the replay the server just ran, never off anything the client sent.
+      replay.clearedTo, checked.run.snapshot.startDepth ?? 1,
     ),
     CAS_ATTEMPTS.runResult,
   );
@@ -453,6 +509,7 @@ export async function settleEndlessRun(
     runId: sent.runId,
     outcome,
     cleared: replay.cleared,
+    clearedTo: replay.clearedTo,
     depth: replay.facts.deepestDepth,
     haul,
     items: replay.haul,

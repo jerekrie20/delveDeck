@@ -138,6 +138,9 @@ function currentScreen(): string {
   // Before `camp` for the same reason the gear screen is: the class prompt stands on the
   // surface palette too, and its own marker is the confirm button nothing else carries.
   if (has('[data-action="class-confirm"]')) return 'class';
+  // …and the start-depth screen for the same reason again: it is the third screen on the
+  // surface palette, and its confirm button is the marker nothing else carries.
+  if (has('[data-action="start-confirm"]')) return 'start';
   if (has('.camphead')) return 'camp';
   if (has('[data-action="pick-ult"]')) return 'loadout';
   if (has('[data-action="skip-descent"]')) return 'descent';
@@ -364,18 +367,29 @@ function playGreedyTurn(): void {
 async function endlessLeg(screens: ScreenReport[]): Promise<void> {
   tap('[data-action="enter-endless"]');
   await wait(700);
-  // **The class prompt, and it only exists once per delver** — so this is the only place
-  // in the gate that can measure it. `.cchip.off` is required for the same reason the
-  // locked ascend chip is on the gear leg: the offline delver is level 1 here, so the two
-  // gated classes are drawn locked with the level that opens them, and that is the longer
-  // string. Then a switch, so the chosen state is measured too.
-  screens.push(measureAt('class', 'class prompt (first entry)', '.cchip.off'));
+  // **The class prompt, and it is once per delver ever** — so this is the only place in
+  // the gate that can measure it. From Stage 6b-4 all three chips are LIVE (the level
+  // gates went when the choice became permanent), so `.cchip.on` is required after a pick
+  // rather than `.cchip.off` before one: there is no locked state left on this screen.
+  screens.push(measureAt('class', 'class prompt (first entry)'));
   tap('[data-action="class-pick"][data-index="0"]');
   await wait(300);
   screens.push(measureAt('class', 'class prompt (a class chosen)', '.cchip.on'));
   tap('[data-action="class-confirm"]');
   await wait(900);
-  screens.push(measureAt('loadout', 'endless loadout'));
+  // **WHERE the run begins** — the second question the door asks, and only when there is
+  // more than one answer. The offline delver carries a second start for exactly this
+  // reason (see `endless.ts` § startDepths): a screen that only a delver who has felled a
+  // boss can reach is a screen the gate could otherwise never measure.
+  screens.push(measureAt('start', 'start depth (a boss already beaten)', '.rowitem.sel'));
+  tap('[data-action="start-pick"][data-index="1"]');
+  await wait(300);
+  tap('[data-action="start-confirm"]');
+  await wait(900);
+  // **The Endless loadout is a different screen from the Daily's from Stage 6b-3** — it
+  // lists the whole collection rather than a drawn nine. The locked pane 6b-3 put under it
+  // came back out at 6b-4 (owner call), so there is no `.rowitem.off` to require any more.
+  screens.push(measureAt('loadout', 'endless loadout (what you own)'));
   takeBarAndDescend();
   await wait(700);
 
@@ -400,6 +414,15 @@ async function endlessLeg(screens: ScreenReport[]): Promise<void> {
       banking = false;
       tap('[data-action="endless-again"]');
       await wait(900);
+      // **DELVE AGAIN goes through the same door as everything else from Stage 6b-4**, so
+      // it lands on the start-depth screen rather than straight on the loadout. Answering
+      // it here is not a detail: without it the taps below hit a screen that has no bar to
+      // take, the loop falls out, and the gate silently stops measuring the death receipt
+      // and the endless descent — two screens reported as covered by their absence.
+      if (currentScreen() === 'start') {
+        tap('[data-action="start-confirm"]');
+        await wait(900);
+      }
       takeBarAndDescend();
       await wait(700);
       continue;
@@ -475,15 +498,16 @@ async function gearLeg(screens: ScreenReport[]): Promise<void> {
   // state going unmeasured the day somebody "tidies" the preview stash.
   screens.push(measureAt('gear', 'gear (stash full of deep rolls)', '.gsalv.off'));
 
-  // The class strip (Stage 6b-2). It is required to be carrying BOTH a locked chip and a
-  // chosen one: the offline delver is level 7, which opens the Hunter and leaves the Adept
-  // locked, and the Endless leg above has already chosen a class — so all three chip
-  // states are on the screen at once. The locked one carries the longer string, and a
-  // strip that could only reach the happy path would leave it unmeasured.
-  screens.push(measureAt('gear', 'gear (class strip, chosen + locked)', '.cchip.off'));
-  tap('[data-action="gear-class"][data-index="1"]');
-  await wait(300);
-  screens.push(measureAt('gear', 'gear (class switched)', '.cchip.on'));
+  // The class strip (Stage 6b-2, **read-only from 6b-4**). `.cchip.on` is required rather
+  // than `.cchip.off`: there is no locked state left — all three classes open at level 1 —
+  // and there is no switch either, because the choice is permanent. What the strip has to
+  // show is the one that was taken beside the two that were not, and the Endless leg above
+  // has already chosen, so this is the state a real delver sees forever.
+  //
+  // **There is deliberately no tap here.** A gate that clicked a control this screen no
+  // longer has would pass by doing nothing, which is the quiet way a removed feature gets
+  // "covered".
+  screens.push(measureAt('gear', 'gear (class strip, chosen + not taken)', '.cchip.on'));
 
   // The two sinks (`TODO.md` § Stage 6b-2), played BEFORE the equip legs so the taps land
   // on a known row: index 0 of the untouched preview stash is shallow, so it is both

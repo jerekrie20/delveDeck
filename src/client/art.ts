@@ -132,6 +132,12 @@ export const ABILITY_GLYPH: Record<string, string> = {
   hobble: 'HB', tauntingShout: 'TS', deadeye: 'DE',
   execute: 'EX', pyroclasm: 'PY', lastStand: 'LS',
   reckoning: 'RK', sunder: 'SD', bloodtide: 'BT',
+  // The six class-locked rows (Stage 6b-3). They wear their ARCHETYPE's accent like every
+  // other tile — a class has no colour of its own anywhere in this game, and the chip on
+  // screen 04 borrows one for the same reason.
+  holdTheLine: 'HL', bulwarksOath: 'BO',
+  mark: 'MK', secondWind: 'SW',
+  siphon: 'SP', runicEcho: 'RE',
 };
 
 export function enemyArt(enemyId: string): string | undefined {

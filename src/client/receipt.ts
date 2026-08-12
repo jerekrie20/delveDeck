@@ -12,6 +12,7 @@
 // promise is *you moved sideways, not backwards*, and a promise is only worth something if
 // it is legible at the moment it costs you.
 
+import { ABILITIES } from '../shared/abilities';
 import { itemName } from '../shared/sim';
 import type { EndlessSummary } from '../server/core/endless';
 import { affixSummary, rarityClass } from './gear';
@@ -75,6 +76,27 @@ function xpReceipt(receipt: EndlessSummary, offline: boolean): string {
 }
 
 /**
+ * What this run's depth and XP **added to the collection**, named rather than counted.
+ *
+ * This is where *"newly unlocked"* is marked (`TODO.md` § Stage 6b-3), and it is here
+ * rather than on the loadout because a collection grows on a settle and nowhere else — so
+ * this is the only screen that can say it at the moment it became true. The loadout answers
+ * the other half of the same question by printing the gate on every row still locked.
+ *
+ * It is also the second thing on this screen that is only ever true of a good run, beside
+ * the first-boss line — and both belong on a receipt whose whole job is to say what you
+ * KEPT on the screen where something was lost.
+ */
+function learnedReceipt(receipt: EndlessSummary): string {
+  if (receipt.learned.length === 0) return '';
+  const names = receipt.learned
+    .map((id) => ABILITIES[id]?.name ?? id)
+    .map((name) => `<b>${escapeHtml(name)}</b>`)
+    .join(', ');
+  return `<div class="dnote">You can take ${names} down with you now.</div>`;
+}
+
+/**
  * Screen 14 — the death, and its mirror for the run that got out.
  *
  * At 6a the haul was shards only. The item half landed at 6b and the XP pair at 6b-2: the
@@ -101,8 +123,11 @@ export function outcomeScreen(
     : `<div class="kept"><div class="v">&plus;${unbanked ? receipt.haul : receipt.banked}</div>` +
       `<div class="k">SHARDS ${unbanked ? 'SURFACED &mdash; NOT BANKED' : 'BANKED'}</div></div>`;
   const items = itemReceipt(receipt, died);
+  // **The DEPTH, not the count.** On a run that began at a boss's far side they are
+  // different numbers, and *"surface at 2 next time"* to somebody who died at 15 would be
+  // the receipt naming a rung of the shaft with an amount of work.
   const again = died
-    ? `SURFACE AT ${Math.max(1, receipt.cleared)} NEXT TIME?`
+    ? `SURFACE AT ${Math.max(1, receipt.clearedTo)} NEXT TIME?`
     : 'THE SHAFT IS STILL THERE';
   const total = unbanked
     ? 'Your delver is unchanged. Nothing was written down &mdash; there is no server ' +
@@ -135,6 +160,7 @@ export function outcomeScreen(
     '<div class="k">DEPTH RECORD</div></div>' +
     xpReceipt(receipt, session.offline) +
     '</div>' +
+    learnedReceipt(receipt) +
     `<div class="dnote">${total}</div></div>` +
     '<div class="act"><button class="btn small" data-action="camp">CAMP</button>' +
     '<button class="btn go" data-action="endless-again">DELVE AGAIN' +

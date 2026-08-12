@@ -1,8 +1,8 @@
 // The three base classes — one row each, pure data. The Endless half of `abilities.ts`.
 //
-// Imported by `daily.ts` (which draws the Endless pool through these weights and builds
-// the classed kit), by `server/core/hero.ts` (which unlocks and stores a class id) and by
-// the client (which draws the strip on screen 04).
+// Imported by `daily.ts` (which folds these numbers over the delver's collection), by
+// `server/core/hero.ts` (which unlocks and stores a class id) and by the client (which
+// draws the strip on screen 04).
 //
 // SHAPE comes from `game_design/CLASSES.md`; the NUMBERS live here because that document
 // says so in its own header — *"base stats, per-level growth, evolution level gates and
@@ -17,17 +17,25 @@
 //
 // **Three things you must not break.**
 //
-//  1. **A class is TWO things: weights and one number.** Not an ability list, not a code
-//     branch, not a stat block with a hat. A fourth class must be a row here and nothing
-//     else, or the seam CLASSES.md is built on has already gone.
+//  1. **A class is TWO things: a handful of LOCKED ROWS, and one number.** Not a code
+//     branch and not a stat block with a hat. A fourth class must be a row here plus a
+//     couple of rows in `abilities.ts` carrying its id, or the seam CLASSES.md is built
+//     on has already gone.
 //  2. **Exactly one signature field per class is non-zero**, and `classes.test.ts` fails
 //     otherwise. A class with two signatures is two classes sharing a name, and the next
 //     one would arrive with three.
-//  3. **Weights are not locks.** Every weight is positive, so a Warden still gets issued
-//     the occasional spell and those are the runs that play differently. A weight of 0
-//     would be a lock wearing a weight's clothes, and locks belong in `Ability.class`.
+//  3. **There are no DRAW WEIGHTS here, and putting them back is a design reversal.**
+//     `archetypeWeights`, `schoolWeights` and `classWeightFor` were deleted at Stage
+//     6b-3 with the Endless draw they leaned on. A weight only means something when
+//     somebody else is choosing your nine; in a mode where you build the bar out of what
+//     you own, a lean is a thumb on a scale nobody is standing on. Identity moved to
+//     `Ability.class`, which is a stronger claim and a smaller one.
+//
+// The three per-class HP rows and all three signatures are unchanged from 6b-2 and are
+// still the numbers GATE 5 was retuned to. See `TODO.md` § Stage 6b-3 for what the gate
+// said once the draw came out.
 
-import type { Archetype, School } from './abilities';
+import type { Archetype } from './abilities';
 
 /**
  * The turn-loop half of a class: **one numeric field, read at a turn boundary.**
@@ -85,23 +93,29 @@ export interface DelverClass {
   /** One line, and it has to fit on a chip. `CLASSES.md`: *"a specialisation must be
    *  legible in one line"* — the same bar applies to the thing it specialises. */
   line: string;
-  /** The level that opens it. Warden is default and opens at 1 (`ABILITIES.md` § Open:
-   *  *"Warden is default"*); the other two are the `PROGRESSION.md` unlock table's
-   *  *"Hunter, Adept — gated by level"* given numbers. **The flag is what unlocks a
-   *  class**, not this number: it is written onto the hero when the level is reached, so
-   *  the rule can move without stranding anyone. */
+  /**
+   * The level that opens it. **1 for all three from Stage 6b-4, and that is a decision
+   * rather than a placeholder.**
+   *
+   * `CLASSES.md` § Choosing a class: the choice became PERMANENT, and a permanent choice
+   * made on a delver's first run against a roster of one is not a choice — it is a stamp.
+   * With gates at 5 and 10 every delver would have been a Warden forever and the other two
+   * would have been unreachable content. Given permanence, the gates and the decision
+   * could not both exist.
+   *
+   * The field stays because **evolution is still a level gate** (Stage 7) and a spec will
+   * need one; the flag machinery behind it stays for the same reason.
+   */
   unlockLevel: number;
-  /** Multiplied with the school weight to give a row's draw weight. Absent = 1. */
-  archetypeWeights: Partial<Record<Archetype, number>>;
-  schoolWeights: Partial<Record<School, number>>;
   /**
    * Which archetype's accent the class strip paints with — **a NAME, never a colour.**
    *
    * The palette is already written down twice by necessity (`art.ts` for the modules,
    * `game.css` for the paint) and `art.test.ts` guards those two against drift. A third
    * copy keyed by class would be one no check can see, so a class points at an archetype
-   * instead and the chip wears that archetype's own class. It is also true rather than
-   * decorative: a Warden chip is the colour of the `guard` tiles a Warden gets issued.
+   * instead and the chip wears that archetype's own class. It is also still true rather
+   * than decorative once the draw weights are gone: a Warden chip is the colour of the
+   * `guard` tiles, and `guard` is what a Warden's locked rows are about.
    */
   accentArchetype: Archetype;
   /** Flat max-HP offset from `TUNING.startingHp` — the HIGHEST / MIDDLE / LOWEST row of
@@ -131,10 +145,6 @@ export const CLASSES: Record<string, DelverClass> = {
     name: 'Warden',
     line: 'Toughest. Block you do not spend carries into your next turn.',
     unlockLevel: 1,
-    archetypeWeights: {
-      guard: 2.5, wall: 2.5, counter: 1.5, strike: 1, control: 0.8, burst: 0.6, tempo: 0.6,
-    },
-    schoolWeights: { physical: 2, hybrid: 1, spell: 0.5 },
     accentArchetype: 'guard',
     hpBase: 6,
     hpPerLevel: 0.9,
@@ -144,11 +154,7 @@ export const CLASSES: Record<string, DelverClass> = {
     id: 'hunter',
     name: 'Hunter',
     line: 'Fastest. Every hit you take builds your ultimate twice as quickly.',
-    unlockLevel: 5,
-    archetypeWeights: {
-      tempo: 2.5, strike: 2.5, counter: 1.5, control: 1, guard: 1, burst: 0.8, wall: 0.6,
-    },
-    schoolWeights: { hybrid: 2, physical: 1.2, spell: 0.8 },
+    unlockLevel: 1,
     accentArchetype: 'tempo',
     hpBase: 0,
     hpPerLevel: 0.6,
@@ -158,11 +164,7 @@ export const CLASSES: Record<string, DelverClass> = {
     id: 'adept',
     name: 'Adept',
     line: 'Hardest hitting. Spend no energy and your cooldowns drop twice as fast.',
-    unlockLevel: 10,
-    archetypeWeights: {
-      burst: 2.5, control: 2.5, wall: 1, guard: 1, strike: 1, tempo: 0.8, counter: 0.6,
-    },
-    schoolWeights: { spell: 2.5, hybrid: 1, physical: 0.5 },
+    unlockLevel: 1,
     accentArchetype: 'burst',
     hpBase: -4,
     hpPerLevel: 0.35,
@@ -172,6 +174,26 @@ export const CLASSES: Record<string, DelverClass> = {
 
 /** In the order the design lists them, which is also the order they unlock. */
 export const CLASS_LIST: DelverClass[] = [CLASSES['warden']!, CLASSES['hunter']!, CLASSES['adept']!];
+
+/**
+ * The refusal a delver who has not chosen a class gets, and it is a **named constant
+ * because the client has to recognise it.**
+ *
+ * Every other `startEndless` failure means *"no server"* and drops the client into an
+ * offline run; this one means *"go and answer the prompt"*. Matching on a string is the
+ * seam, and naming it here is what stops the two copies drifting — if that match ever
+ * breaks, the symptom is the 6b-3 bug again with an extra step: the player is silently
+ * put in an unsaved run instead of being asked.
+ *
+ * **It lives in `shared/` because BOTH sides read it**, and that is not a preference. It
+ * was declared in `server/core/endless.ts` and imported by `client/endless.ts` — the one
+ * value import the client made across the boundary — and the build could not resolve the
+ * bindings of a client module that reaches into the server tree. It emitted `NO_CLASS`
+ * and `CLASS_LIST` as bare undeclared names, and `CLASS_LIST` is read at module scope,
+ * so the whole client bundle threw `ReferenceError` before a single pixel rendered: a
+ * black screen on Reddit, with every check green. `import type` is free — a value is not.
+ */
+export const NO_CLASS = 'Choose a class before you delve.';
 
 /** **Warden is default** (`ABILITIES.md` § Open, and `GAME_DESIGN.md`'s THE CLASS beat
  *  says the line out loud: *"You are a Warden."*). A delver is stamped with it the first
@@ -186,18 +208,6 @@ export const classById = (id: string | null | undefined): DelverClass | undefine
  *  (`PROGRESSION.md` § Unlocks) — so the level in the row above can be retuned without
  *  taking a class back off somebody who already has it. */
 export const classUnlockFlag = (id: string): string => `class:${id}`;
-
-/** A row's draw weight for a class: archetype × school, both defaulting to neutral. Never
- *  zero, because a weight of zero is a lock and locks live on the ability row. */
-export function classWeightFor(
-  row: DelverClass,
-  archetype: Archetype,
-  school: School,
-): number {
-  const byArchetype = row.archetypeWeights[archetype] ?? 1;
-  const bySchool = row.schoolWeights[school] ?? 1;
-  return Math.max(0.01, byArchetype * bySchool);
-}
 
 /**
  * The max HP a class carries at a level. **Floored**, so the stored curve can be

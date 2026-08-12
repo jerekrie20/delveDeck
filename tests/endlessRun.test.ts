@@ -26,32 +26,45 @@
 import { assert, check, describe } from './helpers';
 import { endlessAtFork, endlessChoices, firstLoadout, nerve } from './policies';
 import {
-  DEFAULT_CLASS_ID, GEAR_SLOTS, TUNING, classHpBonus, endlessKitFor, fitsSlot, issuedKitForDay,
-  rollItem, simulateEndless,
+  DEFAULT_CLASS_ID, GEAR_SLOTS, TUNING, classHpBonus, collectionAt, endlessKitFor, fitsSlot,
+  issuedKitForDay, rollItem, simulateEndless, startDepthsFor, xpForEndlessRun,
   type RunChoice, type RunResult,
 } from '../src/shared/sim';
+import { bossForStratum } from '../src/shared/enemies';
 import { createRng } from '../src/shared/rng';
 import { readHero, updateHero } from '../src/server/core/heroStore';
 import {
   checkSubmission, kitForRun, readEndlessState, settleEndlessRun, startEndlessRun,
   stepEndlessRun,
 } from '../src/server/core/endless';
-import { endEndlessRun, equipFromStash, stashCapacity } from '../src/server/core/hero';
+import {
+  endEndlessRun, equipFromStash, setHeroClass, stashCapacity,
+} from '../src/server/core/hero';
 import { STORED_RUN_VERSION } from '../src/server/core/run';
 import { bareSnapshot, newStoredHero } from '../src/server/core/heroSchema';
 import { FakeRedis } from './fakes/redis';
 
 describe('endless · the persisted run');
 
-/** The kit a delver with nothing worn walks in with. **A Warden at level 1**, because
- *  that is what `startEndlessRun` stamps a delver who has never had a class — see
- *  `ensureClass`. Anything else here would be testing a kit the server does not issue. */
-const kitFor = (seed: number) => endlessKitFor(seed, DEFAULT_CLASS_ID, 1);
+/** The collection a delver who has never delved walks in with — a level-1 Warden's. */
+const startingCollection = () => collectionAt(DEFAULT_CLASS_ID, 1, 0);
 
-/** …and the snapshot that goes with it. `bareSnapshot()` is the CLASSLESS one — the truth
- *  about a run written before v4 — and it stays in `hero.test.ts` where the migration
- *  lives. A run started today is started by somebody. */
-const startedSnapshot = () => ({ ...bareSnapshot(), class: DEFAULT_CLASS_ID });
+/** The kit that goes with it: **a Warden at level 1**, which is what these fixtures choose
+ *  at the prompt below. Anything else would be testing a kit the server does not issue. */
+const kitFor = (seed: number) =>
+  endlessKitFor(seed, DEFAULT_CLASS_ID, 1, startingCollection());
+
+/** …and the snapshot that goes with it. `bareSnapshot()` is the CLASSLESS, POOL-LESS one —
+ *  the truth about a run written before v5, which no longer resumes at all — and it stays
+ *  in `hero.test.ts` where the migration lives. A run started today is started by
+ *  somebody, with a collection, from the top of the shaft. */
+const startedSnapshot = () => ({
+  ...bareSnapshot(),
+  class: DEFAULT_CLASS_ID,
+  pool: startingCollection().abilities,
+  ultimates: startingCollection().ultimates,
+  startDepth: 1,
+});
 
 // ---- the persisted run ----------------------------------------------------------
 //
@@ -100,7 +113,7 @@ await check('a run in an older CHOICE FORMAT is refused rather than replayed', (
 });
 
 await check('STARTING A RUN SNAPSHOTS THE DELVER, and the kit is derived from that', async () => {
-  const redis = new FakeRedis();
+  const redis = await delverWhoChose();
   const started = await startEndlessRun(redis, USER, 'run-a', SEED, NOW);
   assert.ok(started.ok);
   assert.equal(started.run.seed, SEED);
@@ -127,7 +140,7 @@ await check('STARTING A RUN SNAPSHOTS THE DELVER, and the kit is derived from th
 });
 
 await check('A CHECKPOINT IS A DECISION — the loadout, or a fork answered', async () => {
-  const redis = new FakeRedis();
+  const redis = await delverWhoChose();
   await startEndlessRun(redis, USER, 'run-b', SEED, NOW);
   const kit = kitFor(SEED);
 
@@ -151,7 +164,7 @@ await check('A CHECKPOINT IS A DECISION — the loadout, or a fork answered', as
 });
 
 await check('RESUMING re-derives the kit from the run’s START state', async () => {
-  const redis = new FakeRedis();
+  const redis = await delverWhoChose();
   await startEndlessRun(redis, USER, 'run-c', SEED, NOW);
   const at = endlessAtFork(SEED, kitFor(SEED), 1);
   assert.ok(at);
@@ -167,7 +180,7 @@ await check('RESUMING re-derives the kit from the run’s START state', async ()
 });
 
 await check('SURFACING BANKS THE HAUL, and the run is cleared off the hero', async () => {
-  const redis = new FakeRedis();
+  const redis = await delverWhoChose();
   await startEndlessRun(redis, USER, 'run-d', SEED, NOW);
   const kit = kitFor(SEED);
   const choices = endlessChoices(SEED, kit, nerve(1));
@@ -189,7 +202,7 @@ await check('SURFACING BANKS THE HAUL, and the run is cleared off the hero', asy
 await check('DEATH TAKES THE HAUL AND KEEPS THE DEPTH RECORD', async () => {
   // The gate's third line, and the mode's whole promise: you moved sideways, never
   // backwards. Nothing reaches the total, and the record stands.
-  const redis = new FakeRedis();
+  const redis = await delverWhoChose();
   await startEndlessRun(redis, USER, 'run-e', SEED, NOW);
   const kit = kitFor(SEED);
   const choices = endlessChoices(SEED, kit, nerve(0, 200));
@@ -249,7 +262,7 @@ await check('WEARING A DROP DOES NOT SAVE IT — death takes it, and the receipt
   assert.equal(after.outcome, 'died');
   assert.ok(after.haulWorn.some(Boolean), 'the run must actually have been wearing it');
 
-  const redis = new FakeRedis();
+  const redis = await delverWhoChose();
   await startEndlessRun(redis, USER, 'run-i', seed, NOW);
   const settled = await settleEndlessRun(redis, redis, USER, NOW, sent(seed, worn, 'run-i'));
   assert.ok(settled.ok);
@@ -275,7 +288,7 @@ await check('SURFACING BANKS ITEMS TO THE STASH, never into the slots', async ()
   const after = simulateEndless(seed, worn, kit);
   assert.equal(after.outcome, 'surfaced');
 
-  const redis = new FakeRedis();
+  const redis = await delverWhoChose();
   await startEndlessRun(redis, USER, 'run-j', seed, NOW);
   const settled = await settleEndlessRun(redis, redis, USER, NOW, sent(seed, worn, 'run-j'));
   assert.ok(settled.ok);
@@ -316,7 +329,7 @@ await check('THE SNAPSHOT DRIVES THE REPLAY, not current gear', async () => {
   // kit built from CURRENT gear stops replaying the choice list that was played under
   // the old one — a resumable run silently becomes a wrong one, and every number the
   // server verifies with it is wrong too.
-  const redis = new FakeRedis();
+  const redis = await delverWhoChose();
   const started = await startEndlessRun(redis, USER, 'run-l', SEED, NOW);
   assert.ok(started.ok);
   const before = started.run.kit;
@@ -338,7 +351,7 @@ await check('THE SNAPSHOT DRIVES THE REPLAY, not current gear', async () => {
 });
 
 await check('a new run snapshots what is worn NOW, so gear actually does something', async () => {
-  const redis = new FakeRedis();
+  const redis = await delverWhoChose();
   const item = rollItem(createRng(21), 'strong', 60, 'legendary');
   const slot = GEAR_SLOTS.find((s) => fitsSlot(item, s))!;
   await updateHero(redis, USER, NOW, (hero) => {
@@ -364,7 +377,7 @@ await check('equipping is refused mid-fight — the telegraph already promised a
 });
 
 await check('SETTLING IS IDEMPOTENT — a retry replays the receipt, it never pays twice', async () => {
-  const redis = new FakeRedis();
+  const redis = await delverWhoChose();
   await startEndlessRun(redis, USER, 'run-f', SEED, NOW);
   const kit = kitFor(SEED);
   const choices = endlessChoices(SEED, kit, nerve(1));
@@ -381,7 +394,7 @@ await check('SETTLING IS IDEMPOTENT — a retry replays the receipt, it never pa
 await check('ABANDONING IS A DEATH — one run at a time, and walking away banks nothing', async () => {
   // Owner answer 3, and it is the rule that stops "start a run, find something good,
   // walk away, collect it later" from being the whole game.
-  const redis = new FakeRedis();
+  const redis = await delverWhoChose();
   await startEndlessRun(redis, USER, 'run-g', SEED, NOW);
   const kit = kitFor(SEED);
   const at = endlessAtFork(SEED, kit, 3);
@@ -403,12 +416,119 @@ await check('ABANDONING IS A DEATH — one run at a time, and walking away banks
   assert.equal(orphan.ok, false, 'the abandoned run cannot be handed in afterwards');
 });
 
+// ---- the class gate, and where a run begins (Stage 6b-4) --------------------------
+
+await check('A RUN WITHOUT A CLASS IS REFUSED — nothing stamps one on your behalf', async () => {
+  // **The 6b-3 bug, pinned at the layer that has to stop it.** `ensureClass` used to write
+  // a default here so a delve *"could always start"*, and it stamped one on everybody who
+  // reached the shaft through the receipt's DELVE AGAIN or the resume screen's START OVER
+  // — neither of which passes the class prompt, which then never fired again.
+  //
+  // Refusing is that rule with no way around it: the choice cannot be skipped because
+  // there is no run to skip it into.
+  const redis = new FakeRedis();
+  const refused = await startEndlessRun(redis, USER, 'run-x', SEED, NOW);
+  assert.equal(refused.ok, false, 'a classless delver cannot open a shaft');
+
+  const hero = await readHero(redis, USER, NOW);
+  assert.equal(hero?.class ?? null, null, 'and the refusal wrote no class either');
+  assert.equal(hero?.run ?? null, null, 'nor a run');
+
+  // …and once the prompt is answered the same call goes through.
+  await updateHero(redis, USER, NOW, setHeroClass(DEFAULT_CLASS_ID), 3);
+  const opened = await startEndlessRun(redis, USER, 'run-x', SEED, NOW);
+  assert.ok(opened.ok, 'answering the prompt is the only thing that was missing');
+});
+
+await check('A DEEP START IS EARNED — an unfelled boss cannot be skipped past', async () => {
+  const redis = await delverWhoChose();
+  // Nothing felled, so the only start is the top of the shaft — and asking for another
+  // one is answered with depth 1 rather than trusted. The client never sends a depth it
+  // did not draw; this is what makes that a guarantee instead of an expectation.
+  assert.deepEqual(startDepthsFor([]), [1], 'a new delver begins at the top, and only there');
+  const cheeky = await startEndlessRun(redis, USER, 'run-p', SEED, NOW, 13);
+  assert.ok(cheeky.ok);
+  assert.equal(cheeky.run.kit.startDepth, 1, 'an unearned start is refused, not honoured');
+
+  // Fell the warrens boss and depth 5 opens — the same `bossKills` list the first-clear
+  // XP award has used since v4, answering a second question.
+  const warrens = bossForStratum('warrens')!;
+  await updateHero(redis, USER, NOW, (hero) => { hero.bossKills.push(warrens.id); }, 3);
+  assert.deepEqual(startDepthsFor([warrens.id]), [1, 5]);
+
+  const deep = await startEndlessRun(redis, USER, 'run-q', SEED, NOW + 1000, 5);
+  assert.ok(deep.ok);
+  assert.equal(deep.run.kit.startDepth, 5, 'and an earned one is honoured');
+  const hero = await readHero(redis, USER, NOW);
+  assert.equal(hero?.run?.snapshot.startDepth, 5, 'frozen on the snapshot, like the class');
+});
+
+await check('A DEEP RUN FIGHTS DEEP DEPTHS, and is paid for the ones it played', async () => {
+  // The whole of `MODES.md` § You only earn what you play, as a played run rather than as
+  // three assertions about arithmetic.
+  const warrens = bossForStratum('warrens')!;
+  const redis = await delverWhoChose();
+  await updateHero(redis, USER, NOW, (hero) => { hero.bossKills.push(warrens.id); }, 3);
+  const started = await startEndlessRun(redis, USER, 'run-r', SEED, NOW, 5);
+  assert.ok(started.ok);
+  const kit = started.run.kit;
+
+  const opening = simulateEndless(SEED, [firstLoadout()], kit);
+  assert.equal(opening.view?.phase, 'combat');
+  assert.equal(
+    opening.view?.phase === 'combat' ? opening.view.depth : 0, 5,
+    'the first fight of a deep run is the depth it started at, not depth 1',
+  );
+
+  const run = simulateEndless(SEED, endlessChoices(SEED, kit, nerve(0.4)), kit);
+  assert.ok(run.cleared > 0, 'this check needs the run to clear something');
+  // **A COUNT and a DEPTH.** Clearing three from depth 5 is `cleared: 3`, `clearedTo: 7`.
+  assert.equal(run.clearedTo, 4 + run.cleared, 'the record is a DEPTH, absolute');
+  assert.ok(run.clearedTo > run.cleared, 'and it is not the count on a deep run');
+
+  // The XP is priced at the depths actually stood on, not at 1..cleared — a deep run's
+  // depths are worth what deep depths are worth.
+  const paid = xpForEndlessRun(run.cleared, false, 5);
+  assert.ok(
+    paid > xpForEndlessRun(run.cleared, false, 1),
+    'the same number of deep depths must pay more than the same number of shallow ones',
+  );
+
+  // …and the record that lands is the absolute depth, so the rarity gates read it.
+  const hero = newStoredHero(NOW);
+  hero.run = { ...storedRun(SEED, [], 'run-r'), snapshot: started.run.kit.startDepth === 5
+    ? { ...startedSnapshot(), startDepth: 5 } : startedSnapshot() };
+  const settled = endEndlessRun('run-r', 0, run.cleared, [], [], run.clearedTo, 5)(hero);
+  assert.ok(settled);
+  assert.equal(settled!.best, run.clearedTo, 'depth N is depth N, however you got there');
+  assert.ok(settled!.newRecord, 'a fresh delver setting one is what makes the bonus apply');
+  assert.equal(
+    settled!.xpEarned, xpForEndlessRun(run.cleared, true, 5),
+    'and the XP is the depths it actually played, priced where it stood',
+  );
+});
+
 
 // ---- helpers --------------------------------------------------------------------
 
 type Kit = ReturnType<typeof issuedKitForDay>;
 
 /** A stored run blob, as `startEndlessRun` would have written it. */
+/**
+ * A store holding a delver who has **answered the class prompt** — which from Stage 6b-4
+ * is what a run requires.
+ *
+ * `startEndlessRun` refuses a classless hero rather than stamping a default (there is a
+ * check for exactly that below), so every fixture here has to make the choice a real
+ * player makes. That is the fixture getting *more* honest, not less: before 6b-4 these
+ * tests were quietly exercising the silent-stamp path that turned out to be the bug.
+ */
+async function delverWhoChose(): Promise<FakeRedis> {
+  const redis = new FakeRedis();
+  await updateHero(redis, USER, NOW, setHeroClass(DEFAULT_CLASS_ID), 3);
+  return redis;
+}
+
 function storedRun(seed: number, choices: RunChoice[], runId = 'run-1') {
   return {
     version: STORED_RUN_VERSION, runId, seed, choices, snapshot: startedSnapshot(),

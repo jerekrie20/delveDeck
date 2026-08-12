@@ -1,4 +1,4 @@
-// What the six statuses actually DO, in words a player can read.
+// What the seven statuses actually DO, in words a player can read.
 //
 // Imported by the client (the loadout's legend and the combat screen's pills) and by
 // `tests/content.test.ts`, which fails if a status the catalog can apply has no rule
@@ -42,7 +42,8 @@ export interface StatusRule {
 }
 
 /**
- * The six from `ABILITIES.md`, each stated as the rule `combat.ts` actually runs.
+ * The six from `ABILITIES.md` plus `marked` (Stage 6b-3), each stated as the rule
+ * `combat.ts` actually runs.
  *
  * `stun` carries the sentence that is easiest to get wrong and most load-bearing: it
  * **delays and never deletes**. The cycle position does not move, so the beat it was about
@@ -82,6 +83,19 @@ export const STATUS_RULES: Record<StatusId, StatusRule> = {
     name: 'Thorns',
     rule: 'An attack that gets through takes {n} back, for {turns}.',
     on: 'you',
+  },
+  /**
+   * The seventh, and **the only one measured in HITS rather than turns** — which is why
+   * its sentence carries no `{turns}` and why it is not a bug that it does not.
+   *
+   * That is also the decision it creates and the reason `ABILITIES.md`'s door for a
+   * seventh status was worth opening: every other status is a clock, so you spend it or
+   * lose it. This one waits, so you hold it for the turn the enemy blocks.
+   */
+  marked: {
+    name: 'Marked',
+    rule: 'Its block stops none of your next {n} hits.',
+    on: 'enemy',
   },
 };
 

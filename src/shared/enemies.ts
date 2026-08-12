@@ -379,3 +379,50 @@ export function stratumForDepth(depth: number): Stratum {
 
 /** Every fourth depth is that stratum's boss. */
 export const isBossDepth = (depth: number): boolean => depth % 4 === 0;
+
+// ---- where a run may BEGIN (Stage 6b-4) -----------------------------------------
+//
+// `MODES.md` § Where a run begins: fell a stratum boss once and every later run may start
+// at the depth after it. It lives here rather than in `collection.ts` because the whole of
+// the rule is knowledge about the SHAFT — which boss stands where — and this is the file
+// that owns that. `collection.ts` owns which ability rows you have earned; this owns which
+// rungs of the ladder you have already climbed past.
+//
+// **The Daily never reads any of it.** `simulateRun` starts at depth 1 because
+// `issuedKitForDay` sets `startDepth: 1` and there is no argument through which anything
+// else could arrive — the same trick the two-argument signature plays.
+
+/** The depth each stratum's boss stands at: the last depth of its band, and for the abyss
+ *  the first boss depth past the crypt. The abyss boss recurs every fourth depth after
+ *  that but is ONE row, so it opens exactly one start — which is what bounds the list. */
+const BOSS_DEPTH: Record<Stratum, number> = { warrens: 4, hold: 8, crypt: 12, abyss: 16 };
+
+const STRATA: readonly Stratum[] = ['warrens', 'hold', 'crypt', 'abyss'];
+
+/**
+ * Every depth this delver may begin a run at, shallowest first. **Depth 1 is always in it**,
+ * so the list is never empty and the choice is never a question with one answer it has to
+ * be asked anyway.
+ *
+ * Keyed on `hero.bossKills` — the ids of stratum bosses ever felled, which the hero has
+ * carried since v4 for the first-clear XP award. It is the same fact answering a second
+ * question, which is why this needed no new stored state.
+ *
+ * **Four bosses, so at most five starts, forever.** That bound is the design (`MODES.md`):
+ * a start depth is a short list you scan, never a number you dial.
+ */
+export function startDepthsFor(bossKills: readonly string[]): number[] {
+  const felled = new Set(bossKills);
+  const out = [1];
+  for (const stratum of STRATA) {
+    const boss = bossForStratum(stratum);
+    if (boss && felled.has(boss.id)) out.push(BOSS_DEPTH[stratum] + 1);
+  }
+  return out.sort((left, right) => left - right);
+}
+
+/** The deepest start anybody could ever have earned — **derived from the model it guards**,
+ *  exactly like `MAX_RUN_CHOICES`. The route's schema bounds the SHAPE with it;
+ *  `startDepthsFor` is what decides whether a given delver has opened the one they asked
+ *  for. A fifth boss moves this number without anyone having to remember to. */
+export const MAX_START_DEPTH = Math.max(...Object.values(BOSS_DEPTH)) + 1;

@@ -188,9 +188,13 @@ export async function loadEndlessState(): Promise<EndlessState | null> {
  *  death** — the caller must have asked first. */
 export async function startEndless(
   runId: string,
+  startDepth = 1,
 ): Promise<{ run: EndlessRunHandle; abandoned: number } | { error: string }> {
   try {
-    const result = await trpc.endless.start.mutate({ runId });
+    // `startDepth` is a CHOICE, not a number: the server checks it against the hero's own
+    // `bossKills` and falls back to 1 rather than trusting it. A client asking to begin at
+    // depth 40 gets depth 1 and a run it can play.
+    const result = await trpc.endless.start.mutate({ runId, startDepth });
     return result.ok ? { run: result.run, abandoned: result.abandoned } : { error: result.error };
   } catch {
     return { error: 'The shaft could not be opened.' };
