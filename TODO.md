@@ -270,18 +270,28 @@ Role · School · Element — taught by chips, a legend, and a click-to-open det
       so a boon, a chip, the legend and a gear affix all say "Attack" the same way.
 - [x] `BY ARCHETYPE` → `BY ROLE`. Glossary-completeness test added.
 
-**Paused, both with a blocker — do not build blind:**
+**Shipped this pass (306 tsx + 24 vitest + visual gate at all three viewports):**
 
-- [ ] **The click-to-open detail popup.** Interactive UI; it needs a visual check to get
-      right (the preview was declined the day this paused). Ready to build the moment a
-      browser check is available. Shows: tags + what each means, the numbers, cost/cooldown
-      in words, and what each status effect does. Same for gear.
+- [x] **The click-to-open detail popup** — `src/client/detail.ts`. A `?` on every ability
+      and gear row opens a card: for an ability its Role/School/Element tags each with the
+      legend line the glossary teaches, its effect text verbatim, cost and cooldown in
+      words, and the status effect it leaves stated in full; for gear its rarity, slot,
+      found-depth, every affix and the implicit in plain words, and the Role legend for each
+      tag its affixes name. Built and verified against the live preview. Also serves as the
+      **standalone legend** — every tag is taught at the moment it is being chosen with, so
+      no separate legend block eats loadout height. `tests/detail.test.ts` sweeps it over
+      the whole catalog and a spread of rolled gear (no unfilled template, effect line never
+      re-worded, every tag arrives with its legend). The gate opens and measures the card in
+      isolation (a modal is read on its own; the dimmed screen behind was already measured).
+
+**Still paused, deliberately sequenced after Stage 6b-5:**
+
 - [ ] **Gear targets any tag** (`GEAR.md`, activated). Extend `Affix`/`AbilityMod` to key on
       School/Element, generalise the `{a}` affixes, add rows. **A balance change — measured
       against the probe's fork ratio**, and best sequenced WITH Stage 6b-5, not stacked
-      blind on top of it.
-- [ ] **A standalone legend**, if the popup does not already carry enough. Likely folds into
-      the popup rather than eating loadout screen height.
+      blind on top of it. The popup already has the seam: an item card's "WHAT ITS TAGS
+      MEAN" section reads each affix's tag through the one glossary, so School/Element
+      affixes drop in without a new section.
 
 The broader `copy.ts` extraction below is still the mechanical, low-risk move for the REST
 of the shell's strings; this pass did the ability/gear vocabulary specifically.

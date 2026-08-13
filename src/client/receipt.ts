@@ -15,7 +15,8 @@
 import { ABILITIES } from '../shared/abilities';
 import { itemName } from '../shared/sim';
 import type { EndlessSummary } from '../server/core/endless';
-import { affixSummary, rarityClass } from './gear';
+import { rarityClass } from './art';
+import { affixSummary } from './gear';
 import { escapeHtml, inShell } from './shell';
 
 /**

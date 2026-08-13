@@ -40,13 +40,14 @@ import {
 // before the bundler ever sees it; a value drags a client module into the server tree and
 // the build stops resolving that module's imports at all.
 import type { EndlessSummary } from '../server/core/endless';
+import { rarityClass } from './art';
 import { loadoutScreen } from './camp';
 import { combatScreen } from './combat';
 import {
   classChoiceScreen, commitClass, pendingClass, pickClass, resetClassChoice, sessionClassId,
   startChoiceScreen, type DelverView,
 } from './delver';
-import { affixSummary, rarityClass } from './gear';
+import { affixSummary } from './gear';
 import { boonScreen, descentScreen } from './interlude';
 import { outcomeScreen } from './receipt';
 import {

@@ -25,7 +25,7 @@
 
 import { ABILITIES, type Archetype } from '../shared/abilities';
 import { ROLE_LABEL, SCHOOL_LABEL, ELEMENT_LABEL } from '../shared/tags';
-import type { Rarity } from '../shared/items';
+import { itemName, type Item, type Rarity } from '../shared/items';
 
 /** Enemy id → static portrait (128px square), displayed centred at 64 in a code-drawn
  *  plate. 128 shown at 100 would be fractional scaling, and fractional scaling with
@@ -139,6 +139,19 @@ export const ABILITY_GLYPH: Record<string, string> = {
   holdTheLine: 'HL', bulwarksOath: 'BO',
   mark: 'MK', secondWind: 'SW',
   siphon: 'SP', runicEcho: 'RE',
+};
+
+/** The plate's accent for a rolled item. Rarity is never the ONLY channel — the tier's
+ *  word is printed on every row beside it, which is the same second-channel rule the
+ *  share grid follows. */
+export const rarityClass = (item: Item): string => `r-${item.rarity}`;
+
+/** Two letters, from the base's name. The mockup's own convention for a gear plate, and
+ *  unlike `ABILITY_GLYPH` it needs no registry: a base added tomorrow draws itself,
+ *  because a stash holds one row per base rather than thirty rows that can collide. */
+export const itemGlyph = (item: Item): string => {
+  const name = itemName(item).split(' ').slice(1).join(' ') || item.base;
+  return name.slice(0, 2).toUpperCase();
 };
 
 export function enemyArt(enemyId: string): string | undefined {

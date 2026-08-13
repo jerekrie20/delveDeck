@@ -1,15 +1,22 @@
 # Next session
 
-**Last session shipped three commits, all docs/copy, no gameplay logic moved:**
+**This session shipped Thread A's remaining UI: the click-to-open detail popup — NOT yet
+committed. Working tree is green (306 tsx + 24 vitest + visual gate at all three
+viewports), type-check and lint clean.** New file `src/client/detail.ts`; `?` on every
+ability and gear row opens a card teaching its tags (each with its glossary line), its
+effect verbatim, cost/cooldown in words, and the status it leaves. New test
+`tests/detail.test.ts` sweeps it over the whole catalog + rolled gear. The visual gate now
+opens and measures the card in isolation. `src/shared/items.ts` gained `implicitText`; two
+gear-drawing helpers (`rarityClass`, `itemGlyph`) moved to `art.ts` to avoid a cycle.
+`TODO.md` § Stage 6c-copy updated: popup + standalone-legend checked off.
 
-1. `e208bc6` — split `BUILD_LOG.md` out of `TODO.md` (1,764 → ~400 lines) and recorded the
-   GATE 5 decision.
-2. `2bdd3d7` — the previous handoff.
-3. `17365e5` — **the de-jargon pass**: the tag system is now shown to players in one
-   vocabulary (chips on every ability, boons and gear unified, "rider" → "status effect").
+**Stage 6c-copy now has ONE piece left, and it is deliberately held for Thread B:**
+**gear-targets-any-tag** — a balance change to sequence WITH Stage 6b-5, not before it. The
+popup already carries its seam (an item card reads each affix's tag through the one
+glossary).
 
-**There are now TWO live threads, and neither is blocked on a question — both are builds.**
-Pick one at the start. There is nothing to answer first this time.
+**The likely next thread is B — Stage 6b-5 (the Endless's own difficulty).** It is the
+bigger balance build and gear-any-tag rides on top of it. Nothing is blocked on a question.
 
 Paste from the line below as the opening prompt.
 
@@ -28,13 +35,15 @@ lint`, `npm run test`, and **`npm run test:visual`** for anything that changes a
 disagree, the folder is right and the code is a bug.** Only I unlock it, and a change lands
 in the folder first, then in code and TODO.md.
 
-**Two threads are open — ask me which to take first (recommend the popup):**
+**Thread A's popup shipped this session (uncommitted, green).** The one Stage 6c-copy piece
+left — **gear-targets-any-tag** — is a balance change and belongs WITH Thread B. So the live
+build is now:
 
-- **A · Finish the de-jargon pass (Stage 6c-copy).** The quick win. The vocabulary/chips/
-  boons shipped last session; what is left is the **click-to-open detail popup** and the
-  **gear-targets-any-tag** mechanics. Details below and in `TODO.md` § Stage 6c-copy.
 - **B · Build the Endless's own difficulty (Stage 6b-5).** The bigger balance stage,
-  decided but not built. Checklist in `TODO.md` § GATE 5.
+  decided but not built. Checklist in `TODO.md` § GATE 5. Ship **gear-any-tag** alongside it
+  (it is measured against the same probe fork ratio), not blind before it.
+
+*(Thread A below is kept for reference; only gear-any-tag remains of it.)*
 
 ---
 

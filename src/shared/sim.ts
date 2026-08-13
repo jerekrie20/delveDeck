@@ -611,7 +611,7 @@ export { scoreRun } from './report';
 // the gear screen promises is what the sim delivers.
 export {
   AFFIXES, EMPTY_GEAR, GEAR_SLOTS, RARITIES, RARITY_LABEL, SLOT_LABEL, affixText, fitsSlot,
-  itemMods, itemName, itemStats, rarityRank, slotFamily, slotForItem,
+  implicitText, itemMods, itemName, itemStats, rarityRank, slotFamily, slotForItem,
 } from './items';
 export type { Affix, EquippedGear, GearSlot, GearStats, Item, Rarity } from './items';
 export { gearMods, gearStats, gearedKit, wornItems } from './kit';

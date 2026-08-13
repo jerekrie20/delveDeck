@@ -17,6 +17,7 @@
 import { ABILITIES } from '../shared/abilities';
 import { TUNING, abilityDetail, classById, levelProgress, type LoadoutView } from '../shared/sim';
 import { abilityClass, abilityGlyph, tagChips, HERO_ART } from './art';
+import { abilityDetailButton } from './detail';
 import type { EndlessDoor } from './endless';
 import { escapeHtml, fillPercent, inShell } from './shell';
 
@@ -200,6 +201,9 @@ function abilityRow(id: string, poolIndex: number, order: number | null): string
     + `<div class="gs">${escapeHtml(abilityDetail(row.text, row.status))}</div>`
     + tagChips(id) + `</div>`
     + `<div class="gtail${inBar ? ' in' : ''}">${inBar ? `&#9679; ${order}` : '&#43; ADD'}</div>`
+    // The `?` is its own tap target inside a row that already means "equip" — see
+    // `detail.ts`. It is last so the row's own answer stays where the thumb expects it.
+    + abilityDetailButton(id)
     + '</div>';
 }
 
@@ -213,6 +217,7 @@ function ultimateRow(id: string, offerIndex: number, picked: boolean): string {
     + `<div class="gs">${escapeHtml(abilityDetail(row.text, row.status))}</div>`
     + tagChips(id) + `</div>`
     + `<div class="gtail${picked ? ' in' : ''}">${picked ? '&#9679; TAKEN' : '&#43; TAKE'}</div>`
+    + abilityDetailButton(id)
     + '</div>';
 }
 

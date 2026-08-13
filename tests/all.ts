@@ -63,5 +63,10 @@ await import('./endlessRun.test');
 // `items` owns the GEAR MODEL — the rows, the roll, the budget gate and the fold.
 // The two files above own what a haul COSTS you; this owns what is in one.
 await import('./items.test');
+// `detail` owns the POPUP that explains a tile — the card behind every `?`, swept over
+// the whole ability catalog and a spread of rolled gear. Its own file because it fails
+// for a reason nothing else does: a legend that stopped matching its tag, a template that
+// never got filled, or an effect line the popup re-worded instead of quoting.
+await import('./detail.test');
 
 summary();

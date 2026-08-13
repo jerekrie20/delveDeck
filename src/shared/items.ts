@@ -393,6 +393,23 @@ export function implicitValue(item: Item): number {
   return Math.max(1, Math.min(row.max, Math.round((item.budget * IMPLICIT_SHARE) / row.cost)));
 }
 
+/**
+ * The implicit **in words**, in the same sentence shape an affix uses — because to a
+ * player reading a plate it is not a different kind of thing from `+9 MAX HP`, it is
+ * just the one the slot came with.
+ *
+ * Filled from `IMPLICIT_ROW`'s own template rather than written out here, for the reason
+ * `affixText` is: the value is rolled, so a sentence with the number typed into it is a
+ * sentence that is wrong on every other item. Empty for the bases that have no implicit —
+ * rings and amulets — which is a real answer and not a missing one (see `ItemBase`).
+ */
+export function implicitText(item: Item): string {
+  const implicit = itemBase(item)?.implicit;
+  const value = implicitValue(item);
+  if (!implicit || value <= 0) return '';
+  return IMPLICIT_ROW[implicit].text.replaceAll('{v}', String(value)).replaceAll('{a}', '');
+}
+
 /** How much of an item's budget its implicit takes before the affixes divide the rest.
  *  Lives here rather than in `TUNING` because it is part of what an implicit *is* —
  *  moving it changes the model, not the balance. */

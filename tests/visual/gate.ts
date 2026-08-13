@@ -153,11 +153,15 @@ function currentScreen(): string {
 }
 
 /** Every rendered line of text, clamped to the content box where `overflow: hidden`
- *  and `text-overflow: ellipsis` actually clip it. */
-function textRects(): TextRect[] {
+ *  and `text-overflow: ellipsis` actually clip it.
+ *
+ *  `root` scopes the walk — the whole app by default, and the CARD when a modal is up, so
+ *  a modal is read in isolation: the screen it dims was already measured on its own, and
+ *  its text behind a translucent veil is not a collision with the card in front of it. */
+function textRects(root: Element = app()): TextRect[] {
   const rects: TextRect[] = [];
   let nodeId = 0;
-  const walker = document.createTreeWalker(app(), NodeFilter.SHOW_TEXT);
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     if (!node.nodeValue || !node.nodeValue.trim()) continue;
     const el = node.parentElement;
@@ -246,8 +250,8 @@ function occluderBetween(x: number, y: number, a: TextRect, b: TextRect): string
   return null;
 }
 
-export function measure(at: string, escaped: string[] = []): ScreenReport {
-  const rects = textRects();
+export function measure(at: string, escaped: string[] = [], root?: Element): ScreenReport {
+  const rects = textRects(root);
   const real: Collision[] = [];
   const occluded: Collision[] = [];
   let unmeasurable = 0;
@@ -564,6 +568,14 @@ export async function run(): Promise<GateResult> {
   tap('[data-action="pick-ult"][data-index="0"]');
   await wait(400);
   screens.push(measure('loadout (bar picked)'));
+  // The detail popup (Stage 6c-copy). Measured SCOPED to the card: a modal is read in
+  // isolation, the dimmed loadout behind the veil was already measured two lines up. The
+  // `escaped` check still asserts the card opened, so a popup that never rendered fails.
+  tap('.rowitem .dopen');
+  await wait(300);
+  const card = document.querySelector('.detail') ?? undefined;
+  screens.push(measure('ability detail popup', card ? [] : ['no detail card opened'], card));
+  tap('[data-action="detail-close"]');
   tap('[data-action="descend"]');
   await wait(700);
 

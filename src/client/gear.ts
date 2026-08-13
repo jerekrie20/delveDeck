@@ -28,7 +28,9 @@ import {
   type EquippedGear, type GearSlot, type GearStats, type Item, type Rarity,
 } from '../shared/sim';
 import { createRng } from '../shared/rng';
+import { itemGlyph, rarityClass } from './art';
 import { classStrip, sessionClassId, type DelverView } from './delver';
+import { itemDetailButton, openItemDetail } from './detail';
 import {
   ascendGear, equipGear, loadGearState, rerollGear, salvageGear, unequipGear,
 } from './session';
@@ -136,7 +138,34 @@ async function write(
   rerender();
 }
 
+/**
+ * The two detail openers, split off `gearAction` because they are the same kind of thing
+ * — turn an index into an item and open its card — and because this module is the only
+ * one holding the stash to turn the index into.
+ *
+ * They pass the slot in **already derived**, by the same `slotForItem` a tap on the row
+ * would equip through, so the card cannot promise a slot the equip would not fill
+ * (`detail.ts` § DetailTarget). `gear-detail-slot` reads a worn item off its slot index;
+ * `gear-detail-stash` reads a stash item and resolves where it WOULD go.
+ */
+function gearDetailAction(action: string, index: number, rerender: () => void): boolean {
+  if (action === 'gear-detail-stash') {
+    const item = view?.stash[index];
+    openItemDetail(item, item && view ? slotForItem(view.gear, item) : null);
+    rerender();
+    return true;
+  }
+  if (action === 'gear-detail-slot') {
+    const slot = GEAR_SLOTS[index];
+    openItemDetail(slot ? view?.gear[slot] : undefined, slot ?? null);
+    rerender();
+    return true;
+  }
+  return false;
+}
+
 export function gearAction(action: string, index: number, rerender: () => void): boolean {
+  if (gearDetailAction(action, index, rerender)) return true;
   switch (action) {
     case 'enter-gear':
       open = true;
@@ -251,16 +280,11 @@ const ascendItemLocally = (item: Item): Item => ascendItem(item, offlineSeed(ite
 
 // ---- drawing ----------------------------------------------------------------------
 
-/** The plate's accent. Rarity is never the ONLY channel — the tier's word is printed on
- *  every row beside it, which is the same second-channel rule the share grid follows. */
-export const rarityClass = (item: Item): string => `r-${item.rarity}`;
-
-/** Two letters, from the base's name. The mockup's own convention for a gear plate, and
- *  it needs no registry: a base added tomorrow draws itself. */
-export const itemGlyph = (item: Item): string => {
-  const name = itemName(item).split(' ').slice(1).join(' ') || item.base;
-  return name.slice(0, 2).toUpperCase();
-};
+// `rarityClass` and `itemGlyph` used to live here and now live in `art.ts` beside
+// `abilityGlyph` and `archetypeClass`, which are the same kind of thing: how an id is
+// DRAWN. They moved when the detail popup needed them, because a popup importing them
+// from here while this module imports the popup's opener is a cycle — and the boundary
+// test exists because this repo has already black-screened on one import edge.
 
 const affixLines = (item: Item): string =>
   item.affixes.map((affix) => affixText(affix)).filter(Boolean).join(' &middot; ');
@@ -282,7 +306,9 @@ function itemRow(item: Item, tail: string, action: string, index: number): strin
     + `DEPTH ${item.depth}</div>`
     + `<div class="gn">${escapeHtml(itemName(item))}</div>`
     + `<div class="gs">${affixLines(item) || 'No affixes.'}</div></div>`
-    + `<div class="gtail">${tail}</div></div>`;
+    + `<div class="gtail">${tail}</div>`
+    + itemDetailButton('gear-detail-stash', index)
+    + '</div>';
 }
 
 function slotRow(slot: GearSlot, index: number, gear: EquippedGear): string {
@@ -299,7 +325,9 @@ function slotRow(slot: GearSlot, index: number, gear: EquippedGear): string {
     + `<div class="gk">${SLOT_LABEL[slot]}</div>`
     + `<div class="gn">${escapeHtml(itemName(item))}</div>`
     + `<div class="gs">${affixLines(item) || 'No affixes.'}</div></div>`
-    + '<div class="gtail">TAKE OFF</div></div>';
+    + '<div class="gtail">TAKE OFF</div>'
+    + itemDetailButton('gear-detail-slot', index)
+    + '</div>';
 }
 
 /**

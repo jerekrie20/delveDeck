@@ -44,6 +44,7 @@ import {
 import {
   gearAction, gearActive, gearClassId, gearScreen, gearShardTotal, leaveGear,
 } from './gear';
+import { closeDetail, detailAction, detailOverlay } from './detail';
 import { boonScreen, descentScreen } from './interlude';
 import { mountScreen } from './mount';
 import { replayTransport } from './replay';
@@ -356,6 +357,15 @@ function msToNextDelve(): number {
   ) - now.getTime();
 }
 
+/** Install a screen with the detail popup on top of it. **The overlay is appended HERE,
+ *  once, rather than inside each screen** (GAME_DESIGN.md § the de-jargon pass): a screen
+ *  cannot forget it and no screen module has to know it exists. It renders to nothing
+ *  unless a `?` has been tapped, so every screen carries it and only the open one shows
+ *  a card. */
+function mount(html: string): void {
+  mountScreen(app!, html + detailOverlay());
+}
+
 function render(): void {
   if (tutorialChoices) {
     const coached = tutorialScreen(simulateRun(seed, tutorialChoices), {
@@ -364,19 +374,19 @@ function render(): void {
     });
     // A practice run that has somehow left depth 1's combat screen has nothing left to
     // coach. Drop the tutorial rather than render half of one.
-    if (coached !== null) { mountScreen(app!, coached); return; }
+    if (coached !== null) { mount(coached); return; }
     tutorialChoices = null;
   }
-  if (gearActive()) { mountScreen(app!, gearScreen()); return; }
+  if (gearActive()) { mount(gearScreen()); return; }
   if (endlessActive()) {
     // The pending selections stay HERE — they are not facts about a run, they belong to
     // whichever screen is asking, and both modes ask the same two screens.
-    mountScreen(app!, endlessScreen({
+    mount(endlessScreen({
       bar: pendingBar, ultimate: pendingUltimate, boon: pendingBoon,
     }));
     return;
   }
-  mountScreen(app!, screenFor(simulateRun(seed, choices)));
+  mount(screenFor(simulateRun(seed, choices)));
 }
 
 // ---- input -----------------------------------------------------------------------
@@ -399,6 +409,10 @@ function commitBoon(): void {
 function goToCamp(): void {
   if (replayChoices) leaveReplay();
   tutorialChoices = null;
+  // An open card is screen state, and leaving the screen discards it. The veil already
+  // blocks every control but CLOSE while a card is up, so this cannot fire mid-read — it
+  // is the seam that stops a card leaking across a hard navigation the veil doesn't gate.
+  closeDetail();
   leaveEndless();
   leaveGear();
   screen = 'camp';
@@ -458,6 +472,11 @@ app.addEventListener('click', (event) => {
     pendingUltimate = 0;
     pendingBoon = null;
   }
+  // Before everything: opening or closing the detail popup is never a choice and never a
+  // mode's business, so it is answered before any screen's own dispatcher gets the tap.
+  // The gear-detail openers are the exception — they need the stash, so `gearAction`
+  // owns those two and this handles the ability opener and the close.
+  if (detailAction(action, found, render)) return;
   if (gearAction(action, index, render)) return;
   // Before `runAction`, because the two modes share `skip-descent` and the Endless
   // drives its own descent overlay off its own run.
