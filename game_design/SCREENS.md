@@ -1,5 +1,10 @@
 # The 17 screens
 
+> **⚠ HISTORICAL — see [VIEWS.md](VIEWS.md) (2026-08-13).** This is the inventory of the old
+> Daily game's mockup. The game pivoted to a class-based ARPG roguelite ([DIRECTION.md](DIRECTION.md)),
+> and the new screen inventory is `VIEWS.md`. This file is kept for reference — the combat,
+> camp and gear screens it describes are partly reused — but do not wireframe from it.
+
 Inventory of `daily-delve-v5.html`. What each screen is, what it pins, and which
 stage builds it.
 
