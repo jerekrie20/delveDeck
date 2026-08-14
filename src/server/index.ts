@@ -1,40 +1,28 @@
+// The Devvit web server — reduced to a deployable SHELL for the Stage 7a slice.
+//
+// The old daily/endless game's server (run verification, hero persistence, leaderboards,
+// the daily post scheduler and comment flow) was scraped with the rest of the old version
+// (owner call, 2026-08-13). The slice is client-only — one fight, no server-side state —
+// so all that is left here is what a Devvit web app needs to install and let a moderator
+// open a post: the `serve` scaffold and the one menu endpoint `devvit.json` maps.
+//
+// When the slice grows a server again (persisting the delver, verifying a run), it grows
+// back HERE, through the same seam — pure logic in `core/`, Redis behind a testable fake.
+
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
-import { trpcServer } from '@hono/trpc-server';
-
 import { createServer, getServerPort } from '@devvit/web/server';
-import { feedRoutes } from './routes/feed';
 import { menu } from './routes/menu';
-import { schedulerRoutes } from './routes/scheduler';
-import { triggers } from './routes/triggers';
-import { appRouter } from './trpc';
-import { createContext } from './context';
 
 const app = new Hono();
 
-const api = new Hono();
-api.use(
-  '/trpc/*',
-  trpcServer({
-    endpoint: '/api/trpc',
-    router: appRouter,
-    createContext,
-  })
-);
-// The feed card's numbers. Plain JSON so the inline splash can read it without a
-// tRPC client — see `routes/feed.ts`.
-api.route('/feed', feedRoutes);
-
 const internal = new Hono();
 internal.route('/menu', menu);
-internal.route('/scheduler', schedulerRoutes);
-internal.route('/triggers', triggers);
 
-app.route('/api', api);
 app.route('/internal', internal);
 
 serve({
   fetch: app.fetch,
-  createServer: createServer,
+  createServer,
   port: getServerPort(),
 });

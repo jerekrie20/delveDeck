@@ -1,0 +1,623 @@
+/* Stage 7a — the slice page's own stylesheet.
+ *
+ * The tokens below are a COPY of the block at the top of `game.css` (palette, type
+ * scale, geometry), and that duplication is deliberate: this page must not depend on
+ * the daily's stylesheet any more than on its sim. The slice proves one fight and then
+ * either dies or grows up — while it lives, nothing it touches is load-bearing.
+ *
+ * The laws copied over, not just the tokens:
+ *
+ *  1. min-height, NEVER `height: 100%` — a flex column at height:100% shrinks its
+ *     children to fit and silently cuts a screen down (the trap game.css documents).
+ *  2. Disabled is not invisible — off states dim and keep readable text.
+ *  3. Nothing under 9px, nothing overlaps, nothing scrolls sideways. The visual gate
+ *     measures this page at 320x568 / 359x632 / 1920x1080 and fails on all three.
+ *
+ * Layering: stage z5-9 · HUD z10-19 · overlays z20-29 (the law from shell.ts). */
+
+:root {
+  /* ink scale, measured on the plinth */
+  --ink: #f2f4f9;      /* primary          ~16:1 */
+  --ink2: #cdd4e2;     /* body / secondary ~11:1 */
+  --dim: #a8b0c2;      /* labels, small caps ~7:1 */
+  --faint: #7c8497;    /* 11px+ meta only  ~4.7:1 */
+  --ghost: #525a6b;    /* decorative ONLY */
+
+  /* the slice's four colours: attack red, the enemy's block cyan, fire orange for
+     Burn, violet for the hero's ward, azure for mana */
+  --atk: #ff6257;
+  --atk-deep: #7d211d;
+  --atk-glow: rgb(255 98 87 / 50%);
+  --blk: #6cdcec;
+  --blk-deep: #164e5c;
+  --burn: #ff8a4c;
+  --burn-glow: rgb(255 138 76 / 45%);
+  --ward: #bf9dff;
+  --ward-glow: rgb(191 157 255 / 45%);
+  --mana: #8fb8ff;
+  --mana-glow: rgb(143 184 255 / 40%);
+  --ok: #6bdd92;
+  --nrg: #ffc85c;
+
+  --px: "Silkscreen", ui-monospace, "Courier New", monospace;
+  --ui: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --lantern: rgb(255 186 105 / 15%);
+
+  /* the plinth — the lit control surface */
+  --plinth-1: #272d3a;
+  --plinth-2: #1a1e27;
+  --plinth-3: #141821;
+  /* the stage — the dark */
+  --stage-1: #141826;
+  --stage-2: #0b0e15;
+
+  /* the type scale — routed through tokens, floor 9px, as in game.css */
+  --px-1: 9px;     /* smallest legible label */
+  --px-2: 10px;    /* eyebrows, tags */
+  --px-3: 11px;    /* tile names */
+  --px-4: 12px;    /* tile rules text, meters */
+  --px-5: 13px;    /* buttons */
+  --px-6: 14px;    /* enemy name */
+  --px-7: 15px;    /* threat value */
+  --px-now: 26px;  /* the NOW threat number */
+  --px-cd: 26px;   /* the cooldown mask */
+
+  /* geometry — sized for the reference 359x632 phone */
+  --app-w: 440px;
+  --stage-h: 192px;
+  --tile-h: 76px;
+  --plate: 96px;
+  --btn-h: 48px;
+}
+
+/* Short viewports give up stage height first — it is the one block whose height is
+   pure atmosphere; the telegraph, the tiles and END TURN are load-bearing and must
+   stay above the fold. */
+@media (max-height: 640px) {
+  :root {
+    --stage-h: 166px;
+    --tile-h: 66px;
+    --plate: 84px;
+    --btn-h: 44px;
+  }
+}
+
+/* The tight phone (320x568) is where the payoff line on the Immolate tile costs real
+   height. The stage gives up more, the plinth tightens — measured, not assumed: at
+   the base sizes END TURN landed 28px below the fold with Burn stacked. */
+@media (max-height: 600px) {
+  :root {
+    --stage-h: 140px;
+    --tile-h: 58px;
+    /* The plate and the NOW number both shrink here so the enemy block clears the
+       threat track pinned to the stage bottom — at 76px/26px the HULL readout landed on
+       the NEXT slot (the collision the gate caught at 320x568). */
+    --plate: 56px;
+    --px-now: 22px;
+  }
+  .foe { padding: 6px 12px 2px; gap: 10px; }
+  .plinth { gap: 6px; padding: 8px; }
+}
+
+@media (min-height: 680px) {
+  :root { --stage-h: 208px; --plate: 100px; }
+}
+
+@media (min-height: 900px) {
+  :root { --stage-h: 240px; }
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: #07090d;
+  color: var(--ink);
+  /* the scrollbar is reserved for free: this page never overflows, and if a future
+     screen does, the column must not jump sideways. On the ROOT element — the visual
+     gate reads `documentElement`, and a gutter on the body only is no gutter at all. */
+  scrollbar-gutter: stable;
+}
+
+body {
+  font-family: var(--ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+#app { min-height: 100vh; }
+
+.app {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  max-width: var(--app-w);
+  margin: 0 auto;
+  background: var(--stage-2);
+}
+
+/* ── the stage ─────────────────────────────────────────────────────────────── */
+
+.stage {
+  position: relative;
+  flex: none;
+  height: var(--stage-h);
+  background: linear-gradient(var(--stage-1), var(--stage-2));
+  border-bottom: 1px solid var(--ghost);
+  overflow: hidden;
+  z-index: 5;
+}
+
+/* the rising gloom, and the lantern light it climbs out of */
+.above {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, transparent 55%, rgb(5 7 11 / 85%));
+  pointer-events: none;
+  z-index: 1;
+}
+
+.bd {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 26px;
+  background: radial-gradient(ellipse at 50% 100%, var(--lantern), transparent 70%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.stagetop {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px 0;
+}
+
+.roundtag {
+  font-family: var(--px);
+  font-size: var(--px-2);
+  letter-spacing: 0.12em;
+  color: var(--dim);
+}
+
+.eyebrow {
+  font-family: var(--px);
+  font-size: var(--px-2);
+  letter-spacing: 0.12em;
+  color: var(--faint);
+  text-transform: uppercase;
+}
+
+/* the enemy — plate, name, tags, HULL */
+.foe {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px 4px;
+}
+
+.pw {
+  position: relative;
+  flex: none;
+  width: var(--plate);
+  height: var(--plate);
+}
+
+.pglow {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(255 98 87 / 25%), transparent 70%);
+  filter: blur(4px);
+}
+
+.port {
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, var(--plinth-1), var(--plinth-3));
+  border: 1px solid var(--ghost);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* Rule 1: no portrait. Glowing eyes read as something lurking. */
+.eyes { display: flex; gap: 14px; }
+.eyes b {
+  width: 10px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--burn);
+  box-shadow: 0 0 10px var(--burn-glow);
+  animation: blink 4.2s infinite;
+}
+.eyes b:nth-child(2) { animation-delay: -0.4s; }
+@keyframes blink {
+  0%, 88%, 100% { transform: scaleY(1); }
+  92% { transform: scaleY(0.08); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .eyes b { animation: none; }
+}
+
+.fside { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+
+.fname {
+  font-family: var(--px);
+  font-size: var(--px-6);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ftags { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.tag {
+  font-family: var(--px);
+  font-size: var(--px-2);
+  letter-spacing: 0.08em;
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--ghost);
+  color: var(--ink2);
+}
+.tag.trait { color: var(--blk); border-color: var(--blk-deep); }
+.tag.burn {
+  color: var(--burn);
+  border-color: var(--burn);
+  background: var(--burn-glow);
+}
+
+.fhp { display: flex; flex-direction: column; gap: 3px; }
+
+.meter {
+  height: 8px;
+  border-radius: 4px;
+  background: #0c0f16;
+  overflow: hidden;
+}
+.fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--atk);
+  box-shadow: 0 0 8px var(--atk-glow, rgb(255 98 87 / 35%));
+  transition: width 180ms ease-out;
+}
+.fill.life { background: var(--ok); box-shadow: 0 0 8px rgb(107 221 146 / 30%); }
+
+.fline { display: flex; justify-content: space-between; align-items: baseline; }
+
+.n {
+  font-family: var(--px);
+  font-size: var(--px-5);
+  font-weight: 700;
+}
+.n small, .w small { font-size: var(--px-2); color: var(--faint); }
+
+/* ── the threat track — the game ────────────────────────────────────────────── */
+
+.threat {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  z-index: 3;
+  display: flex;
+  gap: 6px;
+  padding: 0 8px 8px;
+}
+
+.ts {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px 5px;
+  border-radius: 6px;
+  border: 1px solid var(--ghost);
+  background: rgb(10 13 20 / 92%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ts.now { border-color: var(--atk-deep); background: rgb(125 33 29 / 22%); }
+.ts.block { border-color: var(--blk-deep); }
+.ts.attack .val { color: var(--atk); }
+.ts.block .val { color: var(--blk); }
+
+.when {
+  font-family: var(--px);
+  font-size: var(--px-1);
+  letter-spacing: 0.14em;
+  color: var(--dim);
+}
+
+.ts .row { display: flex; align-items: baseline; gap: 5px; }
+.ts .gly { font-size: var(--px-4); line-height: 1; }
+.ts .val {
+  font-family: var(--px);
+  font-size: var(--px-7);
+  font-weight: 700;
+  line-height: 1.05;
+}
+.ts.now .val { font-size: var(--px-now); }
+
+.ts.lethal { border-color: var(--atk); box-shadow: 0 0 12px var(--atk-glow); }
+.lt {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--px);
+  font-size: var(--px-1);
+  letter-spacing: 0.1em;
+  color: #fff;
+  background: var(--atk);
+  border-radius: 3px;
+  padding: 2px 6px;
+}
+
+.vig {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  box-shadow: inset 0 0 60px rgb(0 0 0 / 60%);
+}
+
+/* ── the plinth ─────────────────────────────────────────────────────────────── */
+
+.plinth {
+  position: relative;
+  z-index: 10;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: linear-gradient(var(--plinth-1), var(--plinth-3));
+}
+
+/* hero: readout, then ward above the HP rail */
+.hero { display: flex; gap: 10px; align-items: stretch; }
+
+.hread {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 64px;
+}
+.hread .n {
+  font-family: var(--px);
+  font-size: var(--px-now);
+  line-height: 1;
+}
+.hread .n.low { color: var(--atk); }
+.hread .d {
+  font-family: var(--px);
+  font-size: var(--px-2);
+  letter-spacing: 0.1em;
+  color: var(--atk);
+}
+.hread .d.safe { color: var(--ok); }
+
+.hbars { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; justify-content: center; }
+
+.wardbar { display: flex; flex-direction: column; gap: 3px; }
+.wardbar .fill { background: var(--ward); box-shadow: 0 0 8px var(--ward-glow); }
+.wline { display: flex; justify-content: space-between; align-items: baseline; }
+.wline .w { font-family: var(--px); font-size: var(--px-4); font-weight: 700; }
+
+.hprail { position: relative; }
+.hprail .meter { position: relative; }
+/* the incoming hit, drawn ON the rail — the segment between where HP is and where
+   the hit will leave it */
+.loss {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: var(--atk);
+  opacity: 0.55;
+  border-radius: 0 4px 4px 0;
+}
+
+/* mana — the pool that regenerates */
+.res { display: flex; flex-direction: column; gap: 3px; }
+.res .fill { background: var(--mana); box-shadow: 0 0 8px var(--mana-glow); }
+.res .k { font-family: var(--px); font-size: var(--px-4); color: var(--ink2); }
+.res .k small { font-size: var(--px-1); color: var(--faint); }
+
+/* the fight's last beat */
+.log {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--px-4);
+  color: var(--faint);
+  min-height: 16px;
+}
+.log span { color: var(--burn); }
+.log em { font-style: normal; }
+
+/* ── the five tiles ─────────────────────────────────────────────────────────── */
+
+.abgrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.ab {
+  position: relative;
+  font-family: var(--ui);
+  color: var(--ink);
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-height: var(--tile-h);
+  padding: 7px 8px 8px;
+  border: 1px solid var(--ghost);
+  border-radius: 8px;
+  background: var(--plinth-2);
+  cursor: pointer;
+  overflow: hidden;
+}
+/* a tile's height is its content, floored at the token — the payoff row grows one
+   line when there is fire to cash in, and clipping it would hide a rule */
+.ab.ready { border-color: var(--burn); box-shadow: 0 0 10px rgb(255 138 76 / 18%); }
+.ab.ready:active { transform: translateY(1px); }
+
+/* Disabled is not invisible — dim, keep the text readable. */
+.ab.off {
+  filter: brightness(0.72);
+  cursor: default;
+  border-color: var(--ghost);
+  box-shadow: none;
+}
+
+.ab .ico { font-size: var(--px-6); line-height: 1; }
+
+.cost {
+  position: absolute;
+  top: 6px;
+  right: 7px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: 10px;
+  background: var(--mana-glow);
+  color: var(--mana);
+  font-family: var(--px);
+  font-size: var(--px-3);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The name and its CD tag share the row, and the tag WRAPS beneath the name when the
+   tile is too narrow for both — the chip owns the top-right corner, and a tag pushed
+   under it is the overlap the visual gate catches. */
+.nmrow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  padding-right: 22px;
+}
+.nm {
+  font-family: var(--px);
+  font-size: var(--px-3);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.cdtag {
+  font-family: var(--px);
+  font-size: var(--px-1);
+  letter-spacing: 0.08em;
+  color: var(--nrg);
+  border: 1px solid var(--ghost);
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+
+.rx { font-size: var(--px-4); color: var(--ink2); line-height: 1.25; }
+
+/* While cooling, the rules text gives way to the rounds left — the big number is the
+   state, and in flow it can sit on nothing. */
+.rx.cd {
+  font-family: var(--px);
+  font-size: var(--px-cd);
+  color: var(--burn);
+  text-shadow: 0 0 12px var(--burn-glow);
+  line-height: 1;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.pot {
+  font-family: var(--px);
+  font-size: var(--px-2);
+  letter-spacing: 0.08em;
+  color: var(--burn);
+}
+
+/* ── the action row ─────────────────────────────────────────────────────────── */
+
+.grow { flex: 1; min-height: 0; }
+
+.act { display: flex; }
+
+.btn {
+  flex: 1;
+  min-height: var(--btn-h);
+  border: none;
+  border-radius: 8px;
+  font-family: var(--px);
+  font-size: var(--px-5);
+  letter-spacing: 0.12em;
+  color: #0b0e15;
+  font-weight: 700;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+}
+.btn:active { transform: translateY(1px); }
+.btn.go { background: var(--ok); box-shadow: 0 0 14px rgb(107 221 146 / 35%); }
+.btn.danger { background: var(--atk); box-shadow: 0 0 14px var(--atk-glow); }
+
+.btn .sub {
+  font-family: var(--px);
+  font-size: var(--px-2);
+  letter-spacing: 0.1em;
+}
+
+/* ── the end of a fight ─────────────────────────────────────────────────────── */
+
+.veil {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  background: rgb(5 6 9 / 88%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.ocard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 22px 28px;
+  border-radius: 12px;
+  border: 1px solid var(--ghost);
+  background: var(--plinth-2);
+  text-align: center;
+}
+
+.otitle {
+  font-family: var(--px);
+  font-size: var(--px-now);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.osub {
+  font-family: var(--px);
+  font-size: var(--px-2);
+  letter-spacing: 0.1em;
+  color: var(--faint);
+  text-transform: uppercase;
+}
+
+.ocard .btn { min-width: 180px; flex: none; padding: 0 18px; }

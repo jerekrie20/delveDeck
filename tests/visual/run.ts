@@ -72,7 +72,9 @@ const KNOWN_FINDINGS: {
  * FAIL above a run that passed — which is its own kind of gate that gets ignored. The
  * headline has to mean what the exit code means.
  */
-function report(result: GateResult, label: string, seen: Set<string>): number {
+function report(
+  result: GateResult & { rounds?: number }, label: string, seen: Set<string>,
+): number {
   const lines: string[] = [];
   const screensWithNew = new Set<string>();
   const flag = (at: string, line: string): void => {
@@ -135,7 +137,10 @@ function report(result: GateResult, label: string, seen: Set<string>): number {
     );
   }
 
-  console.log(`\n${label} — ${screensWithNew.size ? 'FAIL' : 'PASS'}  (${result.depthsReached} depths played)`);
+  const played = result.rounds !== undefined
+    ? `${result.rounds} rounds played`
+    : `${result.depthsReached} depths played`;
+  console.log(`\n${label} — ${screensWithNew.size ? 'FAIL' : 'PASS'}  (${played})`);
   for (const screen of result.summary) {
     const flags = [
       screen.occluded ? `${screen.occluded} occluded` : '',
@@ -156,27 +161,23 @@ function report(result: GateResult, label: string, seen: Set<string>): number {
   return screensWithNew.size;
 }
 
-async function playAt(
+/** The slice page has no tutorial gating and no server calls — just a pinned seed and its
+ *  own gate module. The specifier is passed IN rather than written inline so TypeScript
+ *  does not try to resolve a browser URL against the filesystem; Vite serves and
+ *  transpiles `slice-gate.ts` on request, which is what lets the in-page half be TS too. */
+async function playSliceAt(
   browser: Browser, url: string, viewport: { width: number; height: number },
-): Promise<GateResult> {
+): Promise<GateResult & { rounds: number }> {
   const page = await browser.newPage({ viewport });
   try {
-    // The tutorial is offered once per browser and would take the first screen. This
-    // gate is about the camp and the run; `tutorial.test.ts` owns the five beats.
-    await page.addInitScript(() => {
-      try { window.localStorage.setItem('delvedeck.tutorial.seen', '1'); } catch { /* partitioned */ }
-    });
     await page.goto(url, { waitUntil: 'load' });
-    // The specifier is passed IN rather than written inline, so TypeScript does not
-    // try to resolve a browser URL against the filesystem. Vite serves and transpiles
-    // `gate.ts` on request, which is what lets the in-page half be TypeScript too.
     return (await page.evaluate(
       async (modulePath: string) => {
         const gate = await import(/* @vite-ignore */ modulePath);
-        return await gate.run();
+        return await gate.runSlice();
       },
-      '/tests/visual/gate.ts',
-    )) as GateResult;
+      '/tests/visual/slice-gate.ts',
+    )) as GateResult & { rounds: number };
   } finally {
     await page.close();
   }
@@ -189,13 +190,10 @@ async function main(): Promise<void> {
   });
   await server.listen();
   const port = server.config.server.port ?? 5173;
-  // **A PINNED DAY, so the gate plays the same shaft every time.** Without it the seed
-  // is today's, which means the enemies, the issued nine and — from Stage 6b — whether
-  // an offline run finds anything all change overnight. A layout gate that measures a
-  // different screen on Tuesday is a gate whose green is worth nothing on Wednesday,
-  // and the haul pane in particular only exists on a run that actually dropped
-  // something. This day is one that does; see `gearLeg`/`endlessLeg` in `gate.ts`.
-  const url = `http://localhost:${port}/src/client/index.html?day=2026-08-06`;
+  // **A PINNED SEED, so the gate plays the same fight every time.** The slice is the whole
+  // app now (`index.html`), and `?seed=1` fixes Gravemaw's HP jitter — a layout gate that
+  // measured a different fight each run would be a gate whose green is worth nothing.
+  const sliceUrl = `http://localhost:${port}/src/client/index.html?seed=1`;
 
   const browser = await chromium.launch();
   let failed = 0;
@@ -203,8 +201,14 @@ async function main(): Promise<void> {
   const seen = new Set<string>();
 
   try {
+    // The slice leg, played at all three viewports: the tight phone, the reference phone,
+    // and desktop. `report` is shared, so the same rules apply — nothing is
+    // known-listable, the column must not move between screens, and a gate that names a
+    // state it never reached fails.
     for (const viewport of VIEWPORTS) {
-      const result = await playAt(browser, url, { width: viewport.width, height: viewport.height });
+      const result = await playSliceAt(
+        browser, sliceUrl, { width: viewport.width, height: viewport.height },
+      );
       failed += report(result, viewport.name, seen);
     }
   } finally {

@@ -6,11 +6,13 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
-    <title>Daily Delve</title>
-    <link rel="stylesheet" href="game.css" />
+    <title>Delve — Pyromancer slice</title>
+    <link rel="stylesheet" href="slice.css" />
   </head>
+  <!-- No `h-full` here: slice.css sets `min-height` deliberately. `height: 100%` on a
+       flex body stretches #app to the viewport and makes its children SHRINK to fit. -->
   <body>
     <div id="app"></div>
-    <script type="module" src="main.ts"></script>
+    <script type="module" src="slice.ts"></script>
   </body>
 </html>

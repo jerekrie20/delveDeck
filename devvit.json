@@ -5,11 +5,7 @@
     "dir": "dist/client",
     "entrypoints": {
       "default": {
-        "inline": true,
-        "entry": "splash.html"
-      },
-      "game": {
-        "entry": "game.html"
+        "entry": "index.html"
       }
     }
   },
@@ -24,7 +20,7 @@
     "items": [
       {
         "label": "Create a new post",
-        "description": "Daily Delve",
+        "description": "Delve — Pyromancer slice",
         "location": "subreddit",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/post-create"
@@ -34,22 +30,7 @@
   "permissions": {
     "reddit": {
       "enable": true,
-      "asUser": [
-        "SUBMIT_POST",
-        "SUBMIT_COMMENT",
-        "SUBSCRIBE_TO_SUBREDDIT"
-      ]
-    }
-  },
-  "triggers": {
-    "onAppInstall": "/internal/triggers/on-app-install"
-  },
-  "scheduler": {
-    "tasks": {
-      "dailyPost": {
-        "cron": "1 0 * * *",
-        "endpoint": "/internal/scheduler/daily-post"
-      }
+      "asUser": ["SUBMIT_POST"]
     }
   },
   "scripts": {

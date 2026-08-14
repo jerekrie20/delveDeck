@@ -24,13 +24,19 @@ below writes its own detail into the folder before it is built.
 
 **Prototype fun SMALL before rebuilding the world — this is the fix for the slow pacing.**
 
-- [ ] **Stage 7a · the one-class vertical slice.** On the existing turn loop: **mana** (a
-      regenerating pool, replacing energy + rage), **one defence type** (passive mitigation),
-      **~5 signature abilities that combo through one status**, and **round-pressure** (win
-      within N rounds or it turns against you — NOT a real-time clock). Pick one class, give
-      it a real fantasy. **Goal: one FIGHT that is genuinely fun and readable.** Nothing else
-      moves until this is fun. Decide the slice's specifics in the folder first (a new
-      `game_design/` section or doc), then build.
+- [x] **Stage 7a · the one-class vertical slice.** ✅ **Shipped 2026-08-13.** Designed in
+      `game_design/SLICE_7A.md` first, then built as a **self-contained module** (owner call,
+      2026-08-13 — NOT grafted onto the old daily/endless sim, which was scraped with the rest
+      of the old version). The **Pyromancer**: a glass cannon whose whole kit is one clean
+      setup → payoff — stack **Burn**, then **detonate** it — with **mana** (a regenerating
+      pool, caster-flavoured passive regen), a rechargeable **Ward** (passive floor) plus
+      **Cinder Ward** (the active answer to the telegraph), and **round-pressure** (Gravemaw
+      enrages after 6 rounds). One fight, five abilities, one enemy whose block/heavy-hit cycle
+      makes both class lines matter. Pure + deterministic (`src/shared/slice/`), a standalone
+      playable screen at **`index.html`** (`src/client/slice.{ts,css}`), `tests/slice.test.ts`
+      (18 checks incl. *a sensible policy wins / doing nothing dies*), and its own visual-gate
+      leg with DOM-vs-view sync checks. All green: type-check · lint · test · test:visual.
+      **Next: play it and decide whether the fight is fun before 7b.**
 - [ ] **Stage 7b · juice + feedback.** Make the big turn *read* and *land* — hit impact,
       enemy reaction, damage that pops, the threat track feeling threatening, a first Web
       Audio pass. CSS motion + synth only (rule 1). This is the fix for "can't tell what's
