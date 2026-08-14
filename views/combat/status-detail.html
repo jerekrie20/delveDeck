@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delvedeck — Status Detail v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#f4f6fb; --ink2:#cdd4e2; --dim:#9aa3b5; --faint:#6d7688;
+    --atk:#ff6257; --blk:#6cdcec; --blk-glow:rgba(108,220,236,.5); --burn:#ff8a4c; --burn-glow:rgba(255,138,76,.5);
+    --stratum:#a790ee; --stratum-glow:rgba(167,144,238,.5);
+    --px:"Silkscreen", ui-monospace, monospace; --ui:system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#07090d; color:var(--ink); font-family:var(--ui); display:flex; flex-direction:column; align-items:center; gap:14px; padding:24px 16px 60px;}
+  .head{font-family:var(--px); font-size:11px; letter-spacing:.1em; color:var(--dim); text-align:center;} .head b{color:var(--burn);}
+  .cap{max-width:359px; font-size:12px; color:var(--faint); text-align:center; line-height:1.5;} .cap b{color:var(--dim);}
+  img.px{image-rendering:pixelated;}
+
+  .game{position:relative; width:359px; height:520px; border-radius:26px; overflow:hidden; border:1px solid #20242e; box-shadow:0 24px 60px rgba(0,0,0,.65); user-select:none;}
+  .scene{position:absolute; inset:0; background:#0a0c12 url('https://api.pixellab.ai/mcp/images/ed6b1059-17fa-4a3c-a5e8-3f1c8a4534b4/download') no-repeat center top; background-size:cover; image-rendering:pixelated;}
+  .scene::before{content:''; position:absolute; inset:0; background:radial-gradient(70% 50% at 50% 24%, var(--stratum-glow) 0, transparent 60%); opacity:.14;}
+  .scene::after{content:''; position:absolute; inset:0; background:linear-gradient(180deg, rgba(6,7,11,.5) 0%, transparent 30% 60%, rgba(6,7,11,.75) 100%);}
+  .topbar{position:absolute; top:12px; left:12px; right:12px; z-index:6; display:flex; justify-content:space-between; font-family:var(--px); font-size:9px; letter-spacing:.1em; color:var(--dim); text-shadow:0 1px 3px #000;}
+  .topbar .d{color:var(--stratum);}
+
+  .foe{position:absolute; top:44px; left:50%; transform:translateX(-50%); width:150px; height:150px; image-rendering:pixelated; filter:drop-shadow(0 6px 8px rgba(0,0,0,.5)) drop-shadow(0 0 16px var(--stratum-glow)); z-index:2;}
+  .foename{position:absolute; top:188px; left:0; right:0; text-align:center; font-family:var(--px); font-size:13px; letter-spacing:.08em; text-shadow:0 2px 0 #000; z-index:2;}
+  .chips{position:absolute; top:214px; left:0; right:0; display:flex; gap:9px; justify-content:center; z-index:6;}
+  .chip{font-family:var(--px); font-size:9px; letter-spacing:.04em; padding:5px 9px; border-radius:6px; text-shadow:0 1px 2px #000; display:flex; align-items:center; gap:5px; cursor:pointer; background:rgba(10,11,17,.6);}
+  .chip.block{color:var(--blk); box-shadow:inset 0 0 0 1.5px rgba(108,220,236,.45);}
+  .chip.burn{color:var(--burn); box-shadow:inset 0 0 0 1.5px var(--burn); background:rgba(255,138,76,.12);}
+  .chip:active{transform:translateY(1px);}
+  .chip.on{box-shadow:inset 0 0 0 1.5px currentColor, 0 0 16px currentColor;}
+  .hint{position:absolute; top:250px; left:0; right:0; text-align:center; z-index:2; font-family:var(--px); font-size:7.5px; letter-spacing:.14em; color:var(--faint); animation:pulse 2.2s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:.45;}50%{opacity:.9;}}
+
+  .scrim{position:absolute; inset:0; z-index:8; background:rgba(5,6,10,.62); opacity:0; pointer-events:none; transition:opacity .16s;}
+  .scrim.show{opacity:1; pointer-events:auto;}
+
+  .pop{position:absolute; z-index:9; width:300px; border-radius:14px; overflow:hidden; opacity:0; pointer-events:none; transform:translateY(-4px); transition:opacity .16s, transform .16s;
+    background:linear-gradient(180deg,#1e1a14 0%,#141009 55%,#0c0906 100%); box-shadow:0 16px 34px rgba(0,0,0,.65);}
+  .pop.show{opacity:1; pointer-events:auto; transform:translateY(0);}
+  .pop::after{content:''; position:absolute; inset:0; border-radius:14px; pointer-events:none; box-shadow:inset 0 0 0 1.5px var(--edge, rgba(255,138,76,.5)), 0 0 0 1px rgba(0,0,0,.6);}
+  .arrow{position:absolute; top:-7px; width:13px; height:13px; transform:rotate(45deg); background:#1e1a14; box-shadow:inset 1px 1px 0 rgba(255,190,130,.25);}
+  .pc{position:relative; z-index:2; padding:13px 14px 14px;}
+
+  .phead{display:flex; align-items:center; gap:11px;}
+  .picon{width:44px; height:44px; flex:none; border-radius:11px; display:flex; align-items:center; justify-content:center; font-size:22px; background:radial-gradient(circle at 50% 38%, rgba(255,255,255,.05), rgba(0,0,0,.5)); box-shadow:inset 0 0 0 1px var(--accent), inset 0 2px 5px rgba(0,0,0,.6);}
+  .picon img{width:32px; height:32px;}
+  .ptitle{flex:1;}
+  .prow{display:flex; align-items:center; gap:8px;}
+  .pname{font-family:var(--px); font-size:15px; letter-spacing:.06em; color:var(--accent); text-shadow:0 1px 0 #000, 0 0 12px var(--edge);}
+  .pel{font-family:var(--px); font-size:7px; letter-spacing:.08em; color:var(--accent); border:1px solid var(--accent); border-radius:4px; padding:2px 5px; opacity:.85;}
+  .pstacks{font-family:var(--px); font-size:8px; letter-spacing:.06em; color:var(--dim); margin-top:5px;} .pstacks b{color:var(--ink);}
+  .pclose{position:absolute; top:10px; right:11px; z-index:3; width:22px; height:22px; border:none; cursor:pointer; border-radius:7px; color:var(--ink2); background:rgba(255,255,255,.06); box-shadow:inset 0 0 0 1px rgba(255,255,255,.08); font-family:var(--px); font-size:10px;}
+
+  .pbody{font-size:12px; color:var(--ink2); line-height:1.45; margin-top:11px;}
+  .pkey{margin-top:10px; border-radius:9px; padding:8px 10px; font-size:11px; line-height:1.35; background:color-mix(in srgb, var(--accent) 12%, transparent); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--accent) 34%, transparent); color:var(--ink2);} .pkey b{color:var(--accent);}
+
+  .pticks{margin-top:12px;}
+  .ptl{font-family:var(--px); font-size:7px; letter-spacing:.1em; color:var(--faint); margin-bottom:6px;}
+  .ptrow{display:flex; align-items:center; gap:6px;}
+  .tick{width:36px; height:32px; border-radius:8px; display:flex; flex-direction:column; align-items:center; justify-content:center; background:color-mix(in srgb, var(--accent) 9%, transparent); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);}
+  .tick b{font-family:var(--px); font-size:12px; color:var(--accent);} .tick small{font-family:var(--px); font-size:5.5px; color:var(--faint); letter-spacing:.04em; margin-top:1px;}
+  .tarr{color:var(--faint); font-size:11px;}
+  .ttot{margin-left:auto; font-family:var(--px); font-size:8px; color:var(--accent); text-align:right; line-height:1.4;}
+</style>
+</head>
+<body>
+
+<div class="head">DELVEDECK · <b>STATUS DETAIL v2</b> · tap a chip on Gravemaw — it's live</div>
+
+<div class="game" id="game">
+  <div class="scene"></div>
+  <div class="topbar"><span>ROUND 3</span><span class="d">DEPTH 9 · THE CRYPT</span></div>
+  <img class="foe px" src="https://api.pixellab.ai/mcp/images/c0f9ca4f-a0ba-4a8a-adbc-fd62116c333d/download" alt="Gravemaw">
+  <div class="foename">GRAVEMAW</div>
+  <div class="chips">
+    <span class="chip block" data-s="block">🛡 BLOCK 10</span>
+    <span class="chip burn" data-s="burn">🔥 BURN 3</span>
+  </div>
+  <div class="hint">▸ TAP A STATUS TO INSPECT</div>
+
+  <div class="scrim" id="scrim"></div>
+
+  <div class="pop" id="pop">
+    <div class="arrow" id="arrow"></div>
+    <button class="pclose" id="pclose">✕</button>
+    <div class="pc" id="pc"></div>
+  </div>
+</div>
+
+<div class="cap"><b>A real popup:</b> tap either chip — the card opens pointed at it, the fight dims behind, and the chip lights. Tap away, the ✕, or the same chip to close. BURN and BLOCK both use one card shape, so the pattern reads the whole status system.</div>
+<div class="cap"><b>Refined info:</b> icon + element + current stacks, then plainly what it does, the one rule that matters (Burn bypasses block; block wastes your strikes), and — for a ticking status — a 3→2→1 forecast with the total so you can see the fire's whole future at a glance.</div>
+
+<script>
+  const STATUS = {
+    burn: {
+      accent:'var(--burn)', edge:'var(--burn-glow)', el:'FIRE', name:'BURN',
+      icon:'<img class="px" src="https://api.pixellab.ai/mcp/images/6d2c3d8b-692c-49bb-8f8e-2cdc79bd374e/download">',
+      stacks:'ON GRAVEMAW · <b>3 STACKS</b>',
+      body:"At the start of the enemy's turn, deals damage equal to its stacks — then fades by 1.",
+      key:'<b>Bypasses block.</b> Burn ticks straight through Harden — the answer to a turtling foe.',
+      ticks:['3','2','1'], labels:['NEXT','THEN','LAST'], total:'6 DMG<br>OVER 3 TURNS'
+    },
+    block: {
+      accent:'var(--blk)', edge:'var(--blk-glow)', el:'GUARD', name:'BLOCK',
+      icon:'🛡',
+      stacks:'ON GRAVEMAW · <b>10 BLOCK</b>',
+      body:'Soaks up to 10 of your direct damage before its Hull is touched, then it’s spent.',
+      key:'<b>Wastes your strikes</b> — but not your Burn. Lean on fire, or wait a turn for it to drop.',
+      ticks:null
+    }
+  };
+  const game=document.getElementById('game'), scrim=document.getElementById('scrim'), pop=document.getElementById('pop'),
+    arrow=document.getElementById('arrow'), pc=document.getElementById('pc'), pclose=document.getElementById('pclose');
+  let openKey=null;
+  function render(k){
+    const s=STATUS[k];
+    let ticks='';
+    if(s.ticks){
+      let cells='';
+      s.ticks.forEach((t,i)=>{ cells+=`<div class="tick"><b>${t}</b><small>${s.labels[i]}</small></div>`; if(i<s.ticks.length-1) cells+='<span class="tarr">→</span>'; });
+      ticks=`<div class="pticks"><div class="ptl">HOW IT PLAYS OUT</div><div class="ptrow">${cells}<span class="ttot">${s.total}</span></div></div>`;
+    }
+    pc.innerHTML=`<div class="phead"><div class="picon">${s.icon}</div><div class="ptitle">`
+      +`<div class="prow"><span class="pname">${s.name}</span><span class="pel">${s.el}</span></div>`
+      +`<div class="pstacks">${s.stacks}</div></div></div>`
+      +`<div class="pbody">${s.body}</div><div class="pkey">${s.key}</div>${ticks}`;
+    pop.style.setProperty('--accent', s.accent); pop.style.setProperty('--edge', s.edge);
+  }
+  function open(chip,k){
+    if(openKey===k){ close(); return; }
+    openKey=k; render(k);
+    document.querySelectorAll('.chip').forEach(c=>c.classList.remove('on')); chip.classList.add('on');
+    scrim.classList.add('show'); pop.classList.add('show');
+    const r=chip.getBoundingClientRect(), g=game.getBoundingClientRect();
+    const cx=r.left-g.left+r.width/2, W=300;
+    let left=Math.max(10, Math.min(cx-W/2, 359-10-W));
+    pop.style.left=left+'px'; pop.style.top=(r.bottom-g.top+12)+'px';
+    arrow.style.left=Math.max(12, Math.min(cx-left-6, W-24))+'px';
+  }
+  function close(){ openKey=null; scrim.classList.remove('show'); pop.classList.remove('show'); document.querySelectorAll('.chip').forEach(c=>c.classList.remove('on')); }
+  document.querySelectorAll('.chip').forEach(chip=>chip.addEventListener('click',()=>open(chip, chip.dataset.s)));
+  scrim.addEventListener('click', close); pclose.addEventListener('click', close);
+</script>
+</body>
+</html>

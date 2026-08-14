@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delvedeck — In-Run Haul v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#f4f6fb; --ink2:#cdd4e2; --dim:#9aa3b5; --faint:#6d7688; --nrg:#ffc85c;
+    --atk:#ff6257; --ok:#6bdd92;
+    --r-common:#a8b0c2; --r-rare:#5b9bd5; --r-epic:#bf9dff;
+    --px:"Silkscreen", ui-monospace, monospace; --ui:system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#07090d; color:var(--ink); font-family:var(--ui); display:flex; flex-direction:column; align-items:center; gap:14px; padding:24px 16px 60px;}
+  .head{font-family:var(--px); font-size:11px; letter-spacing:.1em; color:var(--dim); text-align:center;} .head b{color:var(--nrg);}
+  .cap{max-width:359px; font-size:12px; color:var(--faint); text-align:center; line-height:1.5;} .cap b{color:var(--dim);}
+  img.px{image-rendering:pixelated;}
+
+  .game{position:relative; width:359px; height:624px; border-radius:26px; overflow:hidden; border:1px solid #20242e; box-shadow:0 24px 60px rgba(0,0,0,.65); user-select:none;
+    background:linear-gradient(180deg,#110d0d 0%,#0b0a10 44%,#07070c 100%); display:flex; flex-direction:column;}
+  .vig{position:absolute; inset:0; z-index:0; pointer-events:none; box-shadow:inset 0 0 120px rgba(0,0,0,.7);}
+
+  .topnav{position:relative; z-index:5; height:46px; display:flex; align-items:center; justify-content:space-between; padding:0 12px; flex:none;}
+  .back{display:flex; align-items:center; gap:6px; border:none; cursor:pointer; color:var(--ink2); background:rgba(255,255,255,.05); box-shadow:inset 0 0 0 1px rgba(255,255,255,.08); border-radius:9px; padding:6px 10px; font-family:var(--px); font-size:8px; letter-spacing:.08em;}
+  .navttl{font-family:var(--px); font-size:11px; letter-spacing:.12em; color:var(--ink2);}
+  .navsp{width:60px;}
+
+  /* risk banner — the lead */
+  .banner{position:relative; z-index:3; margin:2px 14px 0; border-radius:14px; padding:13px 14px; overflow:hidden;
+    background:linear-gradient(180deg, rgba(255,98,87,.12), rgba(255,98,87,.03)); box-shadow:inset 0 0 0 1px rgba(255,98,87,.3);}
+  .btop{display:flex; align-items:center; gap:12px;}
+  .btop .shards{font-family:var(--px); font-size:24px; color:var(--nrg); text-shadow:0 0 14px rgba(255,200,92,.4); line-height:1;}
+  .btop .div{width:1px; height:30px; background:rgba(255,255,255,.12);}
+  .btop .items{font-family:var(--px); font-size:11px; color:var(--ink2); line-height:1.5;}
+  .btop .items small{color:var(--faint); font-size:8px; letter-spacing:.06em;}
+  .risk{margin-top:10px; font-family:var(--px); font-size:8px; letter-spacing:.05em; color:var(--atk); display:flex; align-items:center; gap:6px; line-height:1.5;}
+  .risk b{color:#ffdede; font-weight:400;}
+
+  .sect{font-family:var(--px); font-size:7.5px; letter-spacing:.14em; color:var(--faint); text-transform:uppercase; margin:13px 16px 0;}
+
+  .list{position:relative; z-index:3; flex:1; min-height:0; overflow-y:auto; padding:8px 14px 14px; display:flex; flex-direction:column; gap:9px;}
+  .list::-webkit-scrollbar{width:0;}
+  .hrow{position:relative; display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:12px; background:rgba(255,255,255,.03); box-shadow:inset 0 0 0 1px rgba(255,255,255,.05); border-left:3px solid var(--rc);}
+  .hrow.rare{--rc:var(--r-rare);} .hrow.common{--rc:var(--r-common);} .hrow.epic{--rc:var(--r-epic);}
+  .hrow.epic{box-shadow:inset 0 0 0 1px rgba(191,157,255,.28), 0 0 14px rgba(191,157,255,.14);}
+  .ico{width:50px; height:50px; flex:none; border-radius:11px; display:flex; align-items:center; justify-content:center; overflow:hidden;
+    background:radial-gradient(circle at 50% 38%, rgba(255,255,255,.05), rgba(0,0,0,.5)); box-shadow:inset 0 0 0 1.5px var(--rc), inset 0 2px 6px rgba(0,0,0,.6);}
+  .ico img{width:42px; height:42px;}
+  .hinfo{flex:1; min-width:0;}
+  .hn{display:flex; align-items:baseline; gap:8px;}
+  .hn .nm{font-family:var(--px); font-size:11px; letter-spacing:.03em; text-transform:uppercase; color:var(--ink);}
+  .hn .rar{font-family:var(--px); font-size:7px; letter-spacing:.08em; color:var(--rc);}
+  .heff{font-size:11px; color:var(--ink2); line-height:1.3; margin-top:3px;} .heff b{color:var(--rc);}
+  .hmeta{font-family:var(--px); font-size:6.5px; letter-spacing:.06em; color:var(--faint); margin-top:5px;}
+  .worn{position:absolute; top:9px; right:11px; font-family:var(--px); font-size:6.5px; letter-spacing:.08em; color:var(--nrg); border:1px solid rgba(255,200,92,.4); border-radius:4px; padding:2px 5px;}
+
+  .foot{position:relative; z-index:3; flex:none; padding:11px 16px 14px; border-top:1px solid rgba(255,255,255,.06); text-align:center;}
+  .foot .l{font-family:var(--px); font-size:7.5px; letter-spacing:.05em; color:var(--faint); line-height:1.7;} .foot .l b{color:#c99;} .foot .l .g{color:var(--ok);}
+</style>
+</head>
+<body>
+
+<div class="head">DELVEDECK · <b>IN-RUN HAUL v2</b> · real art, refined risk &amp; rows</div>
+
+<div class="game">
+  <div class="vig"></div>
+  <div class="topnav">
+    <button class="back">‹ BACK</button>
+    <span class="navttl">THE HAUL</span>
+    <span class="navsp"></span>
+  </div>
+
+  <div class="banner">
+    <div class="btop">
+      <span class="shards">◈ 140</span>
+      <span class="div"></span>
+      <span class="items">3 ITEMS CARRIED<br><small>0 BANKED · 1 WORN</small></span>
+    </div>
+    <div class="risk">☠ UNBANKED — <b>A DEATH BURNS ALL OF IT.</b> SURFACE AT A FORK TO KEEP IT.</div>
+  </div>
+
+  <div class="sect">Gathered this delve</div>
+  <div class="list">
+    <div class="hrow epic">
+      <div class="ico"><img class="px" src="https://api.pixellab.ai/mcp/images/8a2f1b9a-a9d2-45b8-9834-aa1ba843c2ab/download"></div>
+      <div class="hinfo">
+        <div class="hn"><span class="nm">Kindling Charm</span><span class="rar">EPIC</span></div>
+        <div class="heff">A stacker leaves more behind — Ember &amp; Pyre apply <b>+1</b> Burn.</div>
+        <div class="hmeta">TRINKET · FOUND DEPTH 7</div>
+      </div>
+    </div>
+    <div class="hrow rare">
+      <span class="worn">WORN</span>
+      <div class="ico"><img class="px" src="https://api.pixellab.ai/mcp/images/3043fe50-07ef-41f4-bbca-f1d3b565ea8b/download"></div>
+      <div class="hinfo">
+        <div class="hn"><span class="nm">Honed Brand</span><span class="rar">RARE</span></div>
+        <div class="heff">The signature strikes harder — <b>+3</b> damage to Immolate.</div>
+        <div class="hmeta">WEAPON · FOUND DEPTH 9</div>
+      </div>
+    </div>
+    <div class="hrow common">
+      <div class="ico"><img class="px" src="https://api.pixellab.ai/mcp/images/3a703351-a0d6-439b-8c25-6ffeb77ddcd1/download"></div>
+      <div class="hinfo">
+        <div class="hn"><span class="nm">Vital Guard</span><span class="rar">COMMON</span></div>
+        <div class="heff">More life to spend — <b>+7</b> max Life.</div>
+        <div class="hmeta">ARMOR · FOUND DEPTH 8</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="l">DIE AND THE HAUL IS GONE — <b>even the one you're wearing.</b><br>YOU KEEP YOUR CLASS, LEVELS &amp; <span class="g">BANKED</span> GEAR.</div>
+  </div>
+</div>
+
+<div class="cap"><b>Refined:</b> a stronger risk banner (big shards, item/worn count, the blunt death line); every row now on real pixel-art (charm, brand, chestguard) in a rarity-lit frame; cleaner rows with the effect and drop-depth; and the footer keeps the wear-it-still-lose-it rule. One haul, shared by the Fork, this view, and the death receipt.</div>
+
+</body>
+</html>

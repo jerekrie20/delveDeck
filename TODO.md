@@ -24,6 +24,16 @@ below writes its own detail into the folder before it is built.
 
 **Prototype fun SMALL before rebuilding the world — this is the fix for the slow pacing.**
 
+> **Working posture (owner, 2026-08-14): build working, cleanly-pluggable systems first.**
+> While this is a barebones prototype: **testing is the owner's job**, done later / as-we-go
+> (and not narrated); **balance is LAST** (tune numbers once everything works, not to "make a
+> slice fun" mid-build); and **don't polish visual styling yet** (rough looks are fine). BUT
+> **every system must actually WORK and be built behind a clean typed seam so UI/styling plugs
+> in later without rework** — pure logic → typed view → dumb renderer (as `fight.ts` →
+> `FightView` → the client already does). Keep `type-check`/`lint` green; that is enough. This
+> softens the heavy `test`/`test:visual`/probe ceremony the SHELVED sections below assume —
+> that ceremony belonged to a shipping daily game, not a prototype.
+
 - [x] **Stage 7a · the one-class vertical slice.** ✅ **Shipped 2026-08-13.** Designed in
       `game_design/SLICE_7A.md` first, then built as a **self-contained module** (owner call,
       2026-08-13 — NOT grafted onto the old daily/endless sim, which was scraped with the rest
@@ -37,20 +47,35 @@ below writes its own detail into the folder before it is built.
       (18 checks incl. *a sensible policy wins / doing nothing dies*), and its own visual-gate
       leg with DOM-vs-view sync checks. All green: type-check · lint · test · test:visual.
       **Next: play it and decide whether the fight is fun before 7b.**
-- [ ] **Stage 7b · juice + feedback.** Make the big turn *read* and *land* — hit impact,
-      enemy reaction, damage that pops, the threat track feeling threatening, a first Web
-      Audio pass. CSS motion + synth only (rule 1). This is the fix for "can't tell what's
-      happening" and "boring to sit through", and it comes AFTER 7a proves the engine.
-- [ ] **Stage 7c · expand the classes + the synergy engine.** More classes, each a distinct
-      status/element engine (setup → payoff); the shared status/element system becomes the
-      core of the fun. Advanced classes (specialisations) sketched but not required yet.
-- [ ] **Stage 7d · gear that changes how you play.** Rework gear from affix-soup stats into
-      tangible, class-tied items that grant/reshape abilities, alter cooldowns, or provide
-      defence types. Keep the rich rolling machinery; make it produce *things*, not stat
-      lines. Cooldown-reduction on signatures is a build-defining affix.
-- [ ] **Stage 7e · the camp as the build hub.** Own-many-equip-few active slots, the skill
-      tree, class + advanced-class selection — the character-building screen the game is
-      about.
+- [x] **Stage 7b · juice + feedback.** ✅ **Built 2026-08-14** (prototype, styling/gate pass
+      deferred to owner). The pure loop emits a typed `FightEvent[]` on the view (the seam);
+      the dumb renderer plays the NEW tail as juice — floating numbers, impact flash, screen
+      shake, the detonation's ember burst + screen flash (`src/client/fx.ts`, all CSS motion,
+      Rule 1), threat-track tension (the NOW-attack breathes, lethal pulses, enrage reddens
+      the stage), and a first Web Audio synth pass with a mute toggle (`src/client/audio.ts`,
+      context made on first gesture, defaults audible). fx lives in `#fx` outside `#app`.
+      **Known:** `#fx` (fixed, forced pointer-events:auto by the gate) breaks the gate's
+      occlusion check on the veil screens — owner's later visual pass to resolve.
+- [x] **Stage 7c · classes + the synergy engine.** ✅ **Built 2026-08-14.** The engine is now
+      data-driven: `status.ts` (Element + `StatusDef` — Burn/Bleed/Chill as rows), `content.ts`
+      (`ClassDef` = hp + resource + defence-type + abilities, as data), and `fight.ts` runs ANY
+      class over the shared statuses. Pyromancer ported **byte-identical** (18/18 slice tests
+      still green). Second class **Ravager** proves the seam (armour not ward, Bleed not Burn,
+      an **execute** payoff not a detonation). Client is class-agnostic (labels off the view).
+      Advanced classes still sketched-not-built.
+- [x] **Stage 7d · gear that reshapes abilities.** ✅ **Built 2026-08-14.** `gear.ts`: an `Item`
+      carries `AbilityMod`s that RESHAPE the kit (cut a signature's cooldown, +1 Burn per
+      Ember, raise the defence cap, grant a whole ability) — not a stat sheet. `applyLoadout`
+      folds equipped items into the class base → the `EffectiveKit` `fight.ts` runs; seeded
+      `rollItem`/`rollStash` produce things deterministically. `resolveFight(seed, choices,
+      classId, items)` is backward-compatible (items default `[]`). **Known rough edge:** a
+      modded ability's `text` is not regenerated, so it can lag its effective numbers (owner's
+      copy pass / a `describe(ability)` helper later).
+- [x] **Stage 7e · the camp as the build hub.** ✅ **First cut 2026-08-14.** `camp.ts` — the
+      landing screen: pick a class, see the owned stash (rolled gear), **equip few** (3 active
+      slots), watch the effective-kit preview change, then **DELVE**. Class change re-rolls the
+      class-tied stash; the fight's veil offers **TO CAMP**. **Still stubbed:** the skill tree
+      and advanced-class evolution (a disabled placeholder row marks where they plug in).
 
 **Combat decisions already made (see `DIRECTION.md` § Combat):** turn-based kept; telegraph
 re-purposed to timing/answering; mana pool with class-flavoured generation; defence =
@@ -63,13 +88,19 @@ later, the name ("Daily Delve" no longer fits).
 
 ---
 
-## 🗄 SHELVED — the old direction (parked 2026-08-13, not deleted)
+## 🗄 SHELVED — the old direction (parked 2026-08-13; **CODE SCRAPED 2026-08-14**)
 
-Everything below served the **Daily / Endless / Community** game. The Daily is cut and the
-combat is being rebuilt, so these are parked. They are kept for their reasoning and because
-some pieces (the Endless run loop, the gear machinery, the status system) are *reused* by the
-pivot above rather than thrown away. **Do not build these without re-deciding them against
-`DIRECTION.md` first.**
+Everything below served the **Daily / Endless / Community** game. The Daily was cut, and once
+Stage 7a proved the new combat as a self-contained slice, **the old game's code was scraped**
+(owner call, 2026-08-14): the old client, the whole old shared sim, the old server game-logic,
+and ~17 old test suites are gone — recoverable from `git` history if wanted. What is **kept**
+is `src/shared/rng.ts`, the slice, and a minimal Devvit server shell.
+
+The tasks below are therefore **design reasoning, not a live backlog** — the code they describe
+no longer exists. They stay for the *reasoning* (why the fork ratio was the Endless's gate, why
+gear must produce things not stat lines, etc.), to be re-decided against `DIRECTION.md` and
+rebuilt fresh if the pivot ever wants them back. **Do not treat any checkbox below as buildable
+as-written.**
 
 ## ⚠ GATE 5 — SHELVED. Daily-coupled Endless balance (Stage 6b-5)
 

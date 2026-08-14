@@ -47,7 +47,7 @@ delver. It should read as **"my character,"** not a menu of doors.
 | 🏗 | **Advanced class / specialization** | Choose or preview a specialization that reshapes the fantasy. Later. |
 | 🎯 | **Level-up moment** | The beat when a level or point is gained — small, satisfying, not a full screen necessarily. |
 
-## 3 · The Delve — the run
+## 3 · The Delve — the run *DONE*
 
 | Pri | View | Purpose |
 |---|---|---|

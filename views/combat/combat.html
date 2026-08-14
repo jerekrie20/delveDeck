@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delvedeck — Combat v8</title>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#f4f6fb; --ink2:#cdd4e2; --dim:#9aa3b5; --faint:#6d7688;
+    --atk:#ff6257; --atk-glow:rgba(255,98,87,.6);
+    --blk:#6cdcec; --mana:#8fb8ff; --ward:#bf9dff; --burn:#ff8a4c; --ok:#6bdd92; --nrg:#ffc85c;
+    --r-common:#a8b0c2; --r-rare:#5b9bd5; --r-epic:#bf9dff;
+    --px:"Silkscreen", ui-monospace, monospace; --ui:system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#07090d; color:var(--ink); font-family:var(--ui); display:flex; flex-direction:column; align-items:center; gap:14px; padding:24px 16px 60px;}
+  .head{font-family:var(--px); font-size:11px; letter-spacing:.1em; color:var(--dim); text-align:center;} .head b{color:var(--burn);}
+  .cap{max-width:359px; font-size:12px; color:var(--faint); text-align:center; line-height:1.5;} .cap b{color:var(--dim);}
+  img.px{image-rendering:pixelated;}
+
+  .game{position:relative; width:359px; height:740px; border-radius:26px; overflow:hidden; border:1px solid #20242e; box-shadow:0 24px 60px rgba(0,0,0,.65); background:#06070b; font-family:var(--ui); user-select:none;}
+  .shake{animation:shake .42s ease-out;}
+  @keyframes shake{0%,100%{transform:translate(0,0);}15%{transform:translate(-5px,3px);}35%{transform:translate(4px,-3px);}55%{transform:translate(-3px,2px);}80%{transform:translate(2px,-1px);}}
+
+  .scene{position:absolute; left:0; right:0; top:0; bottom:322px; background:#0a0c12 url('https://api.pixellab.ai/mcp/images/ed6b1059-17fa-4a3c-a5e8-3f1c8a4534b4/download') no-repeat center top; background-size:cover; image-rendering:pixelated;}
+  .scene::before{content:''; position:absolute; inset:0; background:linear-gradient(180deg, rgba(6,7,11,.55) 0%, transparent 18% 56%, rgba(6,7,11,.72) 86%, rgba(6,7,11,.96) 100%);}
+  .scene::after{content:''; position:absolute; inset:0; background:radial-gradient(120% 58% at 50% 22%, transparent 32%, rgba(4,5,9,.7));}
+  .floorlight{position:absolute; left:50%; bottom:14px; transform:translateX(-50%); width:220px; height:42px; z-index:3; background:radial-gradient(closest-side, rgba(150,160,190,.14), transparent 74%); pointer-events:none;}
+  .fog{position:absolute; left:0; right:0; top:0; bottom:322px; z-index:3; pointer-events:none; opacity:.5; background:radial-gradient(60% 40% at 30% 40%, rgba(120,140,190,.10), transparent 60%), radial-gradient(50% 34% at 72% 52%, rgba(120,140,190,.08), transparent 60%); animation:fog 14s ease-in-out infinite alternate;}
+  @keyframes fog{0%{transform:translateX(-14px);}100%{transform:translateX(14px);}}
+  .mote{position:absolute; z-index:4; width:2px; height:2px; border-radius:50%; background:rgba(180,195,225,.7); box-shadow:0 0 5px rgba(180,195,225,.5); pointer-events:none; animation:rise 9s linear infinite;}
+  @keyframes rise{0%{transform:translateY(0);opacity:0;}12%{opacity:.8;}100%{transform:translateY(-150px);opacity:0;}}
+
+  .topbar{position:absolute; top:0; left:0; right:0; height:44px; z-index:12; display:flex; align-items:center; justify-content:space-between; padding:0 12px; background:linear-gradient(180deg, rgba(8,9,14,.92), rgba(8,9,14,0));}
+  .menu{width:30px; height:30px; border-radius:9px; border:none; cursor:pointer; color:var(--ink2); background:rgba(255,255,255,.05); box-shadow:inset 0 0 0 1px rgba(255,255,255,.07); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;}
+  .menu i{width:14px; height:2px; background:currentColor; border-radius:2px; display:block;}
+  .tbmid{display:flex; flex-direction:column; align-items:center; gap:1px;} .tbmid .depth{font-family:var(--px); font-size:11px; letter-spacing:.08em; color:var(--ward); text-shadow:0 0 12px rgba(167,144,238,.5);} .tbmid .sub{font-family:var(--px); font-size:7px; letter-spacing:.14em; color:var(--faint);}
+  .tbright{display:flex; flex-direction:column; align-items:flex-end; gap:1px;} .tbright .rd{font-family:var(--px); font-size:11px; letter-spacing:.06em; color:var(--dim);} .tbright .pr{font-family:var(--px); font-size:7px; letter-spacing:.08em; color:var(--nrg);}
+
+  .foeplate{position:absolute; z-index:6; left:50%; top:56px; transform:translateX(-50%); width:224px; display:flex; flex-direction:column; align-items:center; gap:6px;}
+  .foename{font-family:var(--px); font-size:15px; letter-spacing:.08em; text-transform:uppercase; text-shadow:0 2px 0 #000, 0 0 18px rgba(167,144,238,.55);}
+  .hull{position:relative; width:100%; height:9px; border-radius:5px; background:rgba(0,0,0,.6); box-shadow:inset 0 1px 2px rgba(0,0,0,.85);}
+  .hull .f{position:absolute; inset:0 auto 0 0; border-radius:5px; background:linear-gradient(90deg,#8f2620,var(--atk)); box-shadow:0 0 8px rgba(255,98,87,.4); transition:width .5s cubic-bezier(.3,1,.4,1);}
+  .hull .t{position:absolute; right:6px; top:0; bottom:0; display:flex; align-items:center; font-family:var(--px); font-size:8px; color:#ffdedb;}
+  .chips{display:flex; gap:10px;} .chip{display:flex; align-items:center; gap:4px; font-family:var(--px); font-size:9px; text-shadow:0 1px 2px #000;} .chip.burn{color:var(--burn);} .chip.block{color:var(--blk);} .chip .cg{font-size:12px;}
+
+  .enemy{position:absolute; z-index:5; left:50%; top:146px; transform:translateX(-50%); width:252px; height:252px;}
+  .enemy .foe{position:absolute; left:50%; bottom:12px; transform:translateX(-50%); width:232px; height:232px; image-rendering:pixelated; filter:drop-shadow(0 6px 8px rgba(0,0,0,.55)) drop-shadow(0 0 18px rgba(167,144,238,.16)); transform-origin:50% 100%; animation:breathe 3.6s ease-in-out infinite;}
+  @keyframes breathe{0%,100%{transform:translateX(-50%) scaleY(1);}50%{transform:translateX(-50%) scaleY(1.014);}}
+  .enemy .contact{position:absolute; left:50%; bottom:6px; transform:translateX(-50%); width:150px; height:22px; border-radius:50%; background:radial-gradient(closest-side, rgba(0,0,0,.8), rgba(0,0,0,.35) 60%, transparent); filter:blur(1px);}
+  .enemy .underglow{position:absolute; left:50%; bottom:12px; transform:translateX(-50%); width:150px; height:50px; border-radius:50%; background:radial-gradient(closest-side, rgba(255,138,76,.3), transparent 72%); filter:blur(3px); animation:eg 2.6s ease-in-out infinite;}
+  @keyframes eg{0%,100%{opacity:.55;}50%{opacity:.95;}}
+  .ember{position:absolute; z-index:6; width:4px; height:4px; border-radius:50%; background:var(--burn); box-shadow:0 0 7px var(--burn); pointer-events:none; animation:ef 2.4s ease-out infinite;}
+  @keyframes ef{0%{transform:translate(0,0) scale(1);opacity:0;}15%{opacity:1;}100%{transform:translate(var(--ex,0),-110px) scale(.3);opacity:0;}}
+
+  /* ── BOTTOM ZONE on its own stone surface ────────────────────── */
+  .cockpit{position:absolute; z-index:10; left:0; right:0; bottom:0; height:322px; padding:14px 12px 14px; display:flex; flex-direction:column; gap:11px;
+    background:#0b0c12 url('https://api.pixellab.ai/mcp/images/066bd88d-8ba9-4046-9834-874adf3440bd/download') no-repeat center; background-size:cover; image-rendering:pixelated;
+    box-shadow:inset 0 2px 0 rgba(180,150,120,.18), inset 0 3px 10px rgba(0,0,0,.6);}
+  .cockpit::before{content:''; position:absolute; inset:0; z-index:0; background:linear-gradient(180deg, rgba(9,10,15,.62), rgba(7,8,12,.86));}
+  .cockpit>*{position:relative; z-index:1;}
+
+  /* 1 · three orbs: Life · Ward · Mana */
+  .orbs3{display:flex; align-items:flex-start; justify-content:center; gap:18px;}
+  .vital{display:flex; flex-direction:column; align-items:center; gap:4px;}
+  .globe{position:relative; width:72px; height:72px; border-radius:50%; overflow:hidden; box-shadow:inset 0 0 0 2px rgba(0,0,0,.6), inset 0 3px 6px rgba(255,255,255,.12), inset 0 -8px 14px rgba(0,0,0,.6), 0 4px 10px rgba(0,0,0,.55); background:radial-gradient(circle at 40% 30%, #1a1d26, #0a0c12);}
+  .globe .fillg{position:absolute; left:0; right:0; bottom:0;}
+  .globe.life .fillg{background:linear-gradient(180deg,#ff6c62,#a01f19);}
+  .globe.ward .fillg{background:linear-gradient(180deg,#d3bcff,#7d5fd0);}
+  .globe.mana .fillg{background:linear-gradient(180deg,#a9c6ff,#3f63c9);}
+  .globe .gloss{position:absolute; left:14%; top:10%; width:44%; height:26%; border-radius:50%; background:rgba(255,255,255,.18); filter:blur(1px);}
+  .globe .num{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:2;} .globe .num b{font-family:var(--px); font-size:15px; color:#fff; text-shadow:0 1px 3px #000;} .globe .num small{font-family:var(--px); font-size:7px; color:rgba(255,255,255,.8);}
+  .vital .vl{font-family:var(--px); font-size:7px; letter-spacing:.1em; color:var(--dim); text-transform:uppercase;}
+  .globe.ward{width:60px; height:60px;} .vital.wardv{align-self:center;}
+
+  /* 2 · the tab control — a recessed housing with lit, raised active tab */
+  .tabs{display:flex; gap:4px; background:rgba(0,0,0,.5); border-radius:13px; padding:4px; box-shadow:inset 0 2px 6px rgba(0,0,0,.8), inset 0 0 0 1px rgba(255,255,255,.03);}
+  .tab{flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; padding:7px 2px 6px; border-radius:9px; cursor:pointer; color:var(--faint); transition:color .12s;}
+  .tab .ti{font-size:15px; line-height:1; filter:grayscale(.4) opacity(.7);}
+  .tab .tl{font-family:var(--px); font-size:7px; letter-spacing:.05em; text-transform:uppercase;}
+  .tab.on{color:var(--ink); background:linear-gradient(180deg,#3a2617,#20130a); box-shadow:inset 0 1px 0 rgba(255,190,130,.35), 0 2px 5px rgba(0,0,0,.5), 0 0 12px rgba(255,138,76,.22);}
+  .tab.on .ti{filter:none;} .tab.on .tl{color:var(--burn);}
+  .tab .badge{position:absolute; top:2px; right:6px; font-family:var(--px); font-size:7px; color:var(--nrg);}
+  .tab{position:relative;}
+
+  /* 3 · content */
+  .panel{flex:1; min-height:0; overflow-y:auto;} .panel::-webkit-scrollbar{width:0;}
+  .pane{display:none; height:100%;} .pane.on{display:flex; flex-direction:column; gap:10px;}
+
+  /* abilities: orbs row + END TURN */
+  .skills{display:flex; justify-content:space-between; gap:6px; align-items:flex-start; margin-bottom: 12px}
+  .skill{position:relative; flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;}
+  .orb{position:relative; width:100%; max-width:56px; aspect-ratio:1; border-radius:16px; background:radial-gradient(circle at 42% 34%, #33261b, #191108 70%); box-shadow:inset 0 2px 3px rgba(255,255,255,.12), inset 0 -4px 8px rgba(0,0,0,.6), 0 3px 8px rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center;}
+  .orb img{width:34px; height:34px;}
+  .orb .cost{position:absolute; top:-6px; left:-4px; width:21px; height:21px; border-radius:50%; background:radial-gradient(circle at 40% 35%, #bcd2ff, #4f78d6); color:#0a1226; font-family:var(--px); font-size:10px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 4px rgba(0,0,0,.5), inset 0 -2px 3px rgba(0,0,0,.3);}
+  .skill .nm{font-family:var(--px); font-size:7px; letter-spacing:.02em; text-transform:uppercase; color:#e9d7c6; text-align:center; line-height:1.1;}
+  .skill.fire .orb{box-shadow:inset 0 2px 3px rgba(255,255,255,.12), inset 0 -4px 8px rgba(0,0,0,.6), 0 0 0 1.5px rgba(255,138,76,.4), 0 3px 8px rgba(0,0,0,.5);}
+  .skill.ward .orb{background:radial-gradient(circle at 42% 34%, #2a2140, #150f26 70%); box-shadow:inset 0 2px 3px rgba(255,255,255,.12), inset 0 -4px 8px rgba(0,0,0,.6), 0 0 0 1.5px rgba(191,157,255,.45), 0 3px 8px rgba(0,0,0,.5);}
+  .skill.ward .cost{background:radial-gradient(circle at 40% 35%, #d9c8ff, #7d5fd0);}
+  .skill.hot .orb{box-shadow:inset 0 2px 3px rgba(255,255,255,.2), 0 0 18px rgba(255,138,76,.55), 0 0 0 2px rgba(255,138,76,.8), 0 6px 12px rgba(0,0,0,.55); transform:translateY(-3px);}
+  .skill.hot.cast .orb{transform:translateY(-8px) scale(1.12); transition:transform .16s ease;}
+  .skill.off{filter:grayscale(.45) brightness(.6);}
+  .skill.off .cd{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:var(--px); font-size:20px; color:var(--nrg); text-shadow:0 0 8px rgba(0,0,0,.9);}
+
+  .endturn{width:100%; min-height:40px; margin-top:auto; border:none; border-radius:13px; cursor:pointer; background:linear-gradient(180deg,#ff7369,#d33b32 60%,#93251f); color:#2a0908; font-family:var(--px); font-size:15px; letter-spacing:.1em; display:flex; align-items:center; justify-content:center; gap:10px;
+    box-shadow:0 0 16px var(--atk-glow), inset 0 2px 3px rgba(255,255,255,.3), inset 0 -3px 6px rgba(0,0,0,.35), 0 5px 12px rgba(0,0,0,.5); animation:gem 1.8s ease-in-out infinite;}
+  @keyframes gem{0%,100%{box-shadow:0 0 12px var(--atk-glow),inset 0 2px 3px rgba(255,255,255,.3),inset 0 -3px 6px rgba(0,0,0,.35),0 5px 12px rgba(0,0,0,.5);}50%{box-shadow:0 0 22px var(--atk),inset 0 2px 3px rgba(255,255,255,.3),inset 0 -3px 6px rgba(0,0,0,.35),0 5px 12px rgba(0,0,0,.5);}}
+  .endturn:active{transform:translateY(2px);} .endturn .es{font-family:var(--px); font-size:8px; opacity:.85; letter-spacing:.06em;}
+
+  .items{display:flex; flex-wrap:wrap; gap:8px; align-content:flex-start;}
+  .item{width:calc(50% - 4px); padding:8px 9px; border-radius:9px; background:rgba(255,255,255,.04); box-shadow:inset 0 0 0 1px rgba(255,255,255,.07); border-left:3px solid var(--r-common);}
+  .item.rare{border-left-color:var(--r-rare);} .item.epic{border-left-color:var(--r-epic);}
+  .item .iname{font-family:var(--px); font-size:8px; letter-spacing:.03em; text-transform:uppercase; color:var(--ink2);} .item .itext{font-size:10px; color:var(--faint); line-height:1.2; margin-top:3px;} .item .irar{font-family:var(--px); font-size:7px; color:var(--faint); margin-top:4px; letter-spacing:.06em;}
+  .slots{display:flex; gap:8px; align-items:center;} .slot{flex:1; padding:14px 0; display:flex; flex-direction:column; align-items:center; gap:6px; border-radius:9px; background:rgba(255,255,255,.04); box-shadow:inset 0 0 0 1px rgba(255,255,255,.07);} .slot .si{font-size:24px;} .slot .sl{font-family:var(--px); font-size:6.5px; color:var(--faint); letter-spacing:.06em;}
+
+  .fx{position:absolute; inset:0; z-index:20; pointer-events:none; overflow:hidden;}
+  .flash{position:absolute; left:0; right:0; top:0; bottom:322px; background:radial-gradient(60% 44% at 50% 34%, rgba(255,150,70,.4), transparent 62%); opacity:0;}
+  .flash.go{animation:flash .5s ease-out;} @keyframes flash{0%{opacity:0;}22%{opacity:1;}100%{opacity:0;}}
+  .bignum{position:absolute; left:50%; top:250px; transform:translate(-50%,-50%); font-family:var(--px); font-size:44px; color:var(--burn); text-shadow:0 0 16px var(--burn), 0 2px 4px #000; opacity:0;}
+  .bignum.go{animation:pop 1.3s cubic-bezier(.2,1.2,.3,1) forwards;}
+  @keyframes pop{0%{opacity:0;transform:translate(-50%,-40%) scale(.4);}18%{opacity:1;transform:translate(-50%,-58%) scale(1.35);}100%{opacity:0;transform:translate(-50%,-150%) scale(1.1);}}
+  .burst{position:absolute; left:50%; top:250px; width:6px; height:6px; margin:-3px; border-radius:50%; background:var(--burn); box-shadow:0 0 9px var(--burn); opacity:0;}
+  .burst.go{animation:burst .6s ease-out forwards;} @keyframes burst{0%{opacity:1;transform:translate(0,0) scale(1.3);}100%{opacity:0;transform:translate(var(--bx),var(--by)) scale(.3);}}
+</style>
+</head>
+<body>
+
+<div class="head">DELVEDECK · <b>COMBAT v8</b> · Life · Ward · Mana orbs · END TURN in Abilities · stone HUD · new tabs</div>
+
+<div class="game" id="game">
+  <div class="scene"></div><div class="fog"></div><div class="floorlight"></div>
+  <div class="mote" style="left:24%; bottom:410px; animation-delay:0s"></div>
+  <div class="mote" style="left:46%; bottom:450px; animation-delay:2.4s"></div>
+  <div class="mote" style="left:66%; bottom:400px; animation-delay:1.2s"></div>
+
+  <div class="topbar">
+    <button class="menu"><i></i><i></i><i></i></button>
+    <div class="tbmid"><span class="depth">DEPTH 9</span><span class="sub">THE CRYPT</span></div>
+    <div class="tbright"><span class="rd">ROUND 3</span><span class="pr">GRACE 4 LEFT</span></div>
+  </div>
+
+  <div class="foeplate">
+    <div class="foename">GRAVEMAW</div>
+    <div class="hull"><div class="f" id="hull" style="width:62%"></div><span class="t" id="hullt">34 / 55</span></div>
+    <div class="chips"><span class="chip burn" id="burnchip"><span class="cg">🔥</span> BURN 3</span><span class="chip block"><span class="cg">🛡</span> BLOCK 10</span></div>
+  </div>
+
+  <div class="enemy">
+    <div class="underglow"></div><div class="contact"></div>
+    <img class="foe px" id="foe" src="https://api.pixellab.ai/mcp/images/c0f9ca4f-a0ba-4a8a-adbc-fd62116c333d/download" alt="Gravemaw">
+    <div class="ember" style="left:44%; bottom:70px; animation-delay:0s; --ex:-10px"></div>
+    <div class="ember" style="left:56%; bottom:80px; animation-delay:.8s; --ex:12px"></div>
+    <div class="ember" style="left:50%; bottom:60px; animation-delay:1.6s; --ex:-4px"></div>
+  </div>
+
+  <div class="cockpit">
+    <!-- 1 · Life · Ward · Mana -->
+    <div class="orbs3">
+      <div class="vital"><div class="globe life"><div class="fillg" style="height:55%"></div><div class="gloss"></div><div class="num"><b>22</b><small>/40</small></div></div><span class="vl">Life</span></div>
+      <div class="vital wardv"><div class="globe ward"><div class="fillg" style="height:60%"></div><div class="gloss"></div><div class="num"><b>6</b><small>/10</small></div></div><span class="vl">Ward</span></div>
+      <div class="vital"><div class="globe mana"><div class="fillg" style="height:80%"></div><div class="gloss"></div><div class="num"><b>8</b><small>/10</small></div></div><span class="vl">Mana</span></div>
+    </div>
+
+    <!-- 2 · tabs -->
+    <div class="tabs">
+      <span class="tab on" data-p="abil"><span class="ti">⚔️</span><span class="tl">Abilities</span></span>
+      <span class="tab" data-p="drops"><span class="ti">💠</span><span class="tl">Drops</span><span class="badge">2</span></span>
+      <span class="tab" data-p="gear"><span class="ti">🛡️</span><span class="tl">Gear</span></span>
+      <span class="tab" data-p="stash"><span class="ti">🎒</span><span class="tl">Stash</span></span>
+    </div>
+
+    <!-- 3 · content -->
+    <div class="panel">
+      <div class="pane on" id="abil">
+        <div class="skills">
+          <div class="skill fire off"><div class="orb"><img class="px" src="https://api.pixellab.ai/mcp/images/6d2c3d8b-692c-49bb-8f8e-2cdc79bd374e/download"><div class="cost">2</div></div><div class="nm">Ember</div></div>
+          <div class="skill fire"><div class="orb"><img class="px" src="https://api.pixellab.ai/mcp/images/6d2c3d8b-692c-49bb-8f8e-2cdc79bd374e/download"><div class="cost">3</div></div><div class="nm">Scorch</div></div>
+          <div class="skill fire hot" id="immo"><div class="orb"><img class="px" src="https://api.pixellab.ai/mcp/images/952155d1-a1ca-44d2-98ec-15c9cc9f3488/download"><div class="cost">5</div></div><div class="nm">Immolate</div></div>
+          <div class="skill ward"><div class="orb"><img class="px" src="https://api.pixellab.ai/mcp/images/562416b0-2b77-4116-90d2-b91ee9d6b498/download"><div class="cost">3</div></div><div class="nm">Cinder</div></div>
+          <div class="skill fire off"><div class="orb"><img class="px" src="https://api.pixellab.ai/mcp/images/8094d8b3-f74a-491e-b28a-9d809e55d4b4/download"><div class="cost">7</div><div class="cd">2</div></div><div class="nm">Pyre</div></div>
+        </div>
+        <button class="endturn">END TURN<span class="es">GRAVEMAW MOVES</span></button>
+      </div>
+      <div class="pane" id="drops">
+        <div class="items">
+          <div class="item rare"><div class="iname">Honed Brand</div><div class="itext">The signature strikes harder.</div><div class="irar">RARE · found d9</div></div>
+          <div class="item"><div class="iname">Vital Guard</div><div class="itext">More life to spend.</div><div class="irar">COMMON · found d8</div></div>
+        </div>
+      </div>
+      <div class="pane" id="gear">
+        <div class="slots">
+          <div class="slot"><div class="si">🗡️</div><div class="sl">WEAPON</div></div>
+          <div class="slot"><div class="si">🧥</div><div class="sl">ARMOR</div></div>
+          <div class="slot"><div class="si">💍</div><div class="sl">TRINKET</div></div>
+        </div>
+      </div>
+      <div class="pane" id="stash">
+        <div class="items">
+          <div class="item epic"><div class="iname">Kindling Charm</div><div class="itext">A stacker leaves more behind.</div><div class="irar">EPIC</div></div>
+          <div class="item rare"><div class="iname">Quick Brand</div><div class="itext">The signature comes back sooner.</div><div class="irar">RARE</div></div>
+          <div class="item"><div class="iname">Bulwark Guard</div><div class="itext">A sturdier guard.</div><div class="irar">COMMON</div></div>
+          <div class="item"><div class="iname">Honed Brand</div><div class="itext">The signature strikes harder.</div><div class="irar">COMMON</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fx" id="fx"><div class="flash" id="flash"></div><div class="bignum" id="bignum">12</div></div>
+</div>
+
+<div class="cap"><b>v8:</b> three vital orbs — Life, its own Ward orb, and Mana. The tabs are now a recessed control with a lit, raised active tab and per-tab icons. The whole cockpit sits on its own carved-stone surface (distinct from the crypt). END TURN moved down into the Abilities content with the action orbs.</div>
+<div class="cap"><b>Tap the tabs.</b> The detonation still loops on the Abilities tab.</div>
+
+<script>
+  document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+    document.querySelectorAll('.pane').forEach(x=>x.classList.remove('on'));
+    t.classList.add('on'); document.getElementById(t.dataset.p).classList.add('on');
+  }));
+  const game=document.getElementById('game'), hull=document.getElementById('hull'), hullt=document.getElementById('hullt'),
+    burnchip=document.getElementById('burnchip'), immo=document.getElementById('immo'), fx=document.getElementById('fx'), flash=document.getElementById('flash'), bignum=document.getElementById('bignum');
+  function burst(){for(let i=0;i<14;i++){const b=document.createElement('div');b.className='burst go';const a=Math.random()*6.28,d=30+Math.random()*46;
+    b.style.setProperty('--bx',(Math.cos(a)*d).toFixed(0)+'px');b.style.setProperty('--by',(Math.sin(a)*d-10).toFixed(0)+'px');fx.appendChild(b);setTimeout(()=>b.remove(),650);}}
+  function detonate(){const im=document.getElementById('immo'); if(!document.getElementById('abil').classList.contains('on')){return;} im.classList.add('cast');
+    setTimeout(()=>{flash.classList.remove('go');void flash.offsetWidth;flash.classList.add('go');
+      bignum.classList.remove('go');void bignum.offsetWidth;bignum.classList.add('go');burst();
+      game.classList.remove('shake');void game.offsetWidth;game.classList.add('shake');
+      hull.style.width='40%';hullt.textContent='22 / 55';burnchip.style.opacity='.3';},260);
+    setTimeout(()=>im.classList.remove('cast'),1500);
+    setTimeout(()=>{hull.style.width='62%';hullt.textContent='34 / 55';burnchip.style.opacity='1';},3600);}
+  detonate();setInterval(detonate,4600);
+</script>
+</body>
+</html>

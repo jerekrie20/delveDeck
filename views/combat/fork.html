@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delvedeck — The Fork v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#f4f6fb; --ink2:#cdd4e2; --dim:#9aa3b5; --faint:#6d7688;
+    --atk:#ff6257; --atk-glow:rgba(255,98,87,.55);
+    --ok:#6bdd92; --ok-glow:rgba(107,221,146,.5);
+    --amber:#ffbc6a; --amber-glow:rgba(255,157,76,.55);
+    --ward:#bf9dff; --nrg:#ffc85c;
+    --r-common:#a8b0c2; --r-rare:#5b9bd5; --r-epic:#bf9dff; --r-legendary:#ffc85c;
+    --px:"Silkscreen", ui-monospace, monospace; --ui:system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#07090d; color:var(--ink); font-family:var(--ui); display:flex; flex-direction:column; align-items:center; gap:14px; padding:24px 16px 60px;}
+  .head{font-family:var(--px); font-size:11px; letter-spacing:.1em; color:var(--dim); text-align:center;} .head b{color:var(--amber);}
+  .cap{max-width:359px; font-size:12px; color:var(--faint); text-align:center; line-height:1.5;} .cap b{color:var(--dim);}
+  img.px{image-rendering:pixelated;}
+
+  .game{position:relative; width:359px; height:720px; border-radius:26px; overflow:hidden; border:1px solid #20242e; box-shadow:0 24px 60px rgba(0,0,0,.65); user-select:none;
+    background:#08070d url('https://api.pixellab.ai/mcp/images/b978933d-0ac3-4c16-b991-42cba6642af9/download') no-repeat center top; background-size:cover; image-rendering:pixelated;
+    display:flex; flex-direction:column;}
+  /* reinforce warm-up / cold-down + legibility */
+  .game::before{content:''; position:absolute; inset:0; z-index:1; pointer-events:none;
+    background:linear-gradient(180deg, rgba(255,150,70,.16) 0%, rgba(10,8,6,.35) 24%, rgba(9,10,16,.55) 48%, rgba(7,7,12,.72) 72%, rgba(4,4,9,.9) 100%);}
+  .game::after{content:''; position:absolute; inset:0; z-index:1; pointer-events:none; box-shadow:inset 0 0 130px rgba(0,0,0,.75);}
+  .z{position:relative; z-index:3;}
+
+  .topbar{position:relative; z-index:5; height:44px; display:flex; align-items:center; justify-content:space-between; padding:0 12px; flex:none;}
+  .menu{width:30px; height:30px; border-radius:9px; border:none; cursor:pointer; color:var(--ink2); background:rgba(255,255,255,.06); box-shadow:inset 0 0 0 1px rgba(255,255,255,.08); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;}
+  .menu i{width:14px; height:2px; background:currentColor; border-radius:2px; display:block;}
+  .topbar .cleared{font-family:var(--px); font-size:9px; letter-spacing:.12em; color:var(--dim); text-shadow:0 1px 3px #000;}
+
+  .chev{display:flex; flex-direction:column; align-items:center; gap:0; line-height:.72;}
+  .chev span{font-family:var(--px); font-size:13px;}
+  .chev.up span{color:var(--amber); animation:up 1.8s ease-in-out infinite; text-shadow:0 0 10px var(--amber-glow);}
+  .chev.up span:nth-child(2){animation-delay:.2s; opacity:.55;} .chev.up span:nth-child(3){animation-delay:.4s; opacity:.28;}
+  @keyframes up{0%,100%{transform:translateY(0);}50%{transform:translateY(-3px);}}
+  .chev.down span{color:var(--atk); animation:down 1.8s ease-in-out infinite; text-shadow:0 0 10px var(--atk-glow);}
+  .chev.down span:nth-child(2){animation-delay:.2s; opacity:.55;} .chev.down span:nth-child(3){animation-delay:.4s; opacity:.28;}
+  @keyframes down{0%,100%{transform:translateY(0);}50%{transform:translateY(3px);}}
+
+  .zone{position:relative; z-index:3; display:flex; flex-direction:column; align-items:center; padding:0 16px; flex:none;}
+  .zlabel{font-family:var(--px); font-size:11px; letter-spacing:.2em; margin-top:5px; text-shadow:0 2px 4px #000;}
+  .zsub{font-size:11px; margin-top:4px; text-align:center; text-shadow:0 1px 3px #000;}
+  .surface .zlabel{color:var(--amber); text-shadow:0 0 16px var(--amber-glow), 0 2px 4px #000;}
+  .surface .zsub{color:#e6cfae;}
+  .descend .zlabel{color:var(--atk); text-shadow:0 0 16px var(--atk-glow), 0 2px 4px #000;}
+  .descend .zsub{color:#d3a6a6;}
+
+  /* forged plaques — dark stone/iron plate, colour lives in the engraved edge + text */
+  .choicebtn{width:100%; max-width:312px; border:none; cursor:pointer; border-radius:12px; padding:14px 16px; margin-top:12px;
+    display:flex; align-items:center; gap:13px; text-align:left; position:relative; overflow:hidden;
+    background:linear-gradient(180deg,#211d18 0%,#161209 46%,#0d0a06 100%);}
+  /* an inner engraved bevel: dark groove + a faint top light, so it reads chiselled */
+  .choicebtn::before{content:''; position:absolute; inset:3px; border-radius:9px; pointer-events:none;
+    box-shadow:inset 0 1px 0 rgba(255,225,180,.10), inset 0 0 0 1px rgba(0,0,0,.55);}
+  /* the accent rune-edge, colour set per zone */
+  .choicebtn::after{content:''; position:absolute; inset:0; border-radius:12px; pointer-events:none;
+    box-shadow:inset 0 0 0 1.5px var(--edge), 0 0 0 1px rgba(0,0,0,.6);}
+  .choicebtn .icon{width:42px; height:42px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:21px; flex:none;
+    background:radial-gradient(circle at 50% 38%, rgba(0,0,0,.15), rgba(0,0,0,.55)); box-shadow:inset 0 0 0 1px var(--edge), inset 0 2px 5px rgba(0,0,0,.6);}
+  .choicebtn .lead{flex:1; display:flex; flex-direction:column; gap:3px;}
+  .choicebtn .big{font-family:var(--px); font-size:14px; letter-spacing:.06em; color:var(--accent); text-shadow:0 1px 0 #000, 0 0 10px var(--edge);}
+  .choicebtn .small{font-family:var(--px); font-size:8px; letter-spacing:.03em; color:var(--dim);}
+  .choicebtn .go{font-family:var(--px); font-size:20px; flex:none; color:var(--accent); text-shadow:0 0 10px var(--edge);}
+  .choicebtn:active{transform:translateY(2px);}
+  .choicebtn:active::after{box-shadow:inset 0 0 0 1.5px var(--edge), 0 0 14px var(--edge), 0 0 0 1px rgba(0,0,0,.6);}
+  .surface .choicebtn{--accent:#ffd39a; --edge:rgba(255,157,76,.55); box-shadow:0 8px 18px rgba(0,0,0,.6), 0 0 14px rgba(255,157,76,.14);}
+  .surface .choicebtn .icon{filter:drop-shadow(0 0 5px rgba(255,157,76,.5));}
+  .descend .choicebtn{--accent:#ffb0a8; --edge:rgba(255,98,87,.55); box-shadow:0 8px 18px rgba(0,0,0,.6), 0 0 14px rgba(255,98,87,.14);}
+  .descend .choicebtn .icon{filter:drop-shadow(0 0 5px rgba(255,98,87,.5));}
+
+  /* the pivot: the delver, cleared line, the haul */
+  .pivot{position:relative; z-index:3; flex:1; min-height:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px; padding:6px 16px;}
+  .delver{position:relative; width:118px; height:150px; display:flex; align-items:flex-end; justify-content:center;}
+  .delver .glow{position:absolute; top:20px; left:50%; transform:translateX(-50%); width:120px; height:120px; border-radius:50%; background:radial-gradient(circle, rgba(255,170,90,.4), transparent 66%); filter:blur(2px); animation:flick 2.6s ease-in-out infinite;}
+  @keyframes flick{0%,100%{opacity:.7;}50%{opacity:1;}}
+  .delver img{position:relative; width:118px; height:150px; image-rendering:pixelated; filter:drop-shadow(0 6px 8px rgba(0,0,0,.6));}
+  .clearline{font-family:var(--px); font-size:12px; letter-spacing:.1em; color:var(--ink); text-shadow:0 2px 4px #000;}
+  .clearline b{color:var(--ward);}
+
+  .haul{width:100%; max-width:322px; border-radius:14px; padding:11px 12px 12px; background:rgba(9,10,16,.72); box-shadow:inset 0 0 0 1px rgba(255,255,255,.07), 0 6px 16px rgba(0,0,0,.5);}
+  .haultop{display:flex; align-items:center; justify-content:space-between; margin-bottom:9px;}
+  .haultop .h{font-family:var(--px); font-size:8px; letter-spacing:.1em; color:var(--dim); text-transform:uppercase;}
+  .haultop .risk{font-family:var(--px); font-size:8px; letter-spacing:.05em; color:var(--atk); display:flex; align-items:center; gap:4px;}
+  .haulitems{display:flex; gap:7px;}
+  .hi{flex:1; min-width:0; padding:7px 8px; border-radius:9px; background:rgba(255,255,255,.035); box-shadow:inset 0 0 0 1px rgba(255,255,255,.06); border-top:3px solid var(--r-common);}
+  .hi.rare{border-top-color:var(--r-rare);} .hi.epic{border-top-color:var(--r-epic);}
+  .hi.epic{box-shadow:inset 0 0 0 1px rgba(191,157,255,.35), 0 0 12px rgba(191,157,255,.2);}
+  .hi .n{font-family:var(--px); font-size:7.5px; letter-spacing:.02em; text-transform:uppercase; color:var(--ink2); line-height:1.15;}
+  .hi .r{font-family:var(--px); font-size:6.5px; color:var(--faint); margin-top:3px; letter-spacing:.05em;}
+  .haulfoot{margin-top:10px; display:flex; align-items:center; justify-content:space-between; border-top:1px solid rgba(255,255,255,.07); padding-top:8px;}
+  .haulfoot .shards{display:flex; align-items:center; gap:6px; font-family:var(--px); font-size:11px; color:var(--nrg);}
+  .haulfoot .cnt{font-family:var(--px); font-size:8px; color:var(--faint); letter-spacing:.06em;}
+
+  .descend .terms{display:flex; gap:14px; margin-top:8px;}
+  .descend .term{display:flex; align-items:center; gap:4px; font-family:var(--px); font-size:8px; letter-spacing:.03em; color:var(--dim); text-shadow:0 1px 2px #000;}
+  .descend .term b{color:var(--atk); font-weight:400;} .descend .term.lure b{color:var(--r-legendary);}
+</style>
+</head>
+<body>
+
+<div class="head">DELVEDECK · <b>THE FORK v3</b> · forged-plaque buttons, dark-fantasy</div>
+
+<div class="game">
+  <div class="topbar z">
+    <button class="menu"><i></i><i></i><i></i></button>
+    <span class="cleared">RUN · DEPTH 9</span>
+  </div>
+
+  <!-- SURFACE -->
+  <div class="zone surface">
+    <div class="chev up"><span>▲</span><span>▲</span><span>▲</span></div>
+    <div class="zlabel">SURFACE</div>
+    <div class="zsub">Climb out. Bank everything you carry.</div>
+    <button class="choicebtn">
+      <span class="icon">🏕️</span>
+      <span class="lead"><span class="big">SURFACE &amp; BANK</span><span class="small">RETURN TO CAMP · KEEP IT ALL</span></span>
+      <span class="go">⇧</span>
+    </button>
+  </div>
+
+  <!-- PIVOT -->
+  <div class="pivot">
+    <div class="delver"><div class="glow"></div>
+      <img class="px" src="https://api.pixellab.ai/mcp/images/cf19bbac-5888-4cb2-b9b1-721efa42e38d/download" alt="delver">
+    </div>
+    <div class="clearline">DEPTH 9 CLEARED · <b>THE CRYPT</b></div>
+    <div class="haul">
+      <div class="haultop"><span class="h">Your haul · unbanked</span><span class="risk">☠ A DEATH COSTS ALL OF IT</span></div>
+      <div class="haulitems">
+        <div class="hi epic"><div class="n">Kindling Charm</div><div class="r">EPIC · d7</div></div>
+        <div class="hi rare"><div class="n">Honed Brand</div><div class="r">RARE · d9</div></div>
+        <div class="hi"><div class="n">Vital Guard</div><div class="r">COMMON · d8</div></div>
+      </div>
+      <div class="haulfoot"><span class="shards">◈ 140 SHARDS</span><span class="cnt">3 ITEMS · 0 BANKED</span></div>
+    </div>
+  </div>
+
+  <!-- DESCEND -->
+  <div class="zone descend" style="padding-bottom:18px;">
+    <div class="terms">
+      <span class="term">☠ ENEMIES <b>+8%</b></span>
+      <span class="term">🏮 <b>LANTERN DIMS</b></span>
+      <span class="term lure">◈ <b>RICHER LOOT</b></span>
+    </div>
+    <div class="zlabel">DESCEND</div>
+    <div class="zsub">Push to depth 10. The haul rides with you.</div>
+    <button class="choicebtn">
+      <span class="icon">⛓️</span>
+      <span class="lead"><span class="big">DESCEND DEEPER</span><span class="small">DEPTH 10 · THE CRYPT · RISK THE HAUL</span></span>
+      <span class="go">⇩</span>
+    </button>
+    <div class="chev down" style="margin-top:9px;"><span>▼</span><span>▼</span><span>▼</span></div>
+  </div>
+</div>
+
+<div class="cap"><b>New buttons:</b> forged plaques — dark chiselled stone/iron plates with the colour living in an engraved rune-edge and the text, not a glossy fill. SURFACE glows warm amber (toward the camp), DESCEND glows danger-red (into the deep). Press sinks the plate and flares the edge.</div>
+<div class="cap"><b>Held:</b> the real shaft, the delver at the pivot, and the unbanked haul as the stakes.</div>
+
+</body>
+</html>

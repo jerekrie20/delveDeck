@@ -38,6 +38,12 @@
   --mana-glow: rgb(143 184 255 / 40%);
   --ok: #6bdd92;
   --nrg: #ffc85c;
+  /* the other classes' elements, added at 7c */
+  --bleed: #ff5d6c;
+  --frost: #7ecbff;
+  --poison: #8ee06b;
+  --armor: #c7ccd6;
+  --armor-glow: rgb(199 204 214 / 35%);
 
   --px: "Silkscreen", ui-monospace, "Courier New", monospace;
   --ui: system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -266,11 +272,12 @@ body {
   color: var(--ink2);
 }
 .tag.trait { color: var(--blk); border-color: var(--blk-deep); }
-.tag.burn {
-  color: var(--burn);
-  border-color: var(--burn);
-  background: var(--burn-glow);
-}
+/* a status tag, coloured by its element — the generic replacement for 7a's fixed BURN tag */
+.tag.status { color: var(--ink2); border-color: var(--ghost); }
+.tag.status.el-fire { color: var(--burn); border-color: var(--burn); background: var(--burn-glow); }
+.tag.status.el-physical { color: var(--bleed); border-color: var(--bleed); background: rgb(255 93 108 / 18%); }
+.tag.status.el-frost { color: var(--frost); border-color: var(--frost); background: rgb(126 203 255 / 16%); }
+.tag.status.el-poison { color: var(--poison); border-color: var(--poison); background: rgb(142 224 107 / 16%); }
 
 .fhp { display: flex; flex-direction: column; gap: 3px; }
 
@@ -408,6 +415,8 @@ body {
 
 .wardbar { display: flex; flex-direction: column; gap: 3px; }
 .wardbar .fill { background: var(--ward); box-shadow: 0 0 8px var(--ward-glow); }
+/* armour reads as steel, not the caster's violet — the defence-type identity, in colour */
+.wardbar.def-armor .fill { background: var(--armor); box-shadow: 0 0 8px var(--armor-glow); }
 .wline { display: flex; justify-content: space-between; align-items: baseline; }
 .wline .w { font-family: var(--px); font-size: var(--px-4); font-weight: 700; }
 
@@ -621,3 +630,288 @@ body {
 }
 
 .ocard .btn { min-width: 180px; flex: none; padding: 0 18px; }
+
+/* the class picker on the veil — switch kit and start a fresh fight */
+.classpick { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.btn.small {
+  min-width: 0;
+  min-height: 34px;
+  flex: none;
+  padding: 0 14px;
+  background: var(--plinth-1);
+  color: var(--ink2);
+  box-shadow: none;
+  border: 1px solid var(--ghost);
+}
+.btn.small.on { color: #0b0e15; background: var(--burn); border-color: var(--burn); }
+
+/* ── Stage 7b · the juice ─────────────────────────────────────────────────────
+ *
+ * Every effect below lives in `#fx`, a fixed overlay OUTSIDE `#app`, so it is invisible
+ * to the visual gate and can never grow the document's scroll box (it clips). The
+ * authoritative readouts inside `#app` never move; juice rides alongside them. Motion is
+ * CSS-only (Rule 1), and the whole layer is silenced under `prefers-reduced-motion`. */
+
+#fx {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  overflow: hidden;
+  /* `!important` on an ID selector so the fx layer stays non-interactive even under the
+   * visual gate, which forces `* { pointer-events: auto !important }` to make hit-testing
+   * follow paint order. Without this the full-screen overlay becomes the topmost hit
+   * target everywhere and defeats the gate's occlusion check. It is never a hit target. */
+  pointer-events: none !important;
+}
+
+/* a rising, fading number — the amount a beat dealt or restored */
+.fxnum {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-family: var(--px);
+  font-size: var(--px-7);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 85%);
+  animation: fxrise 1s ease-out forwards;
+}
+.fxnum.big { font-size: 34px; letter-spacing: 0.02em; animation: fxpop 1.4s cubic-bezier(0.2, 1.2, 0.3, 1) forwards; }
+.fxnum.k-dmg { color: var(--atk); }
+.fxnum.k-fire { color: var(--burn); text-shadow: 0 0 10px var(--burn-glow), 0 1px 3px rgb(0 0 0 / 85%); }
+.fxnum.k-ward { color: var(--ward); }
+.fxnum.k-block { color: var(--blk); }
+.fxnum.k-hurt { color: #fff; text-shadow: 0 0 10px var(--atk-glow), 0 1px 3px rgb(0 0 0 / 90%); }
+.fxnum.k-heal { color: var(--ok); }
+
+@keyframes fxrise {
+  0% { opacity: 0; transform: translate(-50%, -30%) scale(0.7); }
+  15% { opacity: 1; transform: translate(-50%, -55%) scale(1.05); }
+  100% { opacity: 0; transform: translate(-50%, -160%) scale(1); }
+}
+@keyframes fxpop {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+  18% { opacity: 1; transform: translate(-50%, -60%) scale(1.35); }
+  40% { transform: translate(-50%, -70%) scale(1.1); }
+  100% { opacity: 0; transform: translate(-50%, -150%) scale(1.15); }
+}
+
+/* the bloom under an impact */
+.fxflash {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: fxbloom 0.5s ease-out forwards;
+}
+.fxflash.k-dmg { background: radial-gradient(circle, var(--atk-glow), transparent 68%); }
+.fxflash.k-fire { background: radial-gradient(circle, rgb(255 170 90 / 75%), var(--burn-glow) 40%, transparent 70%); }
+.fxflash.k-ward { background: radial-gradient(circle, var(--ward-glow), transparent 70%); }
+@keyframes fxbloom {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.3); }
+}
+
+/* the detonation's embers, flung along per-node --dx/--dy */
+.fxember {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: var(--burn);
+  box-shadow: 0 0 8px var(--burn-glow);
+  animation: fxfly var(--d, 600ms) ease-out forwards;
+}
+@keyframes fxfly {
+  0% { opacity: 1; transform: translate(0, 0) scale(1.2); }
+  100% { opacity: 0; transform: translate(var(--dx, 0), var(--dy, 0)) scale(0.3); }
+}
+
+/* a full-screen tint — the detonation's flare, and the two deaths */
+.fxveil {
+  position: absolute;
+  inset: 0;
+  animation: fxtint 0.55s ease-out forwards;
+}
+.fxveil.k-fire { background: radial-gradient(circle at 50% 42%, rgb(255 138 76 / 34%), transparent 62%); }
+.fxveil.k-hurt { background: radial-gradient(circle at 50% 70%, rgb(255 60 50 / 34%), transparent 66%); }
+@keyframes fxtint {
+  0% { opacity: 0; }
+  22% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* screen shake — kicked onto a freshly-rendered node. `.pw` sits inside `.stage`
+ * (overflow: hidden), so its shake is clipped and cannot grow the page; the hero shake
+ * on `.app` is translateY-only, which never widens the scroll box. */
+.shk-hit { animation: shkHit 0.26s ease-out; }
+.shk-big { animation: shkBig 0.5s ease-out; }
+.shk-hurt { animation: shkHurt 0.3s ease-out; }
+@keyframes shkHit {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(4px, -2px); }
+  60% { transform: translate(-3px, 2px); }
+}
+@keyframes shkBig {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  12% { transform: translate(-7px, 4px) scale(1.06); }
+  30% { transform: translate(6px, -5px) scale(1.04); }
+  50% { transform: translate(-5px, 3px) scale(1.02); }
+  75% { transform: translate(3px, -2px) scale(1); }
+}
+@keyframes shkHurt {
+  0%, 100% { transform: translateY(0); }
+  30% { transform: translateY(5px); }
+  65% { transform: translateY(-3px); }
+}
+
+/* ── the threat track, made tense ─────────────────────────────────────────────
+ * The NOW slot for an incoming attack breathes; lethal (already flagged) pulses hard. */
+.ts.now.attack { animation: nowBreathe 1.8s ease-in-out infinite; }
+@keyframes nowBreathe {
+  0%, 100% { box-shadow: 0 0 0 rgb(255 98 87 / 0%); border-color: var(--atk-deep); }
+  50% { box-shadow: 0 0 14px var(--atk-glow); border-color: var(--atk); }
+}
+.ts.now.lethal { animation: nowLethal 0.7s ease-in-out infinite; }
+@keyframes nowLethal {
+  0%, 100% { box-shadow: 0 0 10px var(--atk-glow); }
+  50% { box-shadow: 0 0 22px var(--atk), 0 0 8px var(--atk); }
+}
+
+/* enrage — the dark has closed in; the stage takes on a pulsing red rim */
+.stage.enraged .vig { animation: enrageVig 2.4s ease-in-out infinite; }
+@keyframes enrageVig {
+  0%, 100% { box-shadow: inset 0 0 60px rgb(0 0 0 / 60%); }
+  50% { box-shadow: inset 0 0 70px rgb(0 0 0 / 60%), inset 0 0 40px rgb(180 30 24 / 45%); }
+}
+.stage.enraged .eyebrow { color: var(--atk); animation: enragePulse 1.2s ease-in-out infinite; }
+@keyframes enragePulse {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; }
+}
+
+/* ── the mute toggle, a spaced flex item in stagetop ──────────────────────────── */
+.stright { display: flex; align-items: center; gap: 8px; }
+.mute {
+  flex: none;
+  border: none;
+  background: transparent;
+  color: var(--dim);
+  font-size: var(--px-4);
+  line-height: 1;
+  padding: 2px;
+  cursor: pointer;
+  opacity: 0.85;
+}
+.mute:active { transform: translateY(1px); }
+.mute.muted { opacity: 0.5; filter: grayscale(1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .fxnum, .fxflash, .fxember, .fxveil,
+  .shk-hit, .shk-big, .shk-hurt,
+  .ts.now.attack, .ts.now.lethal,
+  .stage.enraged .vig, .stage.enraged .eyebrow { animation: none; }
+  /* the fading effects would otherwise freeze visible at frame one — hide them */
+  .fxnum, .fxflash, .fxember, .fxveil { opacity: 0; }
+}
+
+/* ── Stage 7e · the camp — the build hub ──────────────────────────────────────── */
+.app.camp {
+  gap: 10px;
+  padding: 14px 12px 18px;
+  background: linear-gradient(var(--plinth-1), var(--plinth-3));
+}
+.camptop { display: flex; flex-direction: column; gap: 4px; }
+.ctitle {
+  font-family: var(--px);
+  font-size: var(--px-now);
+  letter-spacing: 0.12em;
+  color: var(--burn);
+  text-shadow: 0 0 14px var(--burn-glow);
+}
+.cblurb { font-size: var(--px-4); color: var(--dim); line-height: 1.3; }
+
+.csection {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--px);
+  font-size: var(--px-2);
+  letter-spacing: 0.12em;
+  color: var(--faint);
+  text-transform: uppercase;
+  margin-top: 4px;
+  border-top: 1px solid var(--ghost);
+  padding-top: 8px;
+}
+.csection.off { opacity: 0.5; }
+.reroll {
+  margin-left: auto;
+  border: 1px solid var(--ghost);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dim);
+  font-family: var(--px);
+  font-size: var(--px-1);
+  letter-spacing: 0.08em;
+  padding: 3px 7px;
+  cursor: pointer;
+}
+
+/* the effective-kit preview */
+.kit {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid var(--burn);
+  border-radius: 8px;
+  background: rgb(255 138 76 / 6%);
+}
+.ksub {
+  font-family: var(--px);
+  font-size: var(--px-2);
+  letter-spacing: 0.08em;
+  color: var(--burn);
+  margin-bottom: 2px;
+}
+.kability {
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  align-items: baseline;
+  gap: 3px 8px;
+}
+.kico { grid-row: span 2; font-size: var(--px-6); align-self: center; }
+.kname { font-family: var(--px); font-size: var(--px-3); letter-spacing: 0.04em; text-transform: uppercase; }
+.kmeta { font-family: var(--px); font-size: var(--px-1); color: var(--mana); text-align: right; }
+.ktext { grid-column: 2 / 4; font-size: var(--px-4); color: var(--ink2); line-height: 1.2; }
+
+/* the stash — own many */
+.stash { display: flex; flex-direction: column; gap: 6px; }
+.citem {
+  position: relative;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px 8px 12px;
+  border: 1px solid var(--ghost);
+  border-left-width: 4px;
+  border-radius: 7px;
+  background: var(--plinth-2);
+  color: var(--ink);
+  cursor: pointer;
+}
+.citem.r-common { border-left-color: var(--dim); }
+.citem.r-rare { border-left-color: var(--mana); }
+.citem.r-epic { border-left-color: var(--ward); }
+.citem.on { box-shadow: 0 0 10px rgb(255 138 76 / 22%); border-color: var(--burn); }
+.citem.off { filter: brightness(0.7); cursor: default; }
+.crow { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.cname { font-family: var(--px); font-size: var(--px-3); letter-spacing: 0.05em; text-transform: uppercase; }
+.crar { font-family: var(--px); font-size: var(--px-1); letter-spacing: 0.08em; color: var(--faint); }
+.ctext { font-size: var(--px-4); color: var(--ink2); line-height: 1.25; }
+.cstate { font-family: var(--px); font-size: var(--px-1); letter-spacing: 0.06em; color: var(--faint); }
+.citem.on .cstate { color: var(--burn); }

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delvedeck — Start Run v3</title>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#f4f6fb; --ink2:#cdd4e2; --dim:#9aa3b5; --faint:#6d7688;
+    --amber:#ffbc6a; --amber-glow:rgba(255,157,76,.55); --nrg:#ffc85c;
+    --warrens:#d4813f; --warrens-glow:rgba(212,129,63,.5);
+    --burn:#ff8a4c; --ward:#bf9dff; --mana:#8fb8ff; --atk:#ff6257; --ok:#6bdd92;
+    --r-rare:#5b9bd5; --r-epic:#bf9dff; --r-common:#a8b0c2;
+    --px:"Silkscreen", ui-monospace, monospace; --ui:system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#07090d; color:var(--ink); font-family:var(--ui); display:flex; flex-direction:column; align-items:center; gap:14px; padding:24px 16px 60px;}
+  .head{font-family:var(--px); font-size:11px; letter-spacing:.1em; color:var(--dim); text-align:center;} .head b{color:var(--amber);}
+  .cap{max-width:359px; font-size:12px; color:var(--faint); text-align:center; line-height:1.5;} .cap b{color:var(--dim);}
+  img.px{image-rendering:pixelated;}
+
+  .game{position:relative; width:359px; height:720px; border-radius:26px; overflow:hidden; border:1px solid #20242e; box-shadow:0 24px 60px rgba(0,0,0,.65); user-select:none;
+    background:#08070d url('https://api.pixellab.ai/mcp/images/2a7e0480-2e50-4d57-aefc-a9542b100267/download') no-repeat center top; background-size:cover; image-rendering:pixelated; display:flex; flex-direction:column;}
+  .game::before{content:''; position:absolute; inset:0; z-index:1; pointer-events:none; background:linear-gradient(180deg, rgba(255,165,85,.12) 0%, transparent 16% 40%, rgba(9,9,15,.66) 58%, rgba(7,7,12,.9) 78%, rgba(4,4,9,.98) 100%);}
+  .game::after{content:''; position:absolute; inset:0; z-index:1; pointer-events:none; box-shadow:inset 0 0 130px rgba(0,0,0,.66);}
+
+  .topnav{position:relative; z-index:5; height:44px; display:flex; align-items:center; justify-content:space-between; padding:0 12px; flex:none;}
+  .back{display:flex; align-items:center; gap:6px; border:none; cursor:pointer; color:var(--ink2); background:rgba(8,9,14,.5); box-shadow:inset 0 0 0 1px rgba(255,255,255,.08); border-radius:9px; padding:6px 10px; font-family:var(--px); font-size:8px; letter-spacing:.08em;}
+  .warm{font-family:var(--px); font-size:8px; letter-spacing:.12em; color:var(--amber); text-shadow:0 0 12px var(--amber-glow);}
+
+  /* the environment is the hero — title floats over the warm mouth */
+  .hero{position:relative; z-index:3; flex:none; height:158px; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding-bottom:6px;}
+  .eyebrow{font-family:var(--px); font-size:8px; letter-spacing:.2em; color:var(--amber); text-shadow:0 0 12px var(--amber-glow);}
+  .title{font-family:var(--px); font-size:24px; letter-spacing:.1em; margin-top:8px; text-shadow:0 3px 0 #000, 0 0 24px var(--amber-glow);}
+  .tsub{font-size:11px; color:#e6cfae; margin-top:5px; text-align:center; text-shadow:0 1px 3px #000;}
+
+  .body{position:relative; z-index:3; flex:1; min-height:0; display:flex; flex-direction:column; gap:10px; padding:10px 15px 15px;}
+
+  .load{border-radius:13px; padding:11px 12px; background:rgba(9,10,16,.74); box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);}
+  .lhead{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:9px;}
+  .cls{font-family:var(--px); font-size:13px; letter-spacing:.05em; color:var(--burn); text-shadow:0 0 12px rgba(255,138,76,.4);}
+  .clssub{font-size:10px; color:var(--faint);}
+  .abils{display:flex; gap:6px;}
+  .ab{flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;}
+  .ab .o{width:100%; max-width:40px; aspect-ratio:1; border-radius:9px; background:radial-gradient(circle at 42% 34%, #33261b, #191108 70%); box-shadow:inset 0 1px 2px rgba(255,255,255,.1), inset 0 -3px 6px rgba(0,0,0,.6), 0 0 0 1px rgba(255,138,76,.28); display:flex; align-items:center; justify-content:center;}
+  .ab.ward .o{background:radial-gradient(circle at 42% 34%, #2a2140, #150f26 70%); box-shadow:inset 0 1px 2px rgba(255,255,255,.1), inset 0 -3px 6px rgba(0,0,0,.6), 0 0 0 1px rgba(191,157,255,.32);}
+  .ab .o img{width:24px; height:24px;}
+  .ab span{font-family:var(--px); font-size:6px; letter-spacing:.02em; color:var(--faint); text-transform:uppercase;}
+  .row2{display:flex; gap:10px; margin-top:11px; padding-top:10px; border-top:1px solid rgba(255,255,255,.07);}
+  .vitals{display:flex; gap:12px; flex:1;}
+  .vit{display:flex; align-items:center; gap:5px; font-family:var(--px); font-size:9px;}
+  .vit .d{width:8px; height:8px; border-radius:50%;} .vit.life .d{background:var(--atk);} .vit.ward .d{background:var(--ward);} .vit.mana .d{background:var(--mana);}
+  .vit small{color:var(--faint); font-size:6.5px; letter-spacing:.06em; margin-left:1px;}
+  .gearmini{display:flex; gap:4px;}
+  .gm{width:22px; height:22px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-family:var(--px); font-size:8px; box-shadow:inset 0 0 0 1px var(--gc); color:var(--gc); background:rgba(255,255,255,.03); overflow:hidden;}
+  .gm.rare{--gc:var(--r-rare);} .gm.epic{--gc:var(--r-epic);} .gm.common{--gc:var(--r-common);}
+  .gm img{width:18px; height:18px;}
+
+  .start{display:flex; align-items:center; gap:10px;}
+  .ladder{flex:1; border-radius:11px; padding:10px 12px; background:rgba(212,129,63,.10); box-shadow:inset 0 0 0 1px rgba(212,129,63,.3);}
+  .ladder .k{font-family:var(--px); font-size:7px; letter-spacing:.12em; color:var(--faint);}
+  .ladder .v{font-family:var(--px); font-size:12px; letter-spacing:.05em; color:var(--warrens); text-shadow:0 0 12px var(--warrens-glow); margin-top:3px;}
+  .ladder .bar{display:flex; gap:3px; margin-top:7px;}
+  .ladder .seg{flex:1; height:4px; border-radius:2px; background:rgba(255,255,255,.08);}
+  .ladder .seg.on{background:var(--warrens); box-shadow:0 0 6px var(--warrens-glow);}
+  .deeper{width:98px; flex:none; border-radius:11px; padding:9px 8px; text-align:center; background:rgba(255,255,255,.02); box-shadow:inset 0 0 0 1px rgba(255,255,255,.08); opacity:.72;}
+  .deeper .dl{font-family:var(--px); font-size:6.5px; letter-spacing:.06em; color:var(--dim); line-height:1.5;}
+  .deeper .du{font-family:var(--px); font-size:6.5px; color:var(--faint); margin-top:5px;}
+
+  .deal{display:flex; gap:8px;}
+  .dcol{flex:1; border-radius:10px; padding:9px 10px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);}
+  .dcol.risk{background:rgba(255,98,87,.08);} .dcol.keep{background:rgba(107,221,146,.06);}
+  .dcol .dh{font-family:var(--px); font-size:7px; letter-spacing:.1em; margin-bottom:4px;}
+  .dcol.risk .dh{color:var(--atk);} .dcol.keep .dh{color:var(--ok);}
+  .dcol .dt{font-size:9.5px; color:var(--ink2); line-height:1.3;}
+
+  .spacer{flex:1; min-height:2px;}
+  .begin{width:100%; border:none; cursor:pointer; border-radius:12px; padding:16px 16px; position:relative; overflow:hidden;
+    display:flex; align-items:center; justify-content:center; gap:11px; background:linear-gradient(180deg,#241a10 0%,#171009 46%,#0d0906 100%); --edge:var(--amber-glow); --accent:#ffd9a6;}
+  .begin::before{content:''; position:absolute; inset:3px; border-radius:9px; pointer-events:none; box-shadow:inset 0 1px 0 rgba(255,220,170,.12), inset 0 0 0 1px rgba(0,0,0,.55);}
+  .begin::after{content:''; position:absolute; inset:0; border-radius:12px; pointer-events:none; box-shadow:inset 0 0 0 1.5px var(--edge), 0 0 0 1px rgba(0,0,0,.6);}
+  .begin .t{font-family:var(--px); font-size:15px; letter-spacing:.09em; color:var(--accent); text-shadow:0 1px 0 #000, 0 0 11px var(--edge);}
+  .begin .g{font-family:var(--px); font-size:16px; color:var(--accent); text-shadow:0 0 11px var(--edge);}
+  .begin:active{transform:translateY(2px);} .begin:active::after{box-shadow:inset 0 0 0 1.5px var(--edge), 0 0 16px var(--edge), 0 0 0 1px rgba(0,0,0,.6);}
+</style>
+</head>
+<body>
+
+<div class="head">DELVEDECK · <b>START RUN v3</b> · new tall backdrop, no delver, environment leads</div>
+
+<div class="game">
+  <div class="topnav">
+    <button class="back">‹ CAMP</button>
+    <span class="warm">THE LAST WARM LIGHT</span>
+  </div>
+
+  <div class="hero">
+    <div class="eyebrow">THE SHAFT AWAITS</div>
+    <div class="title">BEGIN THE DELVE</div>
+    <div class="tsub">Everything you carry rides with you.</div>
+  </div>
+
+  <div class="body">
+    <div class="load">
+      <div class="lhead"><span class="cls">PYROMANCER</span><span class="clssub">glass cannon of fire</span></div>
+      <div class="abils">
+        <div class="ab"><div class="o"><img class="px" src="https://api.pixellab.ai/mcp/images/6d2c3d8b-692c-49bb-8f8e-2cdc79bd374e/download"></div><span>Ember</span></div>
+        <div class="ab"><div class="o"><img class="px" src="https://api.pixellab.ai/mcp/images/6d2c3d8b-692c-49bb-8f8e-2cdc79bd374e/download"></div><span>Scorch</span></div>
+        <div class="ab"><div class="o"><img class="px" src="https://api.pixellab.ai/mcp/images/952155d1-a1ca-44d2-98ec-15c9cc9f3488/download"></div><span>Immol.</span></div>
+        <div class="ab ward"><div class="o"><img class="px" src="https://api.pixellab.ai/mcp/images/562416b0-2b77-4116-90d2-b91ee9d6b498/download"></div><span>Cinder</span></div>
+        <div class="ab"><div class="o"><img class="px" src="https://api.pixellab.ai/mcp/images/8094d8b3-f74a-491e-b28a-9d809e55d4b4/download"></div><span>Pyre</span></div>
+      </div>
+      <div class="row2">
+        <div class="vitals">
+          <span class="vit life"><span class="d"></span>40<small>LIFE</small></span>
+          <span class="vit ward"><span class="d"></span>10<small>WARD</small></span>
+          <span class="vit mana"><span class="d"></span>10<small>MANA</small></span>
+        </div>
+        <div class="gearmini">
+          <div class="gm rare"><img class="px" src="https://api.pixellab.ai/mcp/images/3043fe50-07ef-41f4-bbca-f1d3b565ea8b/download"></div>
+          <div class="gm common"><img class="px" src="https://api.pixellab.ai/mcp/images/3a703351-a0d6-439b-8c25-6ffeb77ddcd1/download"></div>
+          <div class="gm epic"><img class="px" src="https://api.pixellab.ai/mcp/images/8a2f1b9a-a9d2-45b8-9834-aa1ba843c2ab/download"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="start">
+      <div class="ladder">
+        <div class="k">STARTING AT</div>
+        <div class="v">DEPTH 1 · THE WARRENS</div>
+        <div class="bar"><span class="seg on"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span><span class="seg"></span></div>
+      </div>
+      <div class="deeper"><div class="dl">CHOOSE A DEEPER START</div><div class="du">◇ EARN AT DEPTH 8</div></div>
+    </div>
+
+    <div class="deal">
+      <div class="dcol risk"><div class="dh">☠ YOU RISK</div><div class="dt">The run's haul — every item &amp; shard you find, unbanked.</div></div>
+      <div class="dcol keep"><div class="dh">✦ YOU KEEP</div><div class="dt">Your class, levels, skills &amp; banked gear. Always.</div></div>
+    </div>
+
+    <div class="spacer"></div>
+    <button class="begin"><span class="t">DESCEND</span><span class="g">⇩</span></button>
+  </div>
+</div>
+
+<div class="cap"><b>Backdrop reworked:</b> a purpose-built tall shaft (matched to the frame's aspect so it no longer stretches) is now the hero — warm firelit rim at the top fading into the deep. The delver's gone; the environment and the title carry the moment. Everything below (loadout, ladder, the deal, DESCEND) sits on the dark of the pit.</div>
+
+</body>
+</html>

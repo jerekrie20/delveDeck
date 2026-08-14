@@ -13,6 +13,9 @@
        flex body stretches #app to the viewport and makes its children SHRINK to fit. -->
   <body>
     <div id="app"></div>
+    <!-- The juice layer lives OUTSIDE #app so it survives a re-render and stays invisible
+         to the visual gate, which walks #app for its text rectangles. -->
+    <div id="fx" aria-hidden="true"></div>
     <script type="module" src="slice.ts"></script>
   </body>
 </html>

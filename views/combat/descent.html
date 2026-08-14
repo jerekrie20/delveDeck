@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delvedeck — Descent</title>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#f4f6fb; --ink2:#cdd4e2; --dim:#9aa3b5; --faint:#6d7688;
+    --amber:#ffbc6a;
+    --stratum:#a790ee; --stratum-glow:rgba(167,144,238,.55); --stratum-soft:rgba(167,144,238,.16);
+    --px:"Silkscreen", ui-monospace, monospace; --ui:system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#07090d; color:var(--ink); font-family:var(--ui); display:flex; flex-direction:column; align-items:center; gap:14px; padding:24px 16px 60px;}
+  .head{font-family:var(--px); font-size:11px; letter-spacing:.1em; color:var(--dim); text-align:center;} .head b{color:var(--stratum);}
+  .cap{max-width:359px; font-size:12px; color:var(--faint); text-align:center; line-height:1.5;} .cap b{color:var(--dim);}
+  img.px{image-rendering:pixelated;}
+
+  .game{position:relative; width:359px; height:640px; border-radius:26px; overflow:hidden; border:1px solid #20242e; box-shadow:0 24px 60px rgba(0,0,0,.65); user-select:none;
+    background:radial-gradient(120% 80% at 50% 12%, rgba(167,144,238,.10), transparent 46%), linear-gradient(180deg, #14101d 0%, #0d0b16 40%, #08070e 78%, #050409 100%);}
+  /* faint crypt wall, sunk into the dark */
+  .bg{position:absolute; inset:0; z-index:0; opacity:.16; background:url('https://api.pixellab.ai/mcp/images/ed6b1059-17fa-4a3c-a5e8-3f1c8a4534b4/download') no-repeat center top; background-size:cover; image-rendering:pixelated; mix-blend-mode:screen;}
+  .vig{position:absolute; inset:0; z-index:1; pointer-events:none; box-shadow:inset 0 0 140px rgba(0,0,0,.82);}
+  /* the cold pouring down from above */
+  .chill{position:absolute; inset:0; z-index:1; pointer-events:none; background:linear-gradient(180deg, rgba(120,150,210,.14), transparent 34%);}
+
+  /* falling motion streaks — the descent */
+  .streak{position:absolute; z-index:2; width:1px; top:-40px; background:linear-gradient(180deg, transparent, rgba(180,190,220,.5), transparent); pointer-events:none; animation:fall 1.5s linear infinite;}
+  @keyframes fall{0%{transform:translateY(0);}100%{transform:translateY(700px);}}
+
+  .col{position:absolute; inset:0; z-index:4; display:flex; flex-direction:column; align-items:center; padding:26px 20px 20px;}
+
+  /* the dimming lantern, cooling out of the frame */
+  .lantern{display:flex; flex-direction:column; align-items:center; gap:6px;}
+  .lantern .f{width:16px; height:22px; border-radius:50% 50% 44% 44%; background:radial-gradient(circle at 50% 70%, #ffe6bf, var(--amber) 50%, #8a3714 90%); box-shadow:0 0 20px 5px rgba(255,157,76,.3); animation:gut 3s ease-in-out infinite;}
+  @keyframes gut{0%,100%{opacity:.8; transform:scale(1);}50%{opacity:.55; transform:scale(.94);}}
+  .lantern .t{font-family:var(--px); font-size:7px; letter-spacing:.14em; color:var(--faint);}
+
+  /* the crossing */
+  .cross{margin-top:22px; display:flex; align-items:center; gap:10px; font-family:var(--px); font-size:9px; letter-spacing:.1em;}
+  .cross .from{color:var(--faint); text-decoration:line-through; text-decoration-color:rgba(255,255,255,.25);}
+  .cross .arw{color:var(--stratum);}
+  .cross .to{color:var(--stratum); text-shadow:0 0 12px var(--stratum-glow);}
+
+  .tolabel{margin-top:26px; font-family:var(--px); font-size:10px; letter-spacing:.24em; color:var(--dim);}
+  .depth{font-family:var(--px); font-size:96px; line-height:.9; color:var(--ink); text-shadow:0 4px 0 #000, 0 0 40px var(--stratum-glow); animation:slam .5s cubic-bezier(.2,1.5,.4,1) both;}
+  @keyframes slam{0%{transform:scale(.4) translateY(-14px);}60%{transform:scale(1.08);}100%{transform:scale(1);}}
+  .stratum{margin-top:2px; font-family:var(--px); font-size:19px; letter-spacing:.14em; color:var(--stratum); text-shadow:0 2px 0 #000, 0 0 22px var(--stratum-glow); animation:slam .5s .08s cubic-bezier(.2,1.5,.4,1) both;}
+
+  .line{margin-top:22px; max-width:280px; text-align:center; font-size:12.5px; line-height:1.5; color:#c8bfe0;}
+  .line .mark{color:var(--stratum);}
+  .omen{margin-top:14px; font-family:var(--px); font-size:8px; letter-spacing:.08em; color:var(--faint); text-align:center;}
+
+  .spacer{flex:1;}
+
+  /* forged-plaque button, locked style */
+  .press{width:100%; max-width:300px; border:none; cursor:pointer; border-radius:12px; padding:15px 16px; position:relative; overflow:hidden;
+    display:flex; align-items:center; justify-content:center; gap:10px; background:linear-gradient(180deg,#211d18 0%,#161209 46%,#0d0a06 100%);
+    --edge:var(--stratum-glow); --accent:#e7defc;}
+  .press::before{content:''; position:absolute; inset:3px; border-radius:9px; pointer-events:none; box-shadow:inset 0 1px 0 rgba(220,210,255,.10), inset 0 0 0 1px rgba(0,0,0,.55);}
+  .press::after{content:''; position:absolute; inset:0; border-radius:12px; pointer-events:none; box-shadow:inset 0 0 0 1.5px var(--edge), 0 0 0 1px rgba(0,0,0,.6);}
+  .press .t{font-family:var(--px); font-size:14px; letter-spacing:.1em; color:var(--accent); text-shadow:0 1px 0 #000, 0 0 10px var(--edge);}
+  .press .g{font-family:var(--px); font-size:16px; color:var(--accent); text-shadow:0 0 10px var(--edge);}
+  .press:active{transform:translateY(2px);} .press:active::after{box-shadow:inset 0 0 0 1.5px var(--edge), 0 0 14px var(--edge), 0 0 0 1px rgba(0,0,0,.6);}
+  .tap{margin-top:9px; font-family:var(--px); font-size:8px; letter-spacing:.14em; color:var(--faint); animation:pulse 2s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:.5;}50%{opacity:1;}}
+</style>
+</head>
+<body>
+
+<div class="head">DELVEDECK · <b>DESCENT</b> · the between-depths beat · naming where you now are</div>
+
+<div class="game">
+  <div class="bg"></div><div class="chill"></div><div class="vig"></div>
+  <div class="streak" style="left:16%; height:80px; animation-delay:0s;"></div>
+  <div class="streak" style="left:34%; height:120px; animation-delay:.6s;"></div>
+  <div class="streak" style="left:52%; height:70px; animation-delay:.3s;"></div>
+  <div class="streak" style="left:68%; height:140px; animation-delay:.9s;"></div>
+  <div class="streak" style="left:83%; height:90px; animation-delay:1.2s;"></div>
+
+  <div class="col">
+    <div class="lantern"><div class="f"></div><div class="t">THE LIGHT THINS</div></div>
+
+    <div class="cross"><span class="from">THE HOLD</span><span class="arw">▾</span><span class="to">THE CRYPT</span></div>
+
+    <div class="tolabel">DESCENDING TO</div>
+    <div class="depth">9</div>
+    <div class="stratum">THE CRYPT</div>
+
+    <div class="line">A graveyard no one remembers filling. <span class="mark">Every one of the dead was buried facing down.</span></div>
+    <div class="omen">THE COLD DEEPENS · SOMETHING BELOW HAS BEEN WAITING</div>
+
+    <div class="spacer"></div>
+
+    <button class="press"><span class="t">PRESS ON</span><span class="g">▾</span></button>
+    <div class="tap">TAP TO DESCEND</div>
+  </div>
+</div>
+
+<div class="cap"><b>The stratum system, made a moment:</b> the accent shifts to the Crypt's violet, the chill pours in cold from above, the light thins, and the crossing (THE HOLD ▸ THE CRYPT) names where you now are. The depth slams in; the foreman's line does the lore.</div>
+<div class="cap"><b>It waits for a tap</b> — never a timer, so the naming isn't missed. Falling streaks and the guttering lantern carry the descent.</div>
+
+</body>
+</html>

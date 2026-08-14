@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delvedeck — Boon v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#f4f6fb; --ink2:#cdd4e2; --dim:#9aa3b5; --faint:#6d7688;
+    --amber:#ffbc6a; --amber-glow:rgba(255,157,76,.5); --nrg:#ffc85c;
+    --r-uncommon:#7bd88f; --r-rare:#5b9bd5; --r-epic:#bf9dff;
+    --px:"Silkscreen", ui-monospace, monospace; --ui:system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:#07090d; color:var(--ink); font-family:var(--ui); display:flex; flex-direction:column; align-items:center; gap:14px; padding:24px 16px 60px;}
+  .head{font-family:var(--px); font-size:11px; letter-spacing:.1em; color:var(--dim); text-align:center;} .head b{color:var(--amber);}
+  .cap{max-width:359px; font-size:12px; color:var(--faint); text-align:center; line-height:1.5;} .cap b{color:var(--dim);}
+  img.px{image-rendering:pixelated;}
+
+  .game{position:relative; width:359px; height:624px; border-radius:26px; overflow:hidden; border:1px solid #20242e; box-shadow:0 24px 60px rgba(0,0,0,.65); user-select:none;
+    background:linear-gradient(180deg,#171009 0%,#100b0e 34%,#0a0910 70%,#06060b 100%);}
+  /* the reward light: god-rays from the fallen boss above */
+  .rays{position:absolute; top:-120px; left:50%; transform:translateX(-50%); width:520px; height:420px; z-index:0; pointer-events:none; opacity:.5;
+    background:conic-gradient(from 0deg at 50% 0%, transparent 0 6deg, rgba(255,190,110,.10) 6deg 8deg, transparent 8deg 14deg, rgba(255,190,110,.08) 14deg 16deg, transparent 16deg 24deg, rgba(255,190,110,.10) 24deg 26deg, transparent 26deg 34deg);
+    animation:sweep 18s linear infinite;}
+  @keyframes sweep{0%{transform:translateX(-50%) rotate(0);}100%{transform:translateX(-50%) rotate(360deg);}}
+  .glow{position:absolute; top:-60px; left:50%; transform:translateX(-50%); width:280px; height:220px; z-index:0; pointer-events:none;
+    background:radial-gradient(circle, rgba(255,175,95,.28), transparent 66%);}
+  .vig{position:absolute; inset:0; z-index:1; pointer-events:none; box-shadow:inset 0 0 130px rgba(0,0,0,.78);}
+  .mote{position:absolute; z-index:2; width:3px; height:3px; border-radius:50%; background:var(--nrg); box-shadow:0 0 7px var(--nrg); pointer-events:none; animation:rise 6s linear infinite; opacity:.7;}
+  @keyframes rise{0%{transform:translateY(0);opacity:0;}14%{opacity:.8;}100%{transform:translateY(-150px);opacity:0;}}
+
+  .col{position:absolute; inset:0; z-index:4; display:flex; flex-direction:column; align-items:center; padding:22px 14px 16px;}
+  .crown{font-size:26px; filter:grayscale(.3) drop-shadow(0 0 12px var(--amber-glow)); opacity:.9;}
+  .boss{font-family:var(--px); font-size:9px; letter-spacing:.16em; color:var(--amber); text-shadow:0 0 14px var(--amber-glow); margin-top:6px;}
+  .title{font-family:var(--px); font-size:24px; letter-spacing:.08em; margin-top:7px; text-shadow:0 3px 0 #000, 0 0 24px var(--amber-glow);}
+  .sub{font-size:11.5px; color:#d9c7a8; margin-top:6px; text-align:center; max-width:280px; line-height:1.4;}
+
+  .cards{display:flex; gap:9px; width:100%; margin-top:18px;}
+  .bcard{position:relative; flex:1; min-width:0; cursor:pointer; border-radius:13px; padding:11px 8px 10px; display:flex; flex-direction:column; align-items:center; gap:7px; overflow:hidden;
+    background:linear-gradient(180deg,#221d17 0%,#161009 52%,#0d0906 100%);}
+  .bcard::before{content:''; position:absolute; inset:3px; border-radius:10px; pointer-events:none; box-shadow:inset 0 1px 0 rgba(255,225,180,.09), inset 0 0 0 1px rgba(0,0,0,.55);}
+  .bcard::after{content:''; position:absolute; inset:0; border-radius:13px; pointer-events:none; box-shadow:inset 0 0 0 1.5px var(--edge), 0 0 0 1px rgba(0,0,0,.6);}
+  .bcard:active{transform:translateY(2px);}
+  .rar{font-family:var(--px); font-size:6.5px; letter-spacing:.1em; color:var(--accent); opacity:.85; align-self:center;}
+  .relic{position:relative; width:74px; height:74px; display:flex; align-items:center; justify-content:center; border-radius:50%;
+    background:radial-gradient(circle at 50% 42%, var(--seat), rgba(0,0,0,.55) 72%); box-shadow:inset 0 0 0 1px var(--edge), inset 0 3px 8px rgba(0,0,0,.6);}
+  .relic img{width:60px; height:60px;}
+  .bname{font-family:var(--px); font-size:10px; letter-spacing:.03em; color:var(--accent); text-align:center; text-shadow:0 1px 0 #000, 0 0 9px var(--edge);}
+  .bdesc{font-size:9.5px; color:var(--ink2); line-height:1.25; text-align:center; min-height:36px;}
+  .bdesc b{color:var(--accent);}
+  .bmod{display:flex; align-items:center; gap:4px; margin-top:auto; padding-top:6px; border-top:1px solid rgba(255,255,255,.06); width:100%; justify-content:center;}
+  .bmod img{width:14px; height:14px;} .bmod span{font-family:var(--px); font-size:6.5px; letter-spacing:.04em; color:var(--faint);}
+  .bcard.uncommon{--accent:#bff0c8; --edge:rgba(123,216,143,.5); --seat:rgba(123,216,143,.12);}
+  .bcard.rare{--accent:#c6ddf5; --edge:rgba(91,155,213,.5); --seat:rgba(91,155,213,.12);}
+  .bcard.epic{--accent:#e7defc; --edge:rgba(191,157,255,.65); --seat:rgba(191,157,255,.16); box-shadow:0 0 20px rgba(191,157,255,.2);}
+  .bcard.epic .relic{animation:pulse 2.6s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{box-shadow:inset 0 0 0 1px var(--edge), inset 0 3px 8px rgba(0,0,0,.6);}50%{box-shadow:inset 0 0 0 1px var(--edge), inset 0 3px 8px rgba(0,0,0,.6), 0 0 16px rgba(191,157,255,.4);}}
+
+  .spacer{flex:1;}
+  .skip{width:100%; max-width:322px; cursor:pointer; border:none; border-radius:11px; padding:11px 14px; position:relative; overflow:hidden;
+    display:flex; align-items:center; justify-content:space-between; background:linear-gradient(180deg,#16130f,#0c0a07); --edge:rgba(255,200,92,.38); --accent:#e9d6a8;}
+  .skip::after{content:''; position:absolute; inset:0; border-radius:11px; pointer-events:none; box-shadow:inset 0 0 0 1px var(--edge), 0 0 0 1px rgba(0,0,0,.6);}
+  .skip:active{transform:translateY(2px);}
+  .skip .l{display:flex; flex-direction:column; gap:2px; text-align:left;}
+  .skip .st{font-family:var(--px); font-size:10px; letter-spacing:.06em; color:var(--accent);}
+  .skip .ss{font-family:var(--px); font-size:7px; letter-spacing:.04em; color:var(--faint);}
+  .skip .sh{font-family:var(--px); font-size:12px; color:var(--nrg); text-shadow:0 0 10px rgba(255,200,92,.4);}
+</style>
+</head>
+<body>
+
+<div class="head">DELVEDECK · <b>BOON v2</b> · three relics from the fallen king · claim one</div>
+
+<div class="game">
+  <div class="rays"></div><div class="glow"></div><div class="vig"></div>
+  <div class="mote" style="left:24%; bottom:110px; animation-delay:0s;"></div>
+  <div class="mote" style="left:50%; bottom:80px; animation-delay:2s;"></div>
+  <div class="mote" style="left:70%; bottom:140px; animation-delay:1s;"></div>
+
+  <div class="col">
+    <div class="crown">♛</div>
+    <div class="boss">THE HOLLOW KING FALLS</div>
+    <div class="title">CLAIM A BOON</div>
+    <div class="sub">From the wreckage, three powers rise — each reshapes a skill you already carry.</div>
+
+    <div class="cards">
+      <div class="bcard epic">
+        <div class="rar">◆ EPIC</div>
+        <div class="relic"><img class="px" src="https://api.pixellab.ai/mcp/images/f19f7269-7511-4ff4-86f1-75432b49e428/download"></div>
+        <div class="bname">DETONATOR</div>
+        <div class="bdesc">Immolate detonates for <b>+2</b> per stack.</div>
+        <div class="bmod"><img class="px" src="https://api.pixellab.ai/mcp/images/952155d1-a1ca-44d2-98ec-15c9cc9f3488/download"><span>IMMOLATE</span></div>
+      </div>
+      <div class="bcard rare">
+        <div class="rar">◆ RARE</div>
+        <div class="relic"><img class="px" src="https://api.pixellab.ai/mcp/images/04d1d731-34ba-4644-a3de-218ff28a2b2b/download"></div>
+        <div class="bname">EVERBURN</div>
+        <div class="bdesc">Ember leaves <b>+1</b> extra Burn.</div>
+        <div class="bmod"><img class="px" src="https://api.pixellab.ai/mcp/images/6d2c3d8b-692c-49bb-8f8e-2cdc79bd374e/download"><span>EMBER</span></div>
+      </div>
+      <div class="bcard uncommon">
+        <div class="rar">◆ UNCOMMON</div>
+        <div class="relic"><img class="px" src="https://api.pixellab.ai/mcp/images/2625c95f-f95d-42f7-939c-577ce7075fbd/download"></div>
+        <div class="bname">CINDERHEART</div>
+        <div class="bdesc">Cinder Ward also restores <b>6</b> Life.</div>
+        <div class="bmod"><img class="px" src="https://api.pixellab.ai/mcp/images/562416b0-2b77-4116-90d2-b91ee9d6b498/download"><span>CINDER WARD</span></div>
+      </div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <button class="skip">
+      <span class="l"><span class="st">LEAVE THEM</span><span class="ss">A LEANER BUILD · TAKE THE SHARDS</span></span>
+      <span class="sh">+40 ◈</span>
+    </button>
+  </div>
+</div>
+
+<div class="cap"><b>Reworked as treasure:</b> the king's crown breaks and three relics rise on god-rays — real relic art, each in its own rarity frame (the epic pulses). You claim one power that reshapes a skill you already run; its ability icon sits at the card's foot so the modify-an-ability link is explicit.</div>
+<div class="cap"><b>Skip stays a path:</b> leaner build, shards in hand.</div>
+
+</body>
+</html>
