@@ -1,5 +1,16 @@
 # Daily Delve — design
 
+> **⚠ SUPERSEDED IN PART — read [DIRECTION.md](DIRECTION.md) first (owner call,
+> 2026-08-13).** The game pivoted to a **class-based ARPG roguelite**: the Daily
+> shared-seed puzzle is cut, character-building is the heart, energy+rage became mana,
+> block became passive mitigation, and combat is being rebuilt around a class synergy
+> engine. `DIRECTION.md` is the new top of the folder and **wins wherever it disagrees with
+> this file.** Much of what is below — the turn loop's bones, the determinism and art law,
+> the look-and-feel layering, the gear/status machinery — is still true and reused. The
+> *product* framing (the three doors, the Daily as the heart, the issued-kit wall, the share
+> grid, the two-argument rule) is **historical**, kept for its reasoning until the catalogs
+> are rewritten slice by slice.
+
 The spine. This file owns the **rules**; the catalogs own the **content**.
 
 | | |

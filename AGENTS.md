@@ -1,24 +1,37 @@
 # Daily Delve — Agent Brief
 
-A **daily-seed dungeon delve** running as a Reddit Devvit web app. Everyone in a
-subreddit descends the *same* shaft each day: pick 3–5 abilities of the day's issued
-9, push twelve depths against a three-turn threat telegraph, and post one comparable
-score. Endless, gear and progression sit beside it — and never touch it.
+> **⚠ THE GAME PIVOTED (owner call, 2026-08-13). Read
+> [`game_design/DIRECTION.md`](game_design/DIRECTION.md) FIRST.** It is now a **class-based
+> ARPG roguelite** — build a delver at the camp (class, signature abilities, tangible gear),
+> descend to test and grow it, keep the character when you die. **The Daily shared-seed
+> puzzle is cut**, energy+rage became **mana**, block became **passive mitigation**, and
+> combat is being rebuilt around a class **synergy engine**. `DIRECTION.md` is the new top
+> of the design folder; the pitch and rules below are being reframed to match it. The
+> *engineering* law (art pipeline ban, purity, determinism, sizes, Redis testing) is
+> unchanged; the *Daily-centric product* rules are superseded — see the four rules below.
+
+Was: a daily-seed dungeon delve where a whole subreddit descended the same shaft and
+compared one score. Now: a focused single-player ARPG you build and grow. The Devvit web
+app, the server, Redis and the deterministic sim all stay.
 
 **Read before non-trivial work:**
 
-1. `game_design/GAME_DESIGN.md` — the spine. It owns the rules and delegates content
-   to `ABILITIES.md`, `BESTIARY.md` and `GEAR.md`. Answers go in the folder.
-2. `CODING_BIBLE.md` — engineering law (inherited from the previous project).
-3. `TODO.md` — what is LEFT: the live gate, the carried-open list, the unbuilt
-   stages. Work top-down.
-4. `BUILD_LOG.md` — what SHIPPED, stages M0–6b-4, with the reasoning behind every
-   call. Read it before re-arguing a decision; do not add tasks to it.
+1. **`game_design/DIRECTION.md` — the new spec. Wins wherever it disagrees with anything
+   else in the folder.**
+2. `game_design/GAME_DESIGN.md` — the old spine. Its engineering reasoning and the reused
+   machinery are still true; its Daily-centric product framing is historical (it carries a
+   banner saying so).
+3. `CODING_BIBLE.md` — engineering law (inherited from the previous project).
+4. `TODO.md` — what is LEFT: the pivot's build order at the top, then the carried-open list.
+   Work top-down.
+5. `BUILD_LOG.md` — what SHIPPED, with the reasoning behind every call. Read it before
+   re-arguing a decision; do not add tasks to it.
 
-**The design is LOCKED.** `game_design/` is the specification, not a sketch. Counts in
-it are caps; changing one is an owner decision that lands in the folder first, then in
-code and `TODO.md`. **If code and the folder disagree, the folder is right and the
-code is a bug.**
+**The design WAS locked; the owner unlocked and redefined it on 2026-08-13.** The new spec
+is `DIRECTION.md`, and the change-lands-in-the-folder-first rule still holds: a mechanic is
+decided in the folder, then built in code, then checked off in `TODO.md`. **If code and the
+folder disagree, the folder is right and the code is a bug** — and `DIRECTION.md` is the
+folder's top authority now.
 
 The design derives from **`daily-delve-v5.html`**, a 17-screen mockup kept in
 `game_design/`. **The mockup wins unless a doc explicitly overrides it** — the
@@ -32,6 +45,13 @@ cost-1/cooldown-0 attack"* — never *"Strike deals 9"*. Every tuning value live
 rule that keeps the folder from becoming the vault that sank the last project.
 
 ## The four rules that shape everything
+
+> **Post-pivot status (2026-08-13):** **Rule 1 is MORE load-bearing than ever** — an ARPG is
+> tempted toward action/animation, and that is the one door this project welds shut. **Rule 2
+> is SUPERSEDED** — there is no Daily, so there is no issued-kit wall and no two-argument
+> `simulateRun` rule; the character comes with you always. **Rules 3 and 4 still hold** — the
+> Endless run is still server-verified (progression integrity), and no Redis call ships
+> without a mock test.
 
 **1 · No art that animates or aligns.** This project exists because the previous one
 (`../infinite-delve`) stalled on an animated-character pipeline — sprite strips,

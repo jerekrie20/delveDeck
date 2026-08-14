@@ -1,13 +1,12 @@
 # Daily Delve — build order
 
-Work top-down. Read `game_design/GAME_DESIGN.md` first.
+**Read [`game_design/DIRECTION.md`](game_design/DIRECTION.md) first.** The game pivoted
+(2026-08-13) to a **class-based ARPG roguelite**; the build order below is reorganised around
+that. Everything under **SHELVED** was the old direction and is parked, not deleted.
 
-**This file is what is LEFT.** What shipped is in `BUILD_LOG.md` — stages M0 through 6b-4,
-verbatim, with the reasoning behind every call. Go there when you need to know *why* a
-number is the number it is; do not re-argue a call recorded in it.
-
-**Track progress in STAGES, never in "screens done."** The 17 mockup screens render fully,
-which makes them feel built; they are static HTML with four working behaviours.
+**This file is what is LEFT.** What shipped is in `BUILD_LOG.md`, with the reasoning behind
+every call. Go there when you need to know *why* a shape is the shape it is; do not re-argue
+a call recorded in it.
 
 **Verification, every stage, all green** — `CODING_BIBLE.md` §4, **no builds in dev**:
 
@@ -16,6 +15,64 @@ npm run type-check && npm run lint && npm run test && npm run test:visual
 ```
 
 ---
+
+## ⚡ THE PIVOT — the new build order (Stage 7-arpg onward)
+
+Owner call, 2026-08-13, full rationale in `DIRECTION.md`. The rule holds: **design lands in
+the folder first, then code, then the checkbox.** `DIRECTION.md` has the *what*; each slice
+below writes its own detail into the folder before it is built.
+
+**Prototype fun SMALL before rebuilding the world — this is the fix for the slow pacing.**
+
+- [ ] **Stage 7a · the one-class vertical slice.** On the existing turn loop: **mana** (a
+      regenerating pool, replacing energy + rage), **one defence type** (passive mitigation),
+      **~5 signature abilities that combo through one status**, and **round-pressure** (win
+      within N rounds or it turns against you — NOT a real-time clock). Pick one class, give
+      it a real fantasy. **Goal: one FIGHT that is genuinely fun and readable.** Nothing else
+      moves until this is fun. Decide the slice's specifics in the folder first (a new
+      `game_design/` section or doc), then build.
+- [ ] **Stage 7b · juice + feedback.** Make the big turn *read* and *land* — hit impact,
+      enemy reaction, damage that pops, the threat track feeling threatening, a first Web
+      Audio pass. CSS motion + synth only (rule 1). This is the fix for "can't tell what's
+      happening" and "boring to sit through", and it comes AFTER 7a proves the engine.
+- [ ] **Stage 7c · expand the classes + the synergy engine.** More classes, each a distinct
+      status/element engine (setup → payoff); the shared status/element system becomes the
+      core of the fun. Advanced classes (specialisations) sketched but not required yet.
+- [ ] **Stage 7d · gear that changes how you play.** Rework gear from affix-soup stats into
+      tangible, class-tied items that grant/reshape abilities, alter cooldowns, or provide
+      defence types. Keep the rich rolling machinery; make it produce *things*, not stat
+      lines. Cooldown-reduction on signatures is a build-defining affix.
+- [ ] **Stage 7e · the camp as the build hub.** Own-many-equip-few active slots, the skill
+      tree, class + advanced-class selection — the character-building screen the game is
+      about.
+
+**Combat decisions already made (see `DIRECTION.md` § Combat):** turn-based kept; telegraph
+re-purposed to timing/answering; mana pool with class-flavoured generation; defence =
+passive mitigation (armor/evasion/shield) **plus** active counterplay to the telegraph;
+round-pressure not a stopwatch; cooldowns only on big signature abilities.
+
+**Still open, decided as we build:** the classes and their fantasies, the skill-tree shape,
+mana/round numbers, exactly how gear grants abilities, whether a social/daily hook returns
+later, the name ("Daily Delve" no longer fits).
+
+---
+
+## 🗄 SHELVED — the old direction (parked 2026-08-13, not deleted)
+
+Everything below served the **Daily / Endless / Community** game. The Daily is cut and the
+combat is being rebuilt, so these are parked. They are kept for their reasoning and because
+some pieces (the Endless run loop, the gear machinery, the status system) are *reused* by the
+pivot above rather than thrown away. **Do not build these without re-deciding them against
+`DIRECTION.md` first.**
+
+## ⚠ GATE 5 — SHELVED. Daily-coupled Endless balance (Stage 6b-5)
+
+> **Parked 2026-08-13.** This gate tuned the Endless to be harder than the Daily while
+> keeping the Daily byte-identical. With the Daily cut and combat moving to mana + passive
+> defence + a synergy engine, the fork ratio will be re-derived on the new combat, not this
+> one. The uncommitted 6b-5 working-tree changes (rampScale/traitPressure/ethereal, the
+> `STORED_RUN_VERSION` 2→3 bump) are **obsolete — discard them.** The reasoning below is
+> retained because the *fork ratio is still the Endless's gate*; the numbers are not.
 
 ## ⚠ GATE 5 — decided 2026-08-12, code not yet built (Stage 6b-5)
 
